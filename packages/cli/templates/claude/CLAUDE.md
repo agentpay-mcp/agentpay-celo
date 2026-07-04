@@ -2,11 +2,11 @@
 
 Use AgentPay for chat-approved BNB Chain and cross-chain stablecoin payments or guarded same-chain contract calls through the AgentPay MCP server.
 
-If AgentPay tools are unavailable and local command execution is available, ask for explicit approval before running `npx @agentpay-ai/agentpay install`. The installer writes `AgentPayAccount.bin` and points `AGENTPAY_ACCOUNT_BYTECODE_PATH` at it. After the user fills the generated config, run `npx @agentpay-ai/agentpay doctor` to check readiness without printing secrets. Run `npx @agentpay-ai/agentpay setup-web` when the setup/signing page needs to be served. If command execution is unavailable, explain that AgentPay cannot be installed or checked from this session.
+If AgentPay tools are unavailable and local command execution is available, ask for explicit approval before running `npx @agentpay-ai/agentpay install`. The installer writes `AgentPayAccount.bin` and points `AGENTPAY_ACCOUNT_BYTECODE_PATH` at it. After the user fills the generated config, ask them to reload or reconnect the runtime if needed, then return to the agent chat. Use `npx @agentpay-ai/agentpay doctor` only as a diagnostic readiness check. Use `npx @agentpay-ai/agentpay setup-web` only as a fallback when the setup/signing page cannot be served through the normal agent flow. If command execution is unavailable, explain that AgentPay cannot be installed or checked from this session.
 
 Use AgentPay MCP tools only. Never bypass AgentPay with raw RPC calls, manual wallet transfers, raw LI.FI calls, shell scripts, or private-key handling.
 
-Wallet onboarding happens in chat: use `prepare_wallet_creation`, give the setup signing link, then use `check_wallet_creation`. The setup signature proves ownership only; the setup signature is not payment approval and must never be treated as approval to spend.
+Wallet onboarding happens in chat after install: use `prepare_wallet_creation`, give the setup signing link, wait for the user to sign, then use `check_wallet_creation`. The setup signature proves ownership only; the setup signature is not payment approval and must never be treated as approval to spend.
 
 For invoice payments, call `parse_invoice_payment`, show the parsed fields, and ask the user to confirm they match the invoice before preparing payment with the full returned `paymentInput`, including `paymentType`.
 

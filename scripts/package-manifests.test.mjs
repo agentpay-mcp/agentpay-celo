@@ -97,7 +97,7 @@ describe("publishable AgentPay package manifests", () => {
         ethers: rootManifest.dependencies.ethers,
       },
       "@agentpay-ai/agentpay": {
-        "@agentpay-ai/skill": "0.1.1",
+        "@agentpay-ai/skill": "0.1.2",
       },
     };
 

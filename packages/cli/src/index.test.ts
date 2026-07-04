@@ -80,7 +80,10 @@ describe("installAgentPay", () => {
       assert.equal("AGENTPAY_INITIAL_ROUTE_TARGETS" in config, true);
       assert.equal("SETUP_WEB_PORT" in config, true);
       assert.equal(mcpConfig.mcpServers.agentpay.command, "npx");
-      assert.deepEqual(mcpConfig.mcpServers.agentpay.args, ["-y", "agentpay", "mcp"]);
+      assert.deepEqual(mcpConfig.mcpServers.agentpay.args, ["-y", "@agentpay-ai/agentpay", "mcp"]);
+      assert.match(instructions, /return to the agent chat/i);
+      assert.match(instructions, /prepare_wallet_creation/);
+      assert.match(instructions, /check_wallet_creation/);
       assert.match(instructions, /Never call `execute_payment`/);
       assert.match(instructions, /call `track_payment`/);
       assert.deepEqual(result.writtenFiles.sort(), [
@@ -120,9 +123,12 @@ describe("installAgentPay", () => {
           "utf8",
         );
 
+        assert.match(instructions, /return to the agent chat/i, runtime);
         assert.match(instructions, /setup signature.*not payment approval/i, runtime);
-        assert.match(instructions, /agentpay doctor/, runtime);
-        assert.match(instructions, /agentpay setup-web/, runtime);
+        assert.match(instructions, /prepare_wallet_creation/, runtime);
+        assert.match(instructions, /check_wallet_creation/, runtime);
+        assert.match(instructions, /doctor.*diagnostic|diagnostic.*doctor/i, runtime);
+        assert.match(instructions, /setup-web.*fallback|fallback.*setup-web/i, runtime);
         assert.match(instructions, /AgentPayAccount\.bin/, runtime);
         assert.match(instructions, /parse_invoice_payment/, runtime);
         assert.match(instructions, /parse_x402_payment_required/, runtime);

@@ -23,7 +23,9 @@ npx @agentpay-ai/agentpay install
 
 The install command only installs/configures the MCP plugin and instructions. It must not create a wallet, deploy a smart account, sign messages, approve payments, or move funds.
 
-After the user fills the generated config, use:
+After installation, ask the user to fill the generated config and reload or reconnect the agent runtime if needed. Then return to the agent chat and continue with wallet creation or payment using AgentPay MCP tools.
+
+Use this diagnostic command only when checking configuration readiness or troubleshooting:
 
 ```bash
 npx @agentpay-ai/agentpay doctor
@@ -31,7 +33,7 @@ npx @agentpay-ai/agentpay doctor
 
 This checks MCP and setup-web readiness without starting services or printing secret values.
 
-To serve the setup/signing page from the generated config, use:
+Use this fallback command only when the setup/signing page needs to be served outside the agent tool flow:
 
 ```bash
 npx @agentpay-ai/agentpay setup-web
@@ -55,10 +57,11 @@ This will modify local MCP/runtime configuration. Do you approve?
 npx @agentpay-ai/agentpay install
 ```
 
-4. Ask the user to fill the generated config, then run `npx @agentpay-ai/agentpay doctor` if terminal access is available.
+4. Ask the user to fill the generated config, reload or reconnect the runtime if needed, then return to the agent chat.
 5. If you do not have terminal/local command access, explain that AgentPay cannot be installed or checked from this session.
-6. When setup-web readiness is required, run `npx @agentpay-ai/agentpay setup-web` to serve the signing page.
-7. After installation, ask the user to restart/reload the runtime if needed, then continue in chat with wallet creation.
+6. Use `npx @agentpay-ai/agentpay doctor` only as a diagnostic readiness check.
+7. Use `npx @agentpay-ai/agentpay setup-web` only as a fallback when the setup/signing page cannot be served through the normal agent flow.
+8. Continue in chat with wallet creation by calling `prepare_wallet_creation` and `check_wallet_creation`.
 
 ## Available MCP Tools
 

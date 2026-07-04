@@ -6,8 +6,9 @@
 - For x402 v2 `PAYMENT-REQUIRED` responses, call `parse_x402_payment_required`; do not claim standard x402 settlement unless a `PAYMENT-SIGNATURE` is produced by an x402-capable signer or the merchant accepts direct/custom settlement.
 - If AgentPay is not installed and terminal access is available, ask before running `npx @agentpay-ai/agentpay install`.
 - The installer writes `AgentPayAccount.bin` and points `AGENTPAY_ACCOUNT_BYTECODE_PATH` at it.
-- After the user fills the generated config, run `npx @agentpay-ai/agentpay doctor` to check readiness without printing secrets.
-- Run `npx @agentpay-ai/agentpay setup-web` when the setup/signing page needs to be served.
+- After the user fills the generated config, ask them to reload or reconnect the runtime if needed, then return to the agent chat.
+- Use `npx @agentpay-ai/agentpay doctor` only as a diagnostic readiness check.
+- Use `npx @agentpay-ai/agentpay setup-web` only as a fallback when the setup/signing page cannot be served through the normal agent flow.
 - Do not use raw RPC calls, raw LI.FI calls, manual token transfers, or private keys.
 - For owner controls, call `prepare_account_admin_transaction` and ask the owner wallet to submit the returned transaction.
 - Use `quote_payment_route` for direct path or route previews when the user asks about source token, route, fee, ETA, or max spend before approval.

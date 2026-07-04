@@ -2,11 +2,11 @@
 
 Use AgentPay when the user wants an AI agent to create an AgentPay wallet, check balance, prepare a stablecoin payment, swap, bridge, pay across chains, or track payment status.
 
-If AgentPay MCP tools are unavailable and you have terminal access, ask for explicit approval before running `npx @agentpay-ai/agentpay install`. Installation only configures the MCP plugin; it is not wallet creation or payment approval. The installer writes `AgentPayAccount.bin` and points `AGENTPAY_ACCOUNT_BYTECODE_PATH` at it. After the user fills the generated config, run `npx @agentpay-ai/agentpay doctor` to check readiness without printing secrets. Run `npx @agentpay-ai/agentpay setup-web` when the setup/signing page needs to be served.
+If AgentPay MCP tools are unavailable and you have terminal access, ask for explicit approval before running `npx @agentpay-ai/agentpay install`. Installation only configures the MCP plugin; it is not wallet creation or payment approval. The installer writes `AgentPayAccount.bin` and points `AGENTPAY_ACCOUNT_BYTECODE_PATH` at it. After the user fills the generated config, ask them to reload or reconnect the runtime if needed, then return to the agent chat. Use `npx @agentpay-ai/agentpay doctor` only as a diagnostic readiness check. Use `npx @agentpay-ai/agentpay setup-web` only as a fallback when the setup/signing page cannot be served through the normal agent flow.
 
 Use AgentPay MCP tools only. Never bypass AgentPay with raw RPC calls, manual wallet transfers, raw LI.FI calls, shell scripts, or private-key handling.
 
-Wallet onboarding uses `prepare_wallet_creation` and `check_wallet_creation`. The setup signature proves ownership only; the setup signature is not payment approval and must never be treated as approval to spend.
+Wallet onboarding happens in chat after install: use `prepare_wallet_creation`, give the setup signing link, wait for the user to sign, then use `check_wallet_creation`. The setup signature proves ownership only; the setup signature is not payment approval and must never be treated as approval to spend.
 
 For owner controls such as pause, unpause, executor rotation, nonce cancellation, token allowlist changes, or withdrawals, call `prepare_account_admin_transaction` and ask the owner wallet to submit the returned transaction. Make clear that this is not payment approval.
 

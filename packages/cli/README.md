@@ -8,8 +8,6 @@ AgentPay installs MCP tools, runtime instructions, smart account bytecode, and a
 
 ```bash
 npx @agentpay-ai/agentpay install
-npx @agentpay-ai/agentpay doctor
-npx @agentpay-ai/agentpay setup-web
 ```
 
 Use `--runtime codex|claude|cursor|generic|hermes` to choose a runtime explicitly:
@@ -20,12 +18,26 @@ npx @agentpay-ai/agentpay install --runtime codex
 
 The installer writes `~/.agentpay/config.json`, MCP runtime files, `skills/agentpay/SKILL.md`, and `AgentPayAccount.bin`.
 
+After install, reload or reconnect your agent runtime if needed, then return to your agent chat. From there, ask naturally:
+
+```txt
+Create an AgentPay wallet for me on BNB testnet.
+```
+
+or:
+
+```txt
+Pay 5 USDT to 0x... on BNB testnet for invoice INV-001.
+```
+
+The agent should use AgentPay tools in chat to create the wallet setup link, check wallet creation, prepare payments, request the exact approval phrase, execute after exact approval, and track status.
+
 ## Commands
 
 - `agentpay install` creates local AgentPay runtime files.
-- `agentpay doctor` checks required config without printing secrets.
 - `agentpay mcp` starts the AgentPay MCP server over stdio.
-- `agentpay setup-web` starts the setup/signing web server.
+- `agentpay doctor` is a diagnostic check for required config without printing secrets.
+- `agentpay setup-web` is a fallback way to serve the setup/signing web server when the agent cannot start it for you.
 
 ## Required Configuration
 
