@@ -12,3 +12,5 @@ contracts/broadcast/
 !.env.example
 .DS_Store
 .worktrees/
+/AGENTS.md
+/docs/

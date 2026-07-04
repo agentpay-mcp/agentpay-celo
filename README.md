@@ -64,7 +64,6 @@ AgentPay separates ownership from execution.
 - `packages/shared/` - schemas, chain/token metadata, approval helpers, and intent types.
 - `contracts/` - Foundry smart account, deploy scripts, and Solidity tests.
 - `supabase/migrations/` - tables, indexes, RLS, setup intents, payment intents, wallets, and audit events.
-- `docs/` - architecture, security model, demo flow, release handoff, and launch checklist.
 
 ## Development Commands
 
@@ -128,4 +127,4 @@ Use `npm run contracts:bytecode` when developing contracts and refreshing the pa
 - `@agentpay-ai/mcp-server` - MCP server runtime and tools.
 - `@agentpay-ai/setup-web` - setup and signing web server.
 
-See `docs/release-handoff.md` for local readiness and `docs/launch-checklist.md` for external launch steps such as Supabase setup, BNB testnet deployment, npm publishing, and demo capture.
+Use `AGENTPAY_CONCEPT.md` for the product blueprint. External launch steps still require explicit operator approval for Supabase setup, BNB testnet deployment, npm publishing, and demo capture.
