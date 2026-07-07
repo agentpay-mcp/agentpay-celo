@@ -32,6 +32,8 @@ Pay 5 USDT0 to 0x... on X Layer testnet for invoice INV-001.
 
 AgentPay supports X Layer mainnet and testnet. If you do not name one, the agent should ask for mainnet or testnet before creating a wallet or payment. Agent tools accept `network: "mainnet" | "testnet"`, so you can switch networks per request from chat.
 
+Cross-chain routes are selected during quote or payment preparation, not during wallet setup. Create an X Layer mainnet or X Layer testnet AgentPay wallet first, then decide whether a specific payment stays on that network or uses a cross-chain route.
+
 The agent should use AgentPay tools in chat to create the wallet setup link, check wallet creation, prepare payments, request the exact approval phrase, execute after exact approval, and track status.
 
 For x402 paid APIs, the agent uses `search_x402_services` when you do not provide a URL, prepares the selected Bazaar service with `prepare_x402_service_request`, parses the `PAYMENT-REQUIRED` response, runs the same exact-approval payment flow, then calls `retry_x402_request` to retry the protected resource with AgentPay receipt-proof headers. The retry reads V2 `PAYMENT-RESPONSE`, keeps legacy fallback, and includes `payment-identifier` idempotency data when the server advertises it.

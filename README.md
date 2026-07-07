@@ -22,6 +22,8 @@ Create an AgentPay wallet for me on X Layer testnet.
 
 AgentPay supports X Layer mainnet and testnet. If the user does not name one, the agent should ask for mainnet or testnet before creating a wallet, checking balance, preparing admin actions, or preparing payments. Agent tools accept `network: "mainnet" | "testnet"` so users can switch networks per request without changing the install command.
 
+Cross-chain routes are selected during quote or payment preparation, not during wallet setup. Create an X Layer mainnet or X Layer testnet AgentPay wallet first, then decide whether a specific payment stays on that network or uses a cross-chain route.
+
 ## Chat Flow
 
 Wallet setup is driven from chat:

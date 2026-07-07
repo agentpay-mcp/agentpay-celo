@@ -92,6 +92,12 @@ describe("README", () => {
       assert.match(contents, /mainnet or testnet/i, `${file} must ask for X Layer network choice`);
       assert.match(contents, /network: "mainnet" \| "testnet"/, `${file} must mention tool network input`);
       assert.match(contents, /switch networks per request/i, `${file} must describe per-request network switching`);
+      assert.match(contents, /Cross-chain.*payment/i, `${file} must keep cross-chain as a payment-time choice`);
+      assert.doesNotMatch(
+        contents,
+        /cross-chain route,? before creating an AgentPay wallet/i,
+        `${file} must not present cross-chain as a wallet-creation option`,
+      );
     }
   });
 

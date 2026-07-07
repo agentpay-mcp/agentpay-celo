@@ -97,6 +97,8 @@ AgentPay supports X Layer mainnet and testnet.
 
 If the user does not clearly name a network, ask whether they want mainnet or testnet before calling wallet, balance, route-target, admin, contract-call, quote, or payment preparation tools. Pass the selected value as `network: "mainnet" | "testnet"` whenever a tool accepts it. Users can switch networks per request; do not assume a wallet, balance, allowlist, or payment intent on one network applies to the other.
 
+Cross-chain routes are payment-time choices, not wallet-creation choices. Create the wallet on X Layer mainnet or X Layer testnet first, then decide during quote or payment preparation whether the payment stays on that network or uses a cross-chain route.
+
 ## Wallet Creation Workflow
 
 When the user asks to create an AgentPay wallet:
