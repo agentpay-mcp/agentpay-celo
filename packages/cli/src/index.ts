@@ -21,6 +21,7 @@ import {
 } from "@agentpay-ai/setup-web";
 
 const runtimeNames = ["codex", "claude", "cursor", "generic", "hermes"] as const;
+const DEFAULT_HOSTED_MCP_URL = "https://mcp.agentpay.site/mcp";
 const requiredConfigKeys = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "XLAYER_RPC_URL", "EXECUTOR_PRIVATE_KEY"] as const;
 const setupRequiredConfigKeys = [
   "SUPABASE_URL",
@@ -70,7 +71,14 @@ const require = createRequire(import.meta.url);
 export type AgentPayRuntimeName = (typeof runtimeNames)[number];
 
 export type AgentPayCliCommand =
-  | { command: "install"; runtime: AgentPayRuntimeName; outputDir: string; force: boolean }
+  | {
+      command: "install";
+      runtime: AgentPayRuntimeName;
+      outputDir: string;
+      force: boolean;
+      selfHosted: boolean;
+      mcpUrl: string;
+    }
   | { command: "mcp" }
   | { command: "serve-http"; hostname: string; port: number }
   | { command: "setup-web" }
@@ -82,6 +90,8 @@ export interface InstallAgentPayOptions {
   outputDir: string;
   packageRoot?: string;
   force?: boolean;
+  selfHosted?: boolean;
+  mcpUrl?: string;
 }
 
 export interface InstallAgentPayResult {
@@ -149,6 +159,8 @@ export function parseCliArgs(args: string[]): AgentPayCliCommand {
       runtime: parseRuntime(readOption(rest, "--runtime") ?? "generic"),
       outputDir: expandHome(readOption(rest, "--output-dir") ?? "~/.agentpay"),
       force: rest.includes("--force"),
+      selfHosted: rest.includes("--self-hosted"),
+      mcpUrl: readOption(rest, "--mcp-url") ?? DEFAULT_HOSTED_MCP_URL,
     };
   }
 
@@ -234,17 +246,22 @@ export async function installAgentPay(options: InstallAgentPayOptions): Promise<
   const templateDir = join(cliRoot, "templates", options.runtime);
   const templateFiles = getRuntimeTemplateFiles(options.runtime);
   const bytecodePath = join(options.outputDir, "AgentPayAccount.bin");
+  const selfHosted = Boolean(options.selfHosted);
   const filesToWrite = [
-    {
-      from: undefined,
-      to: join(options.outputDir, "config.json"),
-      contents: `${JSON.stringify(createAgentPayConfig({ accountBytecodePath: bytecodePath }), null, 2)}\n`,
-    },
-    {
-      from: join(cliRoot, "assets", "AgentPayAccount.bin"),
-      to: bytecodePath,
-      contents: undefined,
-    },
+    ...(selfHosted
+      ? [
+          {
+            from: undefined,
+            to: join(options.outputDir, "config.json"),
+            contents: `${JSON.stringify(createAgentPayConfig({ accountBytecodePath: bytecodePath }), null, 2)}\n`,
+          },
+          {
+            from: join(cliRoot, "assets", "AgentPayAccount.bin"),
+            to: bytecodePath,
+            contents: undefined,
+          },
+        ]
+      : []),
     {
       from: join(skillRoot, "SKILL.md"),
       to: join(skillDir, "SKILL.md"),
@@ -256,9 +273,11 @@ export async function installAgentPay(options: InstallAgentPayOptions): Promise<
       contents: undefined,
     },
     ...templateFiles.map((fileName) => ({
-      from: join(templateDir, fileName),
+      from: isMcpConfigTemplateFile(fileName) ? undefined : join(templateDir, fileName),
       to: join(runtimeDir, fileName),
-      contents: undefined,
+      contents: isMcpConfigTemplateFile(fileName)
+        ? `${JSON.stringify(createAgentPayMcpConfig({ selfHosted, mcpUrl: options.mcpUrl ?? DEFAULT_HOSTED_MCP_URL }), null, 2)}\n`
+        : undefined,
     })),
   ];
 
@@ -533,6 +552,28 @@ function getRuntimeTemplateFiles(runtime: AgentPayRuntimeName): string[] {
   return ["instructions.md", "mcp.json"];
 }
 
+function isMcpConfigTemplateFile(fileName: string): boolean {
+  return fileName === "mcp.json" || fileName === "claude_desktop_config.json";
+}
+
+function createAgentPayMcpConfig(options: { selfHosted: boolean; mcpUrl: string }): Record<string, unknown> {
+  return {
+    mcpServers: {
+      agentpay: options.selfHosted
+        ? {
+            command: "npx",
+            args: ["-y", "@agentpay-ai/agentpay", "mcp"],
+            env: {
+              AGENTPAY_CONFIG: "~/.agentpay/config.json",
+            },
+          }
+        : {
+            url: options.mcpUrl,
+          },
+    },
+  };
+}
+
 async function assertWritable(path: string, force: boolean): Promise<void> {
   try {
     await access(path, fsConstants.F_OK);
@@ -589,6 +630,7 @@ function createHelpText(): string {
     "",
     "Commands:",
     "  agentpay install [--runtime <codex|claude|cursor|generic|hermes>] [--output-dir ~/.agentpay] [--force]",
+    "  agentpay install --self-hosted [--runtime <codex|claude|cursor|generic|hermes>] [--output-dir ~/.agentpay] [--force]",
     "  agentpay doctor",
     "  agentpay setup-web",
     "  agentpay mcp",

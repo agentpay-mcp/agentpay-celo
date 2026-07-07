@@ -7,10 +7,10 @@
 - If the user wants a paid x402/API service but does not provide a URL, call `search_x402_services`, show Bazaar candidates, ask the user to choose one, collect required parameters, then call `prepare_x402_service_request`.
 - For x402 v2 `PAYMENT-REQUIRED` responses, call `parse_x402_payment_required`, run the exact-approval payment flow, then call `retry_x402_request` after tracking returns `COMPLETED`; it sends AgentPay receipt proof as `X-PAYMENT` and `PAYMENT-SIGNATURE`, reads V2 `PAYMENT-RESPONSE`, and includes `payment-identifier` idempotency data when advertised. Do not claim universal x402 facilitator compatibility unless the merchant supports this AgentPay proof bridge.
 - If AgentPay is not installed and terminal access is available, ask before running `npx @agentpay-ai/agentpay install`.
-- The installer writes `AgentPayAccount.bin` and points `AGENTPAY_ACCOUNT_BYTECODE_PATH` at it.
-- After the user fills the generated config, ask them to reload or reconnect the runtime if needed, then return to the agent chat.
-- Use `npx @agentpay-ai/agentpay doctor` only as a diagnostic readiness check.
-- Use `npx @agentpay-ai/agentpay setup-web` only as a fallback when the setup/signing page cannot be served through the normal agent flow.
+- The default install connects to the hosted AgentPay MCP at `https://mcp.agentpay.site/mcp`; users do not need Supabase, RPC, executor, deployer, or bytecode config.
+- Ask the user to reload or reconnect the runtime if needed, then return to the agent chat.
+- Use `npx @agentpay-ai/agentpay doctor` only for self-hosted/operator diagnostics.
+- Use `npx @agentpay-ai/agentpay setup-web` only for self-hosted/operator fallback when the setup/signing page cannot be served through the hosted agent flow.
 - Do not use raw RPC calls, raw LI.FI calls, manual token transfers, or private keys.
 - For owner controls, call `prepare_account_admin_transaction` and ask the owner wallet to submit the returned transaction.
 - Use `quote_payment_route` for direct path or route previews when the user asks about source token, route, fee, ETA, or max spend before approval.

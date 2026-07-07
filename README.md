@@ -12,9 +12,9 @@ Install AgentPay into a Codex, Claude, Cursor, Hermes, or generic MCP runtime:
 npx @agentpay-ai/agentpay install
 ```
 
-The installer detects the target runtime when possible, accepts `--runtime codex|claude|cursor|generic|hermes`, writes `~/.agentpay/config.json`, installs runtime MCP config, copies `skills/agentpay/SKILL.md`, and bundles `AgentPayAccount.bin`.
+The installer detects the target runtime when possible, accepts `--runtime codex|claude|cursor|generic|hermes`, installs runtime MCP config, and copies `skills/agentpay/SKILL.md`. By default the MCP config points to the hosted endpoint `https://mcp.agentpay.site/mcp`, so normal users do not need Supabase, RPC, executor, deployer, or bytecode config.
 
-Fill the generated config with Supabase, RPC, executor, and setup deployer values, then reload or reconnect the agent runtime if needed. After that, return to chat and ask naturally:
+Reload or reconnect the agent runtime if needed. After that, return to chat and ask naturally:
 
 ```txt
 Create an AgentPay wallet for me on X Layer testnet.
@@ -54,7 +54,7 @@ AgentPay separates ownership from execution.
 - Offchain guards: Supabase stores setup intents, payment intents, approval phrases, status transitions, and `payment_events` audit history.
 - x402 support can search Bazaar with `search_x402_services` when the user does not provide a URL, prepare the selected service with `prepare_x402_service_request`, parse v2 `PAYMENT-REQUIRED`, execute an approved AgentPay payment, and retry the protected resource with `X-PAYMENT` / `PAYMENT-SIGNATURE` headers containing an AgentPay receipt proof. The retry reads the V2 `PAYMENT-RESPONSE` header, keeps legacy `X-PAYMENT-RESPONSE` fallback, and appends `payment-identifier` idempotency data when the server advertises it. Strict standard x402 exact endpoints must support that AgentPay receipt proof bridge or use their native signer/facilitator path.
 
-`doctor`, `setup-web`, and `serve-http` are helper/operator commands, not the main user chat flow. Use `npx @agentpay-ai/agentpay doctor` for diagnostics, `npx @agentpay-ai/agentpay setup-web` only as a fallback when the setup page needs to be served manually, and `npx @agentpay-ai/agentpay serve-http` when deploying a public MCP endpoint behind HTTPS for A2MCP listing.
+`doctor`, `setup-web`, `mcp`, and `serve-http` are self-hosted/operator commands, not the main user chat flow. Use `npx @agentpay-ai/agentpay install --self-hosted` when you intentionally want local operator config and bytecode, `npx @agentpay-ai/agentpay doctor` for self-hosted diagnostics, `npx @agentpay-ai/agentpay setup-web` only as a self-hosted fallback, and `npx @agentpay-ai/agentpay serve-http` when deploying a public MCP endpoint behind HTTPS for A2MCP listing.
 
 ## Public A2MCP Endpoint
 
@@ -103,11 +103,11 @@ cd contracts && forge fmt --check
 
 `npm run demo:local` runs an in-memory wallet setup and chat-approved payment flow with no Supabase, RPC credentials, or private keys.
 
-`npm run release:smoke` packs `@agentpay-ai/skill`, `@agentpay-ai/shared`, `@agentpay-ai/mcp-server`, `@agentpay-ai/setup-web`, and `@agentpay-ai/agentpay` into local tarballs, installs them into a temporary project, runs `npx @agentpay-ai/agentpay install`, and verifies `agentpay doctor` with dummy non-secret config. Run it before publishing npm packages.
+`npm run release:smoke` packs `@agentpay-ai/skill`, `@agentpay-ai/shared`, `@agentpay-ai/mcp-server`, `@agentpay-ai/setup-web`, and `@agentpay-ai/agentpay` into local tarballs, installs them into a temporary project, verifies the hosted MCP config, then runs `agentpay install --self-hosted` plus `agentpay doctor` with dummy non-secret config. Run it before publishing npm packages.
 
-## Configuration
+## Self-Hosted Configuration
 
-The generated config and server environment use these core values:
+Hosted user installs do not require local config. The self-hosted config and server environment use these core values:
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`

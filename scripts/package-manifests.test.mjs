@@ -149,6 +149,24 @@ describe("publishable AgentPay package manifests", () => {
     assert.doesNotMatch(wrapper, /\["--import", "tsx"/);
   });
 
+  it("defaults installed MCP templates to the hosted HTTPS endpoint", async () => {
+    const templatePaths = [
+      "packages/cli/templates/codex/mcp.json",
+      "packages/cli/templates/cursor/mcp.json",
+      "packages/cli/templates/generic/mcp.json",
+      "packages/cli/templates/hermes/mcp.json",
+      "packages/cli/templates/claude/claude_desktop_config.json",
+    ];
+
+    for (const templatePath of templatePaths) {
+      const template = JSON.parse(await readFile(templatePath, "utf8"));
+
+      assert.deepEqual(template.mcpServers.agentpay, {
+        url: "https://mcp.agentpay.site/mcp",
+      });
+    }
+  });
+
   it("publishes the public HTTP MCP transport for A2MCP deployments", async () => {
     const manifest = await readPackageJson("apps/mcp-server");
 

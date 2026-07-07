@@ -13,6 +13,9 @@ describe("README", () => {
     assert.match(contents, /skills\/agentpay\/SKILL\.md/);
     assert.match(contents, /detects the target runtime/i);
     assert.match(contents, /npx @agentpay-ai\/agentpay install/);
+    assert.match(contents, /https:\/\/mcp\.agentpay\.site\/mcp/);
+    assert.match(contents, /normal users do not need Supabase, RPC, executor, deployer, or bytecode config/i);
+    assert.match(contents, /install --self-hosted/);
     assert.match(contents, /Create an AgentPay wallet/i);
     assert.match(contents, /mainnet or testnet/i);
     assert.match(contents, /network: "mainnet" \| "testnet"/);
@@ -30,6 +33,7 @@ describe("README", () => {
     assert.doesNotMatch(contents, /product blueprint/i);
     assert.doesNotMatch(quickStart, /agentpay doctor/i);
     assert.doesNotMatch(quickStart, /agentpay setup-web/i);
+    assert.doesNotMatch(quickStart, /Fill the generated config/i);
   });
 
   it("presents the npm CLI as a chat-first install flow", async () => {
@@ -38,6 +42,9 @@ describe("README", () => {
 
     assert.match(contents, /npx @agentpay-ai\/agentpay install/);
     assert.match(contents, /return to your agent chat/i);
+    assert.match(contents, /https:\/\/mcp\.agentpay\.site\/mcp/);
+    assert.match(contents, /No user secrets are required|do not manage Supabase/i);
+    assert.match(contents, /install --self-hosted/);
     assert.match(contents, /create an AgentPay wallet/i);
     assert.match(contents, /mainnet or testnet/i);
     assert.match(contents, /network: "mainnet" \| "testnet"/);
@@ -47,6 +54,7 @@ describe("README", () => {
     assert.match(contents, /AGENTPAY_A2MCP_PAYMENT_ENABLED/);
     assert.doesNotMatch(quickStart, /agentpay doctor/i);
     assert.doesNotMatch(quickStart, /agentpay setup-web/i);
+    assert.doesNotMatch(quickStart, /config\.json/);
   });
 
   it("keeps public AgentPay docs aligned to X Layer for the OKX branch", async () => {

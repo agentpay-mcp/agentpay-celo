@@ -2,7 +2,7 @@
 
 Chat-approved stablecoin payments for AI agents.
 
-AgentPay installs MCP tools, runtime instructions, smart account bytecode, and a local setup/signing web flow. Agents can prepare X Layer stablecoin payments, while the human keeps approval authority in chat.
+AgentPay installs MCP tools and runtime instructions for chat-approved X Layer payments. By default it connects users to the hosted AgentPay MCP endpoint, so normal users do not manage Supabase, RPC, executor, deployer, or bytecode config.
 
 ## Quick Start
 
@@ -16,7 +16,7 @@ Use `--runtime codex|claude|cursor|generic|hermes` to choose a runtime explicitl
 npx @agentpay-ai/agentpay install --runtime codex
 ```
 
-The installer writes `~/.agentpay/config.json`, MCP runtime files, `skills/agentpay/SKILL.md`, and `AgentPayAccount.bin`.
+The installer writes MCP runtime files and `skills/agentpay/SKILL.md`. The generated MCP config points to `https://mcp.agentpay.site/mcp`.
 
 After install, reload or reconnect your agent runtime if needed, then return to your agent chat. From there, ask naturally:
 
@@ -38,17 +38,20 @@ For x402 paid APIs, the agent uses `search_x402_services` when you do not provid
 
 ## Commands
 
-- `agentpay install` creates local AgentPay runtime files.
-- `agentpay mcp` starts the AgentPay MCP server over stdio.
+- `agentpay install` creates hosted AgentPay runtime files. No user secrets are required.
+- `agentpay install --self-hosted` creates local operator config, bytecode, and stdio MCP files.
+- `agentpay mcp` starts the self-hosted AgentPay MCP server over stdio.
 - `agentpay serve-http --host 0.0.0.0 --port 3001` starts the Streamable HTTP MCP server for public HTTPS A2MCP deployments.
-- `agentpay doctor` is a diagnostic check for required config without printing secrets.
-- `agentpay setup-web` is a fallback way to serve the setup/signing web server when the agent cannot start it for you.
+- `agentpay doctor` is a self-hosted/operator diagnostic check for required config without printing secrets.
+- `agentpay setup-web` is a self-hosted/operator fallback way to serve the setup/signing web server.
 
 For OKX.AI A2MCP listing, run `agentpay serve-http` behind your HTTPS domain or reverse proxy and register the public `/mcp` URL. Enable the **OKX Agent Payments Protocol** seller gate with `AGENTPAY_A2MCP_PAYMENT_ENABLED=true`, pay-to, price, network, and facilitator credentials. The built-in `/healthz` route remains free for platform health checks.
 
-## Required Configuration
+## Self-Hosted Configuration
 
-Fill the generated config or provide equivalent environment variables:
+Normal hosted installs do not require these values. Use them only for `agentpay install --self-hosted`, `agentpay mcp`, `agentpay setup-web`, or `agentpay serve-http`.
+
+Fill the self-hosted config or provide equivalent environment variables:
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`

@@ -23,17 +23,19 @@ npx @agentpay-ai/agentpay install
 
 The install command only installs/configures the MCP plugin and instructions. It must not create a wallet, deploy a smart account, sign messages, approve payments, or move funds.
 
-After installation, ask the user to fill the generated config and reload or reconnect the agent runtime if needed. Then return to the agent chat and continue with wallet creation or payment using AgentPay MCP tools.
+Default installs connect to the hosted AgentPay MCP endpoint at `https://mcp.agentpay.site/mcp`. Users do not need Supabase, RPC, executor, deployer, or bytecode config for normal chat usage.
 
-Use this diagnostic command only when checking configuration readiness or troubleshooting:
+After installation, ask the user to reload or reconnect the agent runtime if needed. Then return to the agent chat and continue with wallet creation or payment using AgentPay MCP tools.
+
+Use this diagnostic command only when checking self-hosted/operator configuration readiness or troubleshooting:
 
 ```bash
 npx @agentpay-ai/agentpay doctor
 ```
 
-This checks MCP and setup-web readiness without starting services or printing secret values.
+This checks self-hosted MCP and setup-web readiness without starting services or printing secret values.
 
-Use this fallback command only when the setup/signing page needs to be served outside the agent tool flow:
+Use this fallback command only for self-hosted/operator mode when the setup/signing page needs to be served outside the hosted agent tool flow:
 
 ```bash
 npx @agentpay-ai/agentpay setup-web
@@ -57,10 +59,10 @@ This will modify local MCP/runtime configuration. Do you approve?
 npx @agentpay-ai/agentpay install
 ```
 
-4. Ask the user to fill the generated config, reload or reconnect the runtime if needed, then return to the agent chat.
+4. Ask the user to reload or reconnect the runtime if needed, then return to the agent chat. Do not ask normal users to fill local Supabase, RPC, executor, deployer, or bytecode config.
 5. If you do not have terminal/local command access, explain that AgentPay cannot be installed or checked from this session.
-6. Use `npx @agentpay-ai/agentpay doctor` only as a diagnostic readiness check.
-7. Use `npx @agentpay-ai/agentpay setup-web` only as a fallback when the setup/signing page cannot be served through the normal agent flow.
+6. Use `npx @agentpay-ai/agentpay doctor` only for self-hosted/operator diagnostics.
+7. Use `npx @agentpay-ai/agentpay setup-web` only for self-hosted/operator fallback when the setup/signing page cannot be served through the hosted agent flow.
 8. Continue in chat with wallet creation by calling `prepare_wallet_creation` and `check_wallet_creation`.
 
 ## Available MCP Tools

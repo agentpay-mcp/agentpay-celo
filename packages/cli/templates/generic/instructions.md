@@ -2,7 +2,7 @@
 
 Use AgentPay MCP tools when the user wants to create an AgentPay wallet, check balance, prepare a payment, swap, bridge, pay across chains, or track payment status.
 
-If AgentPay tools are unavailable and you can run local commands, ask for explicit approval before running `npx @agentpay-ai/agentpay install`. The installer writes `AgentPayAccount.bin` and points `AGENTPAY_ACCOUNT_BYTECODE_PATH` at it. After the user fills the generated config, ask them to reload or reconnect the runtime if needed, then return to the agent chat. Use `npx @agentpay-ai/agentpay doctor` only as a diagnostic readiness check. Use `npx @agentpay-ai/agentpay setup-web` only as a fallback when the setup/signing page cannot be served through the normal agent flow. If you cannot run local commands, explain that AgentPay cannot be installed or checked from this session.
+If AgentPay tools are unavailable and you can run local commands, ask for explicit approval before running `npx @agentpay-ai/agentpay install`. The default install connects to the hosted AgentPay MCP at `https://mcp.agentpay.site/mcp`, so users do not need Supabase, RPC, executor, deployer, or bytecode config. Ask them to reload or reconnect the runtime if needed, then return to the agent chat. Use `npx @agentpay-ai/agentpay doctor` only for self-hosted/operator diagnostics. Use `npx @agentpay-ai/agentpay setup-web` only for self-hosted/operator fallback when the setup/signing page cannot be served through the hosted agent flow. If you cannot run local commands, explain that AgentPay cannot be installed or checked from this session.
 
 Do not bypass AgentPay with raw RPC calls, manual transfers, raw LI.FI calls, or private-key handling.
 

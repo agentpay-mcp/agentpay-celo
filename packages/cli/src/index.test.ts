@@ -23,6 +23,19 @@ describe("parseCliArgs", () => {
       runtime: "codex",
       outputDir: "/tmp/agentpay",
       force: true,
+      selfHosted: false,
+      mcpUrl: "https://mcp.agentpay.site/mcp",
+    });
+  });
+
+  it("parses self-hosted install mode", () => {
+    assert.deepEqual(parseCliArgs(["install", "--self-hosted", "--mcp-url", "https://mcp.example/mcp"]), {
+      command: "install",
+      runtime: "generic",
+      outputDir: `${process.env.HOME}/.agentpay`,
+      force: false,
+      selfHosted: true,
+      mcpUrl: "https://mcp.example/mcp",
     });
   });
 
@@ -64,13 +77,49 @@ describe("installAgentPay", () => {
         packageRoot: process.cwd(),
       });
 
-      const config = JSON.parse(await readFile(join(outputDir, "config.json"), "utf8"));
-      const bytecodePath = join(outputDir, "AgentPayAccount.bin");
-      const bytecode = await readFile(bytecodePath, "utf8");
       const mcpConfig = JSON.parse(await readFile(join(outputDir, "runtimes", "codex", "mcp.json"), "utf8"));
       const instructions = await readFile(join(outputDir, "runtimes", "codex", "AGENTS.md"), "utf8");
       const skill = await readFile(join(outputDir, "skills", "agentpay", "SKILL.md"), "utf8");
       const skillMetadata = await readFile(join(outputDir, "skills", "agentpay", "agents", "openai.yaml"), "utf8");
+
+      assert.match(skill, /Requires exact chat approval before execution/);
+      assert.match(skillMetadata, /display_name: AgentPay/);
+      assert.deepEqual(mcpConfig.mcpServers.agentpay, {
+        url: "https://mcp.agentpay.site/mcp",
+      });
+      assert.match(instructions, /return to the agent chat/i);
+      assert.match(instructions, /hosted AgentPay MCP/i);
+      assert.doesNotMatch(instructions, /fills? the generated config/i);
+      assert.match(instructions, /prepare_wallet_creation/);
+      assert.match(instructions, /check_wallet_creation/);
+      assert.match(instructions, /Never call `execute_payment`/);
+      assert.match(instructions, /call `track_payment`/);
+      assert.deepEqual(result.writtenFiles.sort(), [
+        join(outputDir, "runtimes", "codex", "AGENTS.md"),
+        join(outputDir, "runtimes", "codex", "mcp.json"),
+        join(outputDir, "skills", "agentpay", "SKILL.md"),
+        join(outputDir, "skills", "agentpay", "agents", "openai.yaml"),
+      ].sort());
+    } finally {
+      await rm(outputDir, { recursive: true, force: true });
+    }
+  });
+
+  it("writes self-hosted config, bytecode, and local MCP command only when requested", async () => {
+    const outputDir = await mkdtemp(join(tmpdir(), "agentpay-cli-"));
+
+    try {
+      const result = await installAgentPay({
+        runtime: "codex",
+        outputDir,
+        packageRoot: process.cwd(),
+        selfHosted: true,
+      });
+
+      const config = JSON.parse(await readFile(join(outputDir, "config.json"), "utf8"));
+      const bytecodePath = join(outputDir, "AgentPayAccount.bin");
+      const bytecode = await readFile(bytecodePath, "utf8");
+      const mcpConfig = JSON.parse(await readFile(join(outputDir, "runtimes", "codex", "mcp.json"), "utf8"));
 
       assert.deepEqual(
         config,
@@ -83,28 +132,18 @@ describe("installAgentPay", () => {
       assert.equal("XLAYER_TESTNET_RPC_URL" in config, true);
       assert.equal("AGENTPAY_OWNER_ADDRESS" in config, true);
       assert.equal("AGENTPAY_EXECUTOR_ADDRESS" in config, true);
-      assert.equal(config.AGENTPAY_ACCOUNT_BYTECODE_PATH, bytecodePath);
-      assert.match(bytecode, /^0x[a-fA-F0-9]{200,}\n$/);
-      assert.match(skill, /Requires exact chat approval before execution/);
-      assert.match(skillMetadata, /display_name: AgentPay/);
       assert.equal("AGENTPAY_INITIAL_ROUTE_TARGETS" in config, true);
       assert.equal("X402_BAZAAR_FACILITATOR_URL" in config, true);
       assert.equal("SETUP_WEB_PORT" in config, true);
+      assert.equal(config.AGENTPAY_ACCOUNT_BYTECODE_PATH, bytecodePath);
+      assert.match(bytecode, /^0x[a-fA-F0-9]{200,}\n$/);
       assert.equal(mcpConfig.mcpServers.agentpay.command, "npx");
       assert.deepEqual(mcpConfig.mcpServers.agentpay.args, ["-y", "@agentpay-ai/agentpay", "mcp"]);
-      assert.match(instructions, /return to the agent chat/i);
-      assert.match(instructions, /prepare_wallet_creation/);
-      assert.match(instructions, /check_wallet_creation/);
-      assert.match(instructions, /Never call `execute_payment`/);
-      assert.match(instructions, /call `track_payment`/);
-      assert.deepEqual(result.writtenFiles.sort(), [
-        join(outputDir, "AgentPayAccount.bin"),
-        join(outputDir, "config.json"),
-        join(outputDir, "runtimes", "codex", "AGENTS.md"),
-        join(outputDir, "runtimes", "codex", "mcp.json"),
-        join(outputDir, "skills", "agentpay", "SKILL.md"),
-        join(outputDir, "skills", "agentpay", "agents", "openai.yaml"),
-      ].sort());
+      assert.deepEqual(mcpConfig.mcpServers.agentpay.env, {
+        AGENTPAY_CONFIG: "~/.agentpay/config.json",
+      });
+      assert.ok(result.writtenFiles.includes(join(outputDir, "config.json")));
+      assert.ok(result.writtenFiles.includes(bytecodePath));
     } finally {
       await rm(outputDir, { recursive: true, force: true });
     }
@@ -138,9 +177,10 @@ describe("installAgentPay", () => {
         assert.match(instructions, /setup signature.*not payment approval/i, runtime);
         assert.match(instructions, /prepare_wallet_creation/, runtime);
         assert.match(instructions, /check_wallet_creation/, runtime);
-        assert.match(instructions, /doctor.*diagnostic|diagnostic.*doctor/i, runtime);
-        assert.match(instructions, /setup-web.*fallback|fallback.*setup-web/i, runtime);
-        assert.match(instructions, /AgentPayAccount\.bin/, runtime);
+        assert.match(instructions, /hosted AgentPay MCP/i, runtime);
+        assert.match(instructions, /doctor.*self-hosted|self-hosted.*doctor/i, runtime);
+        assert.match(instructions, /setup-web.*self-hosted|self-hosted.*setup-web/i, runtime);
+        assert.doesNotMatch(instructions, /fills? the generated config/i, runtime);
         assert.match(instructions, /parse_invoice_payment/, runtime);
         assert.match(instructions, /parse_x402_payment_required/, runtime);
         assert.match(instructions, /search_x402_services/, runtime);
@@ -170,7 +210,7 @@ describe("installAgentPay", () => {
 
       const forced = await installAgentPay({ runtime: "generic", outputDir, packageRoot: process.cwd(), force: true });
 
-      assert.ok(forced.writtenFiles.includes(join(outputDir, "config.json")));
+      assert.ok(forced.writtenFiles.includes(join(outputDir, "runtimes", "generic", "mcp.json")));
     } finally {
       await rm(outputDir, { recursive: true, force: true });
     }
@@ -203,11 +243,11 @@ describe("installAgentPay", () => {
         packageRoot,
       });
 
-      const config = JSON.parse(await readFile(join(outputDir, "config.json"), "utf8"));
-      const bytecode = await readFile(join(outputDir, "AgentPayAccount.bin"), "utf8");
+      const mcpConfig = JSON.parse(await readFile(join(outputDir, "runtimes", "generic", "mcp.json"), "utf8"));
 
-      assert.equal(config.AGENTPAY_ACCOUNT_BYTECODE_PATH, join(outputDir, "AgentPayAccount.bin"));
-      assert.match(bytecode, /^0x[a-fA-F0-9]{200,}\n$/);
+      assert.deepEqual(mcpConfig.mcpServers.agentpay, {
+        url: "https://mcp.agentpay.site/mcp",
+      });
       assert.ok(result.writtenFiles.includes(join(outputDir, "runtimes", "generic", "instructions.md")));
     } finally {
       await rm(tempDir, { recursive: true, force: true });
