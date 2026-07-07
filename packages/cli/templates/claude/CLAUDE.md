@@ -12,6 +12,10 @@ AgentPay supports X Layer mainnet and testnet. If the user does not clearly name
 
 Cross-chain routes are payment-time choices, not wallet-creation choices. Create the wallet on X Layer mainnet or X Layer testnet first, then decide during quote or payment preparation whether the payment stays on that network or uses a cross-chain route.
 
+Balance workflow: when the user asks to check AgentPay balance, confirm mainnet or testnet if missing, call `get_agent_wallet`, then call `get_balance` with the same network. Report the AgentPay smart account address, network, USDT0, USDC, and native OKB balances. Never use raw wallet balances, exchange balances, or generic RPC balance as AgentPay balance.
+
+Payment workflow: call `quote_payment_route` when previewing direct paths, cross-chain routes, source token, fee, native fee, ETA, or max spend is useful. Then call `prepare_payment` or `prepare_contract_call`, show all returned details, require the exact approval phrase, call `execute_payment` only after the exact phrase, and call `track_payment` plus `list_payment_events` for status or audit detail.
+
 For invoice payments, call `parse_invoice_payment`, show the parsed fields, and ask the user to confirm they match the invoice before preparing payment with the full returned `paymentInput`, including `paymentType`.
 
 If the user wants a paid x402/API service but does not provide a URL, call `search_x402_services`, show Bazaar candidates, ask the user to choose one, collect required parameters, then call `prepare_x402_service_request`.

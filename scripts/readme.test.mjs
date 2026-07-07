@@ -101,6 +101,37 @@ describe("README", () => {
     }
   });
 
+  it("keeps installed agent instructions aligned to the Codex operational workflows", async () => {
+    const files = [
+      "packages/skill/SKILL.md",
+      "packages/cli/templates/codex/AGENTS.md",
+      "packages/cli/templates/claude/CLAUDE.md",
+      "packages/cli/templates/cursor/rules.md",
+      "packages/cli/templates/generic/instructions.md",
+      "packages/cli/templates/hermes/instructions.md",
+    ];
+
+    for (const file of files) {
+      const contents = await readFile(file, "utf8");
+
+      assert.match(contents, /Use AgentPay MCP tools|Use AgentPay when/i, `${file} must route requests to AgentPay`);
+      assert.match(contents, /prepare_wallet_creation/, `${file} must describe wallet setup`);
+      assert.match(contents, /check_wallet_creation/, `${file} must describe wallet completion checks`);
+      assert.match(contents, /get_agent_wallet[\s\S]*get_balance|get_balance[\s\S]*get_agent_wallet/, `${file} must describe balance reads through AgentPay tools`);
+      assert.match(contents, /Never use raw wallet balances, exchange balances, or generic RPC balance/i, `${file} must forbid non-AgentPay balance sources`);
+      assert.match(contents, /quote_payment_route/, `${file} must describe route previews`);
+      assert.match(contents, /prepare_payment/, `${file} must describe payment preparation`);
+      assert.match(contents, /prepare_contract_call/, `${file} must describe guarded contract calls`);
+      assert.match(contents, /check_route_target_allowance/, `${file} must describe route target checks`);
+      assert.match(contents, /prepare_route_target_allowance/, `${file} must describe route target owner transactions`);
+      assert.match(contents, /execute_payment/, `${file} must describe execution`);
+      assert.match(contents, /track_payment/, `${file} must describe tracking`);
+      assert.match(contents, /list_payment_events/, `${file} must describe audit events`);
+      assert.match(contents, /Reject vague confirmations|Never accept vague confirmations/i, `${file} must reject vague approvals`);
+      assert.match(contents, /insufficient balance[\s\S]*do not ask for approval|do not request approval[\s\S]*insufficient balance/i, `${file} must stop on insufficient balance`);
+    }
+  });
+
   it("keeps x402 instructions on the AgentPay receipt-proof retry flow", async () => {
     const files = [
       "README.md",

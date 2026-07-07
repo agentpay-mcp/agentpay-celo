@@ -128,6 +128,8 @@ When the user asks about funds or before preparing payment:
 3. Call `get_balance` with the selected network.
 4. Show balances with token symbols, chain names, and wallet address.
 
+Never use raw wallet balances, exchange balances, or generic RPC balance as AgentPay balance. AgentPay balance means the balance returned by `get_balance` for the AgentPay smart account on the selected network.
+
 If the wallet is not created, use the wallet creation workflow first.
 
 ## Invoice Workflow

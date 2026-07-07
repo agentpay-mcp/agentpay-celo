@@ -177,6 +177,8 @@ describe("installAgentPay", () => {
         assert.match(instructions, /setup signature.*not payment approval/i, runtime);
         assert.match(instructions, /prepare_wallet_creation/, runtime);
         assert.match(instructions, /check_wallet_creation/, runtime);
+        assert.match(instructions, /get_agent_wallet[\s\S]*get_balance|get_balance[\s\S]*get_agent_wallet/, runtime);
+        assert.match(instructions, /Never use raw wallet balances, exchange balances, or generic RPC balance/i, runtime);
         assert.match(instructions, /hosted AgentPay MCP/i, runtime);
         assert.match(instructions, /doctor.*self-hosted|self-hosted.*doctor/i, runtime);
         assert.match(instructions, /setup-web.*self-hosted|self-hosted.*setup-web/i, runtime);
