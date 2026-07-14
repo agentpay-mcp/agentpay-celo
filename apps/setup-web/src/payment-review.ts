@@ -459,9 +459,18 @@ function renderPaymentReviewPage(nonce: string): string {
         const summary = document.getElementById("summary");
         const typedData = document.getElementById("typed-data");
         const sign = document.getElementById("sign");
-        const ethereum = [window.okxwallet, window.ethereum].find(
-          (candidate) => candidate && typeof candidate.request === "function",
-        );
+        const announcedProviders = [];
+        const rememberProvider = (provider, name = "EIP-6963 wallet") => {
+          if (provider && typeof provider.request === "function" && !announcedProviders.some((entry) => entry.provider === provider)) {
+            announcedProviders.push({ provider, name });
+          }
+        };
+        window.addEventListener("eip6963:announceProvider", (event) => {
+          rememberProvider(event.detail?.provider, event.detail?.info?.name || event.detail?.info?.rdns);
+        });
+        window.dispatchEvent(new Event("eip6963:requestProvider"));
+        let ethereum;
+        let listenedProvider;
 
         history.replaceState(null, document.title, window.location.pathname);
 
@@ -474,10 +483,62 @@ function renderPaymentReviewPage(nonce: string): string {
         };
         const chainHex = (chainId) => "0x" + Number(chainId).toString(16);
         const accountMatches = (account, expected) => String(account).toLowerCase() === String(expected).toLowerCase();
+        const providerCandidates = () => {
+          const candidates = [
+            { provider: window.okxwallet, name: "OKX Wallet" },
+            { provider: window.ethereum, name: "Injected EVM wallet" },
+            ...(Array.isArray(window.ethereum?.providers)
+              ? window.ethereum.providers.map((provider, index) => ({ provider, name: "Injected wallet " + (index + 1) }))
+              : []),
+            ...announcedProviders,
+          ];
+          return candidates.filter((candidate, index, all) =>
+            candidate.provider && typeof candidate.provider.request === "function"
+              && all.findIndex((entry) => entry.provider === candidate.provider) === index,
+          );
+        };
+        const findProviderState = async () => {
+          if (!state.payload) return undefined;
+          const expectedOwner = state.payload.summary.ownerAddress;
+          const expectedChain = chainHex(state.payload.authorization.domain.chainId).toLowerCase();
+          let anyProvider;
+          let ownerProvider;
+          for (const candidate of providerCandidates()) {
+            try {
+              const accounts = await candidate.provider.request({ method: "eth_accounts" });
+              const chainId = await candidate.provider.request({ method: "eth_chainId" });
+              const current = { ...candidate, accounts, chainId };
+              anyProvider ??= current;
+              if (accounts?.some((account) => accountMatches(account, expectedOwner))) {
+                ownerProvider ??= current;
+                if (String(chainId).toLowerCase() === expectedChain) return current;
+              }
+            } catch {
+              // A provider may be present but unavailable; try the next announced wallet.
+            }
+          }
+          return ownerProvider ?? anyProvider;
+        };
+        const listenToProvider = (provider) => {
+          if (!provider || listenedProvider === provider) return;
+          listenedProvider = provider;
+          provider.on?.("accountsChanged", () => { void checkWallet(); });
+          provider.on?.("chainChanged", () => { void checkWallet(); });
+        };
         const checkWallet = async () => {
-          if (!ethereum || !state.payload) return false;
-          const accounts = await ethereum.request({ method: "eth_accounts" });
-          const chainId = await ethereum.request({ method: "eth_chainId" });
+          if (!state.payload) return false;
+          const selected = await findProviderState();
+          if (!selected) {
+            ethereum = undefined;
+            setNotice("Open this page in a browser with an EVM wallet.", "error");
+            sign.disabled = false;
+            sign.textContent = "Connect wallet";
+            return false;
+          }
+          ethereum = selected.provider;
+          listenToProvider(ethereum);
+          const accounts = selected.accounts;
+          const chainId = selected.chainId;
           if (!accounts?.[0] || !accountMatches(accounts[0], state.payload.summary.ownerAddress)) {
             setNotice("Connect the owner wallet shown in the review details.", "error"); sign.disabled = false; sign.textContent = "Connect owner wallet"; return false;
           }
@@ -487,9 +548,11 @@ function renderPaymentReviewPage(nonce: string): string {
           setNotice("Everything matches. Review the details, then sign the authorization."); sign.disabled = false; sign.textContent = "Review & Sign"; return true;
         };
         const connectAndSign = async () => {
-          if (!ethereum || !state.payload) { setNotice("No compatible EVM wallet was found.", "error"); return; }
+          if (!state.payload) return;
           sign.disabled = true;
           try {
+            ethereum = ethereum || providerCandidates()[0]?.provider;
+            if (!ethereum) { setNotice("No compatible EVM wallet was found.", "error"); sign.disabled = false; return; }
             await ethereum.request({ method: "eth_requestAccounts" });
             if (!await checkWallet()) return;
             const accounts = await ethereum.request({ method: "eth_accounts" });
@@ -527,8 +590,6 @@ function renderPaymentReviewPage(nonce: string): string {
             typedData.textContent = JSON.stringify(body.authorization, null, 2);
             if (body.status === "SIGNED") { sign.disabled = true; setNotice("This payment is already signed. Return to chat to continue execution.", "success"); return; }
             sign.addEventListener("click", connectAndSign);
-            if (!ethereum) { setNotice("Open this page in a browser with an EVM wallet.", "error"); return; }
-            ethereum.on?.("accountsChanged", () => { void checkWallet(); }); ethereum.on?.("chainChanged", () => { void checkWallet(); });
             await checkWallet();
           } catch (error) { setNotice(error instanceof Error ? error.message : "Review unavailable.", "error"); }
         };

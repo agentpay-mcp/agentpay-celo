@@ -106,10 +106,12 @@ describe("Review & Sign page", () => {
     assert.equal(response.headers.get("referrer-policy"), "no-referrer");
     assert.match(response.headers.get("content-security-policy") ?? "", /frame-ancestors 'none'/);
     assert.match(html, /eth_signTypedData_v4/);
-    assert.match(
-      html,
-      /const ethereum = \[window\.okxwallet, window\.ethereum\]\.find\(\s*\(candidate\) => candidate && typeof candidate\.request === "function",?\s*\);/,
-    );
+    assert.match(html, /const providerCandidates = \(\) =>/);
+    assert.match(html, /window\.okxwallet/);
+    assert.match(html, /candidate\.provider\.request/);
+    assert.match(html, /eip6963:announceProvider/);
+    assert.match(html, /eip6963:requestProvider/);
+    assert.match(html, /accounts\?\.some\(\(account\) => accountMatches\(account, expectedOwner\)\)/);
     assert.doesNotMatch(html, /eth_sendTransaction|personal_sign/);
     assert.doesNotMatch(html, /localStorage/);
   });
