@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { concat, hexlify, Signature, toBeHex, Wallet } from "ethers";
+import { concat, hexlify, Signature, toBeHex, TypedDataEncoder, Wallet } from "ethers";
 
 import {
   createPaymentAuthorizationFromIntent,
@@ -50,20 +50,23 @@ const intent: PaymentIntentRecord = {
   approvalPhrase: "APPROVE pay_review_123",
 };
 
-function createFixture(overrides: Partial<PaymentReviewHandoffRecord> = {}) {
-  const authorization = createPaymentAuthorizationFromIntent(intent, intent.tenantId!);
+function createFixture(
+  overrides: Partial<PaymentReviewHandoffRecord> = {},
+  selectedIntent: PaymentIntentRecord = intent,
+) {
+  const authorization = createPaymentAuthorizationFromIntent(selectedIntent, selectedIntent.tenantId!);
   let handoff: PaymentReviewHandoffRecord = {
     id: "review_pay_review_123",
-    paymentIntentId: intent.id,
-    tenantId: intent.tenantId!,
-    ownerAddress: intent.ownerAddress,
-    accountAddress: intent.accountAddress,
-    sourceChainId: intent.sourceChainId,
+    paymentIntentId: selectedIntent.id,
+    tenantId: selectedIntent.tenantId!,
+    ownerAddress: selectedIntent.ownerAddress,
+    accountAddress: selectedIntent.accountAddress,
+    sourceChainId: selectedIntent.sourceChainId,
     authorizationHash: hashPaymentAuthorization(authorization),
     tokenDigest: hashPaymentReviewToken(token, reviewTokenSecret),
     status: "PENDING",
     createdAt: "2026-07-12T23:00:00.000Z",
-    expiresAt: intent.deadline,
+    expiresAt: selectedIntent.deadline,
     ...overrides,
   };
   const paymentReviews: PaymentReviewRepository = {
@@ -88,7 +91,7 @@ function createFixture(overrides: Partial<PaymentReviewHandoffRecord> = {}) {
   };
   return {
     paymentReviews,
-    paymentIntents: { async getPaymentIntent() { return intent; } },
+    paymentIntents: { async getPaymentIntent() { return selectedIntent; } },
     clock: () => new Date("2026-07-12T23:30:00.000Z"),
     reviewTokenSecret,
     authorization,
@@ -106,6 +109,7 @@ describe("Review & Sign page", () => {
     assert.equal(response.headers.get("referrer-policy"), "no-referrer");
     assert.match(response.headers.get("content-security-policy") ?? "", /frame-ancestors 'none'/);
     assert.match(html, /eth_signTypedData_v4/);
+    assert.match(html, /walletAuthorization/);
     assert.match(html, /const providerCandidates = \(\) =>/);
     assert.match(html, /window\.okxwallet/);
     assert.match(html, /candidate\.provider\.request/);
@@ -156,8 +160,64 @@ describe("Review & Sign handoff API", () => {
     assert.equal(body.status, "PENDING");
     assert.equal(body.authorizationHash, fixture.authorizationHash);
     assert.equal(body.summary.ownerAddress, owner.address);
+    assert.deepEqual(body.walletAuthorization.types.EIP712Domain, [
+      { name: "name", type: "string" },
+      { name: "version", type: "string" },
+      { name: "chainId", type: "uint256" },
+      { name: "verifyingContract", type: "address" },
+    ]);
+    assert.equal(body.walletAuthorization.primaryType, body.authorization.primaryType);
+    assert.equal(body.walletAuthorization.domain.chainId, "0xc4");
+    assert.equal(
+      TypedDataEncoder.hash(
+        body.walletAuthorization.domain,
+        {
+          [body.walletAuthorization.primaryType]:
+            body.walletAuthorization.types[body.walletAuthorization.primaryType],
+        },
+        body.walletAuthorization.message,
+      ),
+      body.authorizationHash,
+    );
     assert.equal("signature" in body, false);
     assert.equal(response.headers.get("cache-control"), "no-store");
+  });
+
+  it("preserves the canonical digest for a cross-chain route wallet payload", async () => {
+    const routeIntent: PaymentIntentRecord = {
+      ...intent,
+      id: "pay_review_route_123",
+      destinationChainId: 8453,
+      destinationTokenAddress: "0x6666666666666666666666666666666666666666",
+      destinationTokenSymbol: "USDC",
+      maxAmountIn: "1.02",
+      minAmountOut: "1",
+      maxNativeFee: "250000000000000",
+      nativeValue: "100000000000000",
+      routeProvider: "LI.FI",
+      routeTarget: "0x7777777777777777777777777777777777777777",
+      routeCalldata: "0x1234",
+      routeCalldataHash: "0x56570de287d73cd1cb6092bb8fdee6173974955fdef345ae579ee9f475ea7432",
+      routeSummary: "Route 1 USDT0 from X Layer to 1 USDC on Base.",
+      approvalPhrase: "APPROVE pay_review_route_123",
+    };
+    const fixture = createFixture({}, routeIntent);
+    const handler = createPaymentReviewHandler(fixture);
+    const response = await handler(new Request("https://wallet.agentpay.site/api/payment-review", {
+      headers: { "x-agentpay-review-token": token },
+    }));
+    const body = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(body.walletAuthorization.primaryType, "RoutePaymentAuthorization");
+    assert.equal(
+      TypedDataEncoder.hash(
+        body.walletAuthorization.domain,
+        { RoutePaymentAuthorization: body.walletAuthorization.types.RoutePaymentAuthorization },
+        body.walletAuthorization.message,
+      ),
+      body.authorizationHash,
+    );
   });
 
   it("accepts only the owner EIP-712 signature and makes the same signature retry idempotent", async () => {

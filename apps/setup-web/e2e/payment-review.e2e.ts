@@ -1,10 +1,18 @@
 import { expect, test } from "@playwright/test";
-import { Wallet } from "ethers";
+import { TypedDataEncoder, Wallet } from "ethers";
 
 import { createPaymentReviewE2eFixture } from "./payment-review-fixture.ts";
 import { installMockWallet, setWalletAccount, setWalletChain, walletMethods } from "./eip1193-wallet.ts";
 
 type ReviewFixture = Awaited<ReturnType<typeof createPaymentReviewE2eFixture>>;
+
+function expectedWalletTypedData(authorization: NonNullable<ReviewFixture["prepared"]["authorization"]>) {
+  return TypedDataEncoder.getPayload(
+    authorization.domain,
+    authorization.types as unknown as Record<string, Array<{ name: string; type: string }>>,
+    authorization.message,
+  );
+}
 
 let fixture: ReviewFixture;
 let fixtureStarted = false;
@@ -35,7 +43,7 @@ test("completes prepare -> browser sign -> scoped signature handoff without a tr
   await installMockWallet(page, {
     account: fixture.owner.address,
     chainIdHex: fixture.expectedChainHex,
-    expectedTypedData: fixture.prepared.authorization,
+    expectedTypedData: expectedWalletTypedData(fixture.prepared.authorization!),
     signature: fixture.signature,
   });
 
@@ -72,7 +80,7 @@ test("completes prepare -> browser sign -> scoped signature handoff without a tr
   await installMockWallet(reopenedPage, {
     account: fixture.owner.address,
     chainIdHex: fixture.expectedChainHex,
-    expectedTypedData: fixture.prepared.authorization,
+    expectedTypedData: expectedWalletTypedData(fixture.prepared.authorization!),
     signature: fixture.signature,
   });
   await reopenedPage.goto(fixture.prepared.reviewUrl!);
@@ -86,7 +94,7 @@ test("blocks a wrong owner and resumes only after accountsChanged matches the ow
   await installMockWallet(page, {
     account: otherOwner.address,
     chainIdHex: fixture.expectedChainHex,
-    expectedTypedData: fixture.prepared.authorization,
+    expectedTypedData: expectedWalletTypedData(fixture.prepared.authorization!),
     signature: fixture.signature,
   });
 
@@ -108,7 +116,7 @@ test("blocks the wrong chain and resumes only after chainChanged matches the sou
   await installMockWallet(page, {
     account: fixture.owner.address,
     chainIdHex: "0xc4",
-    expectedTypedData: fixture.prepared.authorization,
+    expectedTypedData: expectedWalletTypedData(fixture.prepared.authorization!),
     signature: fixture.signature,
   });
 
@@ -128,7 +136,7 @@ test("keeps an expired handoff non-executable", async ({ page }) => {
   await installMockWallet(page, {
     account: fixture.owner.address,
     chainIdHex: fixture.expectedChainHex,
-    expectedTypedData: fixture.prepared.authorization,
+    expectedTypedData: expectedWalletTypedData(fixture.prepared.authorization!),
     signature: fixture.signature,
   });
 
@@ -143,7 +151,7 @@ test("keeps a rejected wallet signature pending and allows an intentional retry"
   await installMockWallet(page, {
     account: fixture.owner.address,
     chainIdHex: fixture.expectedChainHex,
-    expectedTypedData: fixture.prepared.authorization,
+    expectedTypedData: expectedWalletTypedData(fixture.prepared.authorization!),
     signature: fixture.signature,
     rejectSignCount: 1,
   });
@@ -174,7 +182,7 @@ test("recovers the same signature after a lost response and rejects a conflictin
   await installMockWallet(page, {
     account: fixture.owner.address,
     chainIdHex: fixture.expectedChainHex,
-    expectedTypedData: fixture.prepared.authorization,
+    expectedTypedData: expectedWalletTypedData(fixture.prepared.authorization!),
     signature: fixture.signature,
   });
 

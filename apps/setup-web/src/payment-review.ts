@@ -14,6 +14,7 @@ import {
   paymentReviewTokenSchema,
   type PaymentIntentRecord,
 } from "@agentpay-ai/shared";
+import { TypedDataEncoder } from "ethers";
 import { z } from "zod";
 
 const reviewSignatureBodySchema = z.object({
@@ -155,6 +156,11 @@ async function handleOpenReview(token: string, dependencies: PaymentReviewWebDep
     paymentIntentId: loaded.intent.id,
     status: loaded.handoff.status,
     authorization: loaded.authorization,
+    walletAuthorization: TypedDataEncoder.getPayload(
+      loaded.authorization.domain,
+      loaded.authorization.types as unknown as Record<string, Array<{ name: string; type: string }>>,
+      loaded.authorization.message,
+    ),
     authorizationHash: loaded.authorizationHash,
     summary: createReviewSummary(loaded.intent, loaded.authorization.domain.chainId, loaded.authorizationHash),
   });
@@ -556,7 +562,8 @@ function renderPaymentReviewPage(nonce: string): string {
             await ethereum.request({ method: "eth_requestAccounts" });
             if (!await checkWallet()) return;
             const accounts = await ethereum.request({ method: "eth_accounts" });
-            const signature = await ethereum.request({ method: "eth_signTypedData_v4", params: [accounts[0], JSON.stringify(state.payload.authorization)] });
+            if (!state.payload.walletAuthorization) throw new Error("Review unavailable.");
+            const signature = await ethereum.request({ method: "eth_signTypedData_v4", params: [accounts[0], JSON.stringify(state.payload.walletAuthorization)] });
             const response = await fetch("/api/payment-review", { method: "POST", headers: { "content-type": "application/json", "x-agentpay-review-token": state.token }, body: JSON.stringify({ signature }) });
             const body = await response.json();
             if (!response.ok) throw new Error(body.error || "Signature handoff failed.");
