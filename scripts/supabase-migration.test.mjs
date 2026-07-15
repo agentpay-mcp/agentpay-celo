@@ -12,6 +12,7 @@ const paidExecutionChallengeOutboxMigrationPath = "supabase/migrations/202607131
 const paidExecutionCanaryLedgerMigrationPath = "supabase/migrations/20260713170000_paid_execution_canary_ledger.sql";
 const canaryOwnerRebindingMigrationPath = "supabase/migrations/20260714180000_canary_owner_rebinding.sql";
 const oauthConsumerAuthorizationMigrationPath = "supabase/migrations/20260715110000_oauth_consumer_authorization.sql";
+const paymentIntentAuditMigrationPath = "supabase/migrations/20260715153000_payment_intent_atomic_audit.sql";
 const migrationsDir = "supabase/migrations";
 const requiredTables = ["setup_intents", "agent_wallets", "payment_intents", "payment_events"];
 const requiredSecurityStatements = [
@@ -307,5 +308,29 @@ describe("AgentPay Supabase migration", () => {
     assert.ok(sql.includes("alter table public.paid_execution_canary_reservations enable row level security"));
     assert.ok(sql.includes("revoke all on table public.paid_execution_canary_reservations from public, anon, authenticated"));
     assert.ok(sql.includes("grant execute on function public.reserve_paid_execution_canary"));
+  });
+
+  it("records payment intent state changes with a transactional tenant-bound audit trigger", async () => {
+    const sql = normalizeSql(await readFile(paymentIntentAuditMigrationPath, "utf8"));
+
+    assert.ok(sql.startsWith("begin;"));
+    assert.ok(sql.endsWith("commit;"));
+    assert.ok(sql.includes("create or replace function public.record_payment_intent_state_event"));
+    assert.ok(sql.includes("after insert or update of status on public.payment_intents"));
+    assert.ok(sql.includes("insert into public.payment_events"));
+    assert.ok(sql.includes("new.tenant_id"));
+    assert.ok(sql.includes("new.id"));
+    for (const eventType of [
+      "payment_created",
+      "payment_approved",
+      "payment_executing",
+      "payment_failed",
+      "payment_expired",
+      "payment_completed",
+    ]) {
+      assert.ok(sql.includes(eventType), eventType);
+    }
+    assert.ok(sql.includes("revoke all on function public.record_payment_intent_state_event"));
+    assert.ok(sql.includes("notify pgrst, 'reload schema'"));
   });
 });

@@ -413,21 +413,7 @@ describe("createSupabaseAgentPayRepositories", () => {
       purpose: "design bounty",
       approval_phrase: "APPROVE pay_123",
     });
-    assert.deepEqual(eventQuery.inserted, [
-      {
-        tenant_id: "tenant_a",
-        payment_intent_id: "pay_123",
-        event_type: "PAYMENT_CREATED",
-        message: "Payment intent created.",
-        metadata: {
-          status: "AWAITING_APPROVAL",
-          amountOut: "10",
-          destinationChainId: 8453,
-          destinationTokenSymbol: "USDC",
-          recipientAddress: "0x1111111111111111111111111111111111111111",
-        },
-      },
-    ]);
+    assert.deepEqual(eventQuery.inserted, []);
   });
 
   it("loads a payment intent by id from payment_intents", async () => {
@@ -493,18 +479,7 @@ describe("createSupabaseAgentPayRepositories", () => {
       ["eq", ["id", "pay_123"]],
       ["eq", ["tenant_id", "tenant_a"]],
     ]);
-    assert.deepEqual(eventQuery.inserted, [
-      {
-        tenant_id: "tenant_a",
-        payment_intent_id: "pay_123",
-        event_type: "PAYMENT_EXECUTING",
-        message: "Payment execution started.",
-        metadata: {
-          sourceTxHash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          approvedAt: "2026-07-02T14:40:00.000Z",
-        },
-      },
-    ]);
+    assert.deepEqual(eventQuery.inserted, []);
   });
 
   it("claims payment approval only while the intent is awaiting approval", async () => {
@@ -549,28 +524,13 @@ describe("createSupabaseAgentPayRepositories", () => {
       ["select", ["id"]],
       ["maybeSingle", []],
     ]);
-    assert.deepEqual(eventQuery.inserted, [
-      {
-        tenant_id: "tenant_a",
-        payment_intent_id: "pay_123",
-        event_type: "PAYMENT_APPROVED",
-        message: "Exact approval phrase accepted.",
-        metadata: {
-          approvedAt: "2026-07-02T14:40:00.000Z",
-        },
-      },
-    ]);
+    assert.deepEqual(eventQuery.inserted, []);
   });
 
-  it("binds unscoped public payment approval updates and events to the trusted intent tenant", async () => {
+  it("binds unscoped public payment approval updates to the trusted intent tenant", async () => {
     const query = new FakePaymentIntentQuery();
-    const eventQuery = new FakePaymentEventQuery();
     const client = {
       from(table: string) {
-        if (table === "payment_events") {
-          return eventQuery;
-        }
-
         assert.equal(table, "payment_intents");
         return query;
       },
@@ -585,17 +545,6 @@ describe("createSupabaseAgentPayRepositories", () => {
 
     assert.equal(claimed, true);
     assert.ok(query.calls.some(([name, args]) => name === "eq" && args[0] === "tenant_id" && args[1] === "tenant_production"));
-    assert.deepEqual(eventQuery.inserted, [
-      {
-        tenant_id: "tenant_production",
-        payment_intent_id: "pay_public",
-        event_type: "PAYMENT_APPROVED",
-        message: "Exact approval phrase accepted.",
-        metadata: {
-          approvedAt: "2026-07-15T14:29:54.319Z",
-        },
-      },
-    ]);
   });
 
   it("rejects a payment mutation whose trusted tenant conflicts with the consumer session", async () => {
@@ -680,17 +629,7 @@ describe("createSupabaseAgentPayRepositories", () => {
       error_code: "EXECUTION_FAILED",
       error_message: "RPC failed",
     });
-    assert.deepEqual(eventQuery.inserted, [
-      {
-        tenant_id: "tenant_a",
-        payment_intent_id: "pay_123",
-        event_type: "PAYMENT_FAILED",
-        message: "RPC failed",
-        metadata: {
-          errorCode: "EXECUTION_FAILED",
-        },
-      },
-    ]);
+    assert.deepEqual(eventQuery.inserted, []);
   });
 
   it("marks a payment intent expired", async () => {
@@ -715,17 +654,7 @@ describe("createSupabaseAgentPayRepositories", () => {
       error_code: "DEADLINE_EXPIRED",
       error_message: "Payment approval deadline expired.",
     });
-    assert.deepEqual(eventQuery.inserted, [
-      {
-        tenant_id: "tenant_a",
-        payment_intent_id: "pay_123",
-        event_type: "PAYMENT_EXPIRED",
-        message: "Payment approval deadline expired.",
-        metadata: {
-          errorCode: "DEADLINE_EXPIRED",
-        },
-      },
-    ]);
+    assert.deepEqual(eventQuery.inserted, []);
   });
 
   it("marks a payment intent completed with destination transaction hash", async () => {
@@ -755,18 +684,7 @@ describe("createSupabaseAgentPayRepositories", () => {
       destination_tx_hash: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       completed_at: "2026-07-02T14:43:00.000Z",
     });
-    assert.deepEqual(eventQuery.inserted, [
-      {
-        tenant_id: "tenant_a",
-        payment_intent_id: "pay_123",
-        event_type: "PAYMENT_COMPLETED",
-        message: "Payment completed.",
-        metadata: {
-          destinationTxHash: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-          completedAt: "2026-07-02T14:43:00.000Z",
-        },
-      },
-    ]);
+    assert.deepEqual(eventQuery.inserted, []);
   });
 
   it("lists latest payment intents by creation time", async () => {

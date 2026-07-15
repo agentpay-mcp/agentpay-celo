@@ -14,7 +14,7 @@ export const MAINNET_CAIP2 = "eip155:196";
 export const MAINNET_USDT0_ADDRESS = "0x779Ded0c9e1022225f8E0630b35a9b54bE713736";
 export const MAINNET_USDT0_CODE_HASH =
   "0x4d9be648c5bf39973670d9f8b481d5d0b971e6a2db2deccc6b98cde21c5dd83e";
-export const MAINNET_MIGRATION_HEAD = "20260715110000_oauth_consumer_authorization";
+export const MAINNET_MIGRATION_HEAD = "20260715153000_payment_intent_atomic_audit";
 export const DEFAULT_PRODUCTION_MANIFEST_PATH = fileURLToPath(
   new URL("../../../../ops/manifests/xlayer-mainnet.shadow.json", import.meta.url),
 );

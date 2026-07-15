@@ -107,8 +107,8 @@ const exactPaymentConfig = {
 };
 
 describe("production readiness gate", () => {
-  it("pins production readiness to the OAuth consumer authorization migration", () => {
-    assert.equal(MAINNET_MIGRATION_HEAD, "20260715110000_oauth_consumer_authorization");
+  it("pins production readiness to the atomic payment audit migration", () => {
+    assert.equal(MAINNET_MIGRATION_HEAD, "20260715153000_payment_intent_atomic_audit");
     assert.equal(baseManifest.database.migrationHead, MAINNET_MIGRATION_HEAD);
     assert.equal(baseManifest.release.migrationHead, MAINNET_MIGRATION_HEAD);
   });

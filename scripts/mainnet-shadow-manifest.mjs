@@ -12,7 +12,7 @@ export const MAINNET_USDT0_CODE_HASH =
   "0x4d9be648c5bf39973670d9f8b481d5d0b971e6a2db2deccc6b98cde21c5dd83e";
 export const MAINNET_ACCOUNT_CREATION_BYTECODE_HASH =
   "0x41fb5a4c59d1af753553e5dcf9e9ed345506ecaa8040298d17dc9c629fbd5b49";
-export const MAINNET_MIGRATION_HEAD = "20260715110000_oauth_consumer_authorization";
+export const MAINNET_MIGRATION_HEAD = "20260715153000_payment_intent_atomic_audit";
 export const FORBIDDEN_PRODUCTION_RUNTIME_ENV_REFS = Object.freeze([
   "XLAYER_RPC_URL",
   "XLAYER_TESTNET_RPC_URL",
