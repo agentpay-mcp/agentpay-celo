@@ -20,7 +20,7 @@ describe("getBalance", () => {
             return {
               ownerAddress: "0x2222222222222222222222222222222222222222",
               accountAddress: "0x3333333333333333333333333333333333333333",
-              homeChainId: 196,
+              homeChainId: 42220,
               executorAddress: "0x4444444444444444444444444444444444444444",
               status: "ACTIVE",
             };
@@ -30,7 +30,7 @@ describe("getBalance", () => {
           async getTokenBalance(request) {
             reads.push(request);
             return {
-              amount: request.tokenSymbol === "USDT0" ? "12.5" : "3",
+              amount: request.tokenSymbol === "USDC" ? "12.5" : "3",
             };
           },
         },
@@ -43,28 +43,35 @@ describe("getBalance", () => {
       },
     );
 
-    assert.deepEqual(walletReads, [{ homeChainId: 196 }]);
+    assert.deepEqual(walletReads, [{ homeChainId: 42220 }]);
     assert.deepEqual(reads, [
       {
         accountAddress: "0x3333333333333333333333333333333333333333",
-        chainId: 196,
-        tokenAddress: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
-        tokenSymbol: "USDT0",
+        chainId: 42220,
+        tokenAddress: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+        tokenSymbol: "USDC",
         decimals: 6,
       },
       {
         accountAddress: "0x3333333333333333333333333333333333333333",
-        chainId: 196,
-        tokenAddress: "0x74b7F16337b8972027F6196A17a631aC6dE26d22",
-        tokenSymbol: "USDC",
+        chainId: 42220,
+        tokenAddress: "0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e",
+        tokenSymbol: "USDT",
         decimals: 6,
+      },
+      {
+        accountAddress: "0x3333333333333333333333333333333333333333",
+        chainId: 42220,
+        tokenAddress: "0x765DE816845861e75A25fCA122bb6898B8B1282a",
+        tokenSymbol: "USDm",
+        decimals: 18,
       },
     ]);
     assert.deepEqual(nativeReads, [
       {
         accountAddress: "0x3333333333333333333333333333333333333333",
-        chainId: 196,
-        tokenSymbol: "OKB",
+        chainId: 42220,
+        tokenSymbol: "CELO",
         decimals: 18,
       },
     ]);
@@ -72,24 +79,30 @@ describe("getBalance", () => {
       status: "ACTIVE",
       accountAddress: "0x3333333333333333333333333333333333333333",
       ownerAddress: "0x2222222222222222222222222222222222222222",
-      chainId: 196,
-      chain: "X Layer",
+      chainId: 42220,
+      chain: "Celo",
       balances: [
         {
-          tokenSymbol: "USDT0",
-          tokenAddress: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+          tokenSymbol: "USDC",
+          tokenAddress: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
           amount: "12.5",
           decimals: 6,
         },
         {
-          tokenSymbol: "USDC",
-          tokenAddress: "0x74b7F16337b8972027F6196A17a631aC6dE26d22",
+          tokenSymbol: "USDT",
+          tokenAddress: "0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e",
           amount: "3",
           decimals: 6,
         },
+        {
+          tokenSymbol: "USDm",
+          tokenAddress: "0x765DE816845861e75A25fCA122bb6898B8B1282a",
+          amount: "3",
+          decimals: 18,
+        },
       ],
       nativeBalance: {
-        tokenSymbol: "OKB",
+        tokenSymbol: "CELO",
         tokenAddress: "native",
         amount: "0.03",
         decimals: 18,
@@ -99,8 +112,8 @@ describe("getBalance", () => {
 
   it("allows callers to request a stablecoin subset", async () => {
     configureStableTokenMetadataOverrides({
-      1952: {
-        USDT0: {
+      11142220: {
+        USDC: {
           address: "0x9999999999999999999999999999999999999999",
           decimals: 6,
         },
@@ -110,7 +123,7 @@ describe("getBalance", () => {
 
     try {
       const output = await getBalance(
-        { tokenSymbols: ["USDT0"], homeChainId: 1952 },
+        { tokenSymbols: ["USDC"], homeChainId: 11142220 },
         {
           wallets: {
             async getActiveWallet(request) {
@@ -118,7 +131,7 @@ describe("getBalance", () => {
               return {
                 ownerAddress: "0x2222222222222222222222222222222222222222",
                 accountAddress: "0x3333333333333333333333333333333333333333",
-                homeChainId: 1952,
+                homeChainId: 11142220,
                 executorAddress: "0x4444444444444444444444444444444444444444",
                 status: "ACTIVE",
               };
@@ -139,9 +152,9 @@ describe("getBalance", () => {
 
       assert.deepEqual(
         output.balances.map((balance) => balance.tokenSymbol),
-        ["USDT0"],
+        ["USDC"],
       );
-      assert.deepEqual(walletReads, [{ homeChainId: 1952 }]);
+      assert.deepEqual(walletReads, [{ homeChainId: 11142220 }]);
     } finally {
       configureStableTokenMetadataOverrides({});
     }

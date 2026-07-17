@@ -25,32 +25,51 @@ export const SUPPORTED_CHAINS = {
       decimals: 18,
     },
   },
+  42220: {
+    id: 42220,
+    name: "Celo",
+    nativeCurrency: {
+      symbol: "CELO",
+      decimals: 18,
+    },
+  },
+  11142220: {
+    id: 11142220,
+    name: "Celo Sepolia",
+    nativeCurrency: {
+      symbol: "CELO",
+      decimals: 18,
+    },
+  },
 } as const;
 
 export type SupportedChainId = keyof typeof SUPPORTED_CHAINS;
 export type NativeCurrency = (typeof SUPPORTED_CHAINS)[SupportedChainId]["nativeCurrency"];
 
-export const X_LAYER_NETWORK_CHAIN_IDS = {
-  mainnet: 196,
-  testnet: 1952,
+export const CELO_NETWORK_CHAIN_IDS = {
+  mainnet: 42220,
+  testnet: 11142220,
 } as const;
 
-export const xLayerNetworkSchema = z.enum(["mainnet", "testnet"]);
-export const xLayerHomeChainIdSchema = z.union([z.literal(196), z.literal(1952)]);
+export const celoNetworkSchema = z.enum(["mainnet", "testnet"]);
+export const celoHomeChainIdSchema = z.union([z.literal(42220), z.literal(11142220)]);
 export const networkSelectionShape = {
-  network: xLayerNetworkSchema.optional(),
-  homeChainId: xLayerHomeChainIdSchema.optional(),
+  network: celoNetworkSchema.optional(),
+  homeChainId: celoHomeChainIdSchema.optional(),
 } as const;
 
-export type XLayerNetwork = z.infer<typeof xLayerNetworkSchema>;
-export type XLayerHomeChainId = z.infer<typeof xLayerHomeChainIdSchema>;
+export type CeloNetwork = z.infer<typeof celoNetworkSchema>;
+export type CeloHomeChainId = z.infer<typeof celoHomeChainIdSchema>;
 export type NetworkSelectionInput = {
-  network?: XLayerNetwork;
-  homeChainId?: XLayerHomeChainId;
+  network?: CeloNetwork;
+  homeChainId?: CeloHomeChainId;
 };
 
-export function resolveXLayerHomeChainId(input: NetworkSelectionInput, fallbackHomeChainId: XLayerHomeChainId = 196): XLayerHomeChainId {
-  const networkHomeChainId = input.network ? X_LAYER_NETWORK_CHAIN_IDS[input.network] : undefined;
+export function resolveCeloHomeChainId(
+  input: NetworkSelectionInput,
+  fallbackHomeChainId: CeloHomeChainId = 42220,
+): CeloHomeChainId {
+  const networkHomeChainId = input.network ? CELO_NETWORK_CHAIN_IDS[input.network] : undefined;
 
   if (networkHomeChainId !== undefined && input.homeChainId !== undefined && networkHomeChainId !== input.homeChainId) {
     throw new Error(`Network ${input.network} maps to chain ${networkHomeChainId}, but homeChainId ${input.homeChainId} was provided.`);

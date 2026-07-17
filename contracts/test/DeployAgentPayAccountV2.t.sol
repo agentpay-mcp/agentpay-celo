@@ -8,8 +8,11 @@ contract DeployAgentPayAccountV2Test {
     address private constant OWNER = address(0x1234);
     address private constant EXECUTOR = address(0x5678);
     address private constant ROUTE_TARGET = address(0x7777);
-    address private constant XLAYER_USDT0 = 0x779Ded0c9e1022225f8E0630b35a9b54bE713736;
-    address private constant XLAYER_TESTNET_USDC = 0xcB8BF24c6cE16Ad21D707c9505421a17f2bec79D;
+    address private constant CELO_USDC = 0xcebA9300f2b948710d2653dD7B07f33A8B32118C;
+    address private constant CELO_USDT = 0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e;
+    address private constant CELO_SEPOLIA_USDC = 0x01C5C0122039549AD1493B8220cABEdD739BC44E;
+    address private constant CELO_SEPOLIA_USDT = 0xd077A400968890Eacc75cdc901F0356c943e4fDb;
+    address private constant CELO_SEPOLIA_USDM = 0xdE9e4C3ce781b4bA68120d6261cbad65ce0aB00b;
 
     function testDeploysOwnerSignedV2WithDefaultStableTokenAllowlist() public {
         DeployAgentPayAccountV2 deployer = new DeployAgentPayAccountV2();
@@ -19,26 +22,26 @@ contract DeployAgentPayAccountV2Test {
 
         assert(account.owner() == OWNER);
         assert(account.executor() == EXECUTOR);
-        assert(account.allowedTokens(XLAYER_USDT0));
-        assert(!account.allowedTokens(XLAYER_TESTNET_USDC));
+        assert(account.allowedTokens(CELO_USDC));
+        assert(!account.allowedTokens(CELO_USDT));
         assert(!account.allowedRouteTargets(ROUTE_TARGET));
         assert(account.domainSeparator() != bytes32(0));
     }
 
-    function testDefaultAllowedTokensAreXLayerStablecoins() public {
+    function testDefaultAllowedTokensUseTheCeloMainnetUSDCGoldenPath() public {
         DeployAgentPayAccountV2 deployer = new DeployAgentPayAccountV2();
         address[] memory tokens = deployer.defaultAllowedTokens();
 
         assert(tokens.length == 1);
-        assert(tokens[0] == XLAYER_USDT0);
+        assert(tokens[0] == CELO_USDC);
     }
 
-    function testMainnetDeploymentSurfaceRejectsUSDC() public {
+    function testMainnetDeploymentSurfaceRejectsNonUSDCStablecoins() public {
         DeployAgentPayAccountV2 deployer = new DeployAgentPayAccountV2();
         AgentPayAccountV2 account = deployer.deploy(OWNER, EXECUTOR, new address[](0));
 
-        assert(account.allowedTokens(XLAYER_USDT0));
-        assert(!account.allowedTokens(XLAYER_TESTNET_USDC));
+        assert(account.allowedTokens(CELO_USDC));
+        assert(!account.allowedTokens(CELO_USDT));
     }
 
     function testMainnetDeploymentSurfaceRejectsRouteTargets() public {
@@ -56,13 +59,14 @@ contract DeployAgentPayAccountV2Test {
         assert(reverted);
     }
 
-    function testTestnetDeploymentSurfaceKeepsUSDT0AndUSDC() public {
+    function testSepoliaDeploymentSurfaceKeepsCanonicalCeloStablecoins() public {
         DeployAgentPayAccountV2 deployer = new DeployAgentPayAccountV2();
-        address[] memory tokens = deployer.defaultAllowedTokensForChain(1952);
+        address[] memory tokens = deployer.defaultAllowedTokensForChain(11142220);
 
-        assert(tokens.length == 2);
-        assert(tokens[0] == 0x9e29b3AaDa05Bf2D2c827Af80Bd28Dc0b9b4FB0c);
-        assert(tokens[1] == XLAYER_TESTNET_USDC);
+        assert(tokens.length == 3);
+        assert(tokens[0] == CELO_SEPOLIA_USDC);
+        assert(tokens[1] == CELO_SEPOLIA_USDT);
+        assert(tokens[2] == CELO_SEPOLIA_USDM);
     }
 
     function testUnsupportedChainReverts() public {

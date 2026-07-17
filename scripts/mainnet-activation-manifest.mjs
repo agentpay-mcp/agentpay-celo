@@ -10,7 +10,7 @@ import {
 } from "./mainnet-shadow-manifest.mjs";
 
 export const MAINNET_ACTIVATED_MANIFEST_PATH = fileURLToPath(
-  new URL("../ops/manifests/xlayer-mainnet.activated.json", import.meta.url),
+  new URL("../ops/manifests/celo-mainnet.activated.json", import.meta.url),
 );
 
 function isRecord(value) {
@@ -51,7 +51,7 @@ export function buildMainnetActivatedManifest({ shadowManifest } = {}) {
   manifest.status = "DEPLOYED";
   manifest.executionMode = "OFF";
   manifest.activation = {
-    sourceManifest: "xlayer-mainnet.shadow.json",
+    sourceManifest: "celo-mainnet.shadow.json",
     accountDeployment: "PENDING",
     executionEnabled: false,
   };
@@ -274,9 +274,9 @@ export function validateMainnetActivationManifest(manifest, { artifactDigests } 
   if (manifest.status !== "DEPLOYED") add("status", "must be DEPLOYED");
   if (manifest.environment !== "production") add("environment", "must be production");
   if (manifest.executionMode !== "OFF") add("executionMode", "must be OFF");
-  if (manifest.chain?.chainId !== 196 || manifest.chain?.caip2 !== "eip155:196") add("chain", "must target X Layer mainnet");
+  if (manifest.chain?.chainId !== 42220 || manifest.chain?.caip2 !== "eip155:42220") add("chain", "must target Celo mainnet");
   if (manifest.x402?.enabled !== false) add("x402.enabled", "must remain false while execution is OFF");
-  if (manifest.activation?.sourceManifest !== "xlayer-mainnet.shadow.json") add("activation.sourceManifest", "must point to the frozen shadow artifact");
+  if (manifest.activation?.sourceManifest !== "celo-mainnet.shadow.json") add("activation.sourceManifest", "must point to the frozen shadow artifact");
   const accountDeployment = manifest.activation?.accountDeployment;
   if (accountDeployment !== "PENDING" && accountDeployment !== "DEPLOYED") {
     add("activation.accountDeployment", "must be PENDING or DEPLOYED");
@@ -366,7 +366,7 @@ export async function generateMainnetActivatedManifest({ outputPath = MAINNET_AC
 
 function helpText() {
   return [
-    "Generate the non-secret X Layer mainnet DEPLOYED/OFF activation manifest.",
+    "Generate the non-secret Celo mainnet DEPLOYED/OFF activation manifest.",
     "",
     "Usage:",
     "  npm run manifest:mainnet:activate [-- --out path]",

@@ -16,7 +16,7 @@
     "src/mcp/agentpay-mcp.ts",
     "src/mcp/consumer-auth.ts",
     "src/mcp/http.ts",
-    "src/mcp/okx-agent-payment.ts",
+    "src/mcp/celo-agent-payment.ts",
     "src/mcp/stdio.ts",
     "src/runtime/agentpay-runtime.ts",
     "src/runtime/production-readiness.ts",
@@ -59,8 +59,8 @@
     "@agentpay-ai/shared": "0.1.3",
     "@noble/hashes": "^2.2.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
-    "@okxweb3/x402-core": "^0.1.0",
-    "@okxweb3/x402-evm": "^0.2.1",
+    "@x402/core": "^2.18.0",
+    "@x402/evm": "^2.18.0",
     "@supabase/supabase-js": "^2.110.0",
     "ethers": "^6.17.0"
   }

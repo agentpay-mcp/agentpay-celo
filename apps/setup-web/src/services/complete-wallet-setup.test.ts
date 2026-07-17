@@ -92,10 +92,11 @@ describe("completeWalletSetup", () => {
         {
           ownerAddress: owner.address,
           executorAddress,
-          homeChainId: 1952,
+          homeChainId: 11142220,
           initialAllowedTokenAddresses: [
-            "0x9e29b3AaDa05Bf2D2c827Af80Bd28Dc0b9b4FB0c",
-            "0xcB8BF24c6cE16Ad21D707c9505421a17f2bec79D",
+            "0x01C5C0122039549AD1493B8220cABEdD739BC44E",
+            "0xd077A400968890Eacc75cdc901F0356c943e4fDb",
+            "0xdE9e4C3ce781b4bA68120d6261cbad65ce0aB00b",
           ],
           initialAllowedRouteTargets: [],
         },
@@ -105,7 +106,7 @@ describe("completeWalletSetup", () => {
         {
           ownerAddress: owner.address,
           accountAddress,
-          homeChainId: 1952,
+          homeChainId: 11142220,
           executorAddress,
           status: "ACTIVE",
         },
@@ -204,34 +205,31 @@ describe("completeWalletSetup", () => {
     assert.equal(storedTenantId, "tenant_owner_a");
   });
 
-  it("rejects a custom token allowlist before a mainnet setup deployment", async () => {
+  it("defaults a defensively reachable mainnet setup to canonical USDC only", async () => {
     let deployments = 0;
-    let failures = 0;
+    let deployedTokens: string[] = [];
 
-    await assert.rejects(
-      () =>
-        completeWalletSetup(
+    await completeWalletSetup(
           { setupIntentId: "setup_mainnet", signature: `0x${"c".repeat(130)}` },
           {
             setupIntents: {
               async getSetupIntent() {
-                return { ...setupIntent, id: "setup_mainnet", homeChainId: 196 };
+                return { ...setupIntent, id: "setup_mainnet", homeChainId: 42220 };
               },
               async markSetupSigned() {
-                throw new Error("setup must not be marked signed before allowlist validation");
+                return;
               },
               async markSetupCompleted() {},
               async markSetupExpired() {},
-              async markSetupFailed() {
-                failures += 1;
-              },
+              async markSetupFailed() {},
             },
             wallets: {
               async createAgentWallet() {},
             },
             deployer: {
-              async deployAgentPayAccount() {
+              async deployAgentPayAccount(request) {
                 deployments += 1;
+                deployedTokens = request.initialAllowedTokenAddresses;
                 return { accountAddress };
               },
             },
@@ -241,16 +239,11 @@ describe("completeWalletSetup", () => {
               },
             },
             clock: () => new Date("2026-07-03T04:02:00.000Z"),
-            initialAllowedTokenAddresses: [
-              "0x74b7F16337b8972027F6196A17a631aC6dE26d22",
-            ],
           },
-        ),
-      /canonical USDT0 token allowlist/i,
-    );
+        );
 
-    assert.equal(deployments, 0);
-    assert.equal(failures, 1);
+    assert.equal(deployments, 1);
+    assert.deepEqual(deployedTokens, ["0xcebA9300f2b948710d2653dD7B07f33A8B32118C"]);
   });
 
   it("uses the setup intent home chain when storing the deployed wallet", async () => {
@@ -268,7 +261,7 @@ describe("completeWalletSetup", () => {
             return {
               ...setupIntent,
               id: "setup_testnet",
-              homeChainId: 1952,
+              homeChainId: 11142220,
             };
           },
           async markSetupSigned() {},
@@ -293,7 +286,7 @@ describe("completeWalletSetup", () => {
           },
         },
         clock: () => new Date("2026-07-03T04:02:00.000Z"),
-        homeChainId: 196,
+        homeChainId: 42220,
         initialAllowedTokenAddresses: [
           "0xaf3a391f2b2fb1e139b197c3286f9ebb626605ea",
           "0xc6a555771769b5d82421de5d6bed88431c115462",
@@ -301,8 +294,8 @@ describe("completeWalletSetup", () => {
       },
     );
 
-    assert.equal((wallets[0] as { homeChainId: number }).homeChainId, 1952);
-    assert.equal((deploys[0] as { homeChainId: number }).homeChainId, 1952);
+    assert.equal((wallets[0] as { homeChainId: number }).homeChainId, 11142220);
+    assert.equal((deploys[0] as { homeChainId: number }).homeChainId, 11142220);
     assert.deepEqual((deploys[0] as { initialAllowedTokenAddresses: string[] }).initialAllowedTokenAddresses, [
       "0xaf3a391f2b2fb1e139b197c3286f9ebb626605ea",
       "0xc6a555771769b5d82421de5d6bed88431c115462",

@@ -15,11 +15,12 @@ interface VmV2Deploy {
 /// @dev The legacy DeployAgentPayAccount script remains available for migration tests only.
 contract DeployAgentPayAccountV2 {
     address internal constant VM_ADDRESS = address(uint160(uint256(keccak256("hevm cheat code"))));
-    uint256 public constant XLAYER_CHAIN_ID = 196;
-    uint256 public constant XLAYER_TESTNET_CHAIN_ID = 1952;
-    address public constant XLAYER_USDT0 = 0x779Ded0c9e1022225f8E0630b35a9b54bE713736;
-    address public constant XLAYER_TESTNET_USDT0 = 0x9e29b3AaDa05Bf2D2c827Af80Bd28Dc0b9b4FB0c;
-    address public constant XLAYER_TESTNET_USDC = 0xcB8BF24c6cE16Ad21D707c9505421a17f2bec79D;
+    uint256 public constant CELO_CHAIN_ID = 42220;
+    uint256 public constant CELO_SEPOLIA_CHAIN_ID = 11142220;
+    address public constant CELO_USDC = 0xcebA9300f2b948710d2653dD7B07f33A8B32118C;
+    address public constant CELO_SEPOLIA_USDC = 0x01C5C0122039549AD1493B8220cABEdD739BC44E;
+    address public constant CELO_SEPOLIA_USDT = 0xd077A400968890Eacc75cdc901F0356c943e4fDb;
+    address public constant CELO_SEPOLIA_USDM = 0xdE9e4C3ce781b4bA68120d6261cbad65ce0aB00b;
 
     VmV2Deploy internal constant vm = VmV2Deploy(VM_ADDRESS);
 
@@ -42,14 +43,14 @@ contract DeployAgentPayAccountV2 {
         public
         returns (AgentPayAccountV2 account)
     {
-        account = deployForChain(owner, executor, initialRouteTargets, XLAYER_CHAIN_ID);
+        account = deployForChain(owner, executor, initialRouteTargets, CELO_CHAIN_ID);
     }
 
     function deployForChain(address owner, address executor, address[] memory initialRouteTargets, uint256 chainId)
         public
         returns (AgentPayAccountV2 account)
     {
-        if (chainId == XLAYER_CHAIN_ID && initialRouteTargets.length != 0) {
+        if (chainId == CELO_CHAIN_ID && initialRouteTargets.length != 0) {
             revert MainnetRouteTargetsForbidden(initialRouteTargets.length);
         }
         account = new AgentPayAccountV2(owner, executor, defaultAllowedTokensForChain(chainId), initialRouteTargets);
@@ -57,21 +58,22 @@ contract DeployAgentPayAccountV2 {
     }
 
     function defaultAllowedTokens() public returns (address[] memory tokens) {
-        return defaultAllowedTokensForChain(XLAYER_CHAIN_ID);
+        return defaultAllowedTokensForChain(CELO_CHAIN_ID);
     }
 
     function defaultAllowedTokensForChain(uint256 chainId) public returns (address[] memory tokens) {
-        if (chainId == XLAYER_CHAIN_ID) {
-            // Mainnet golden path: USDT0 only. USDC must never be enabled by
-            // the production deployment surface.
+        if (chainId == CELO_CHAIN_ID) {
+            // Production canary golden path: canonical Celo USDC only.
+            // Additional stablecoins are enabled after the bounded canary.
             tokens = new address[](1);
-            tokens[0] = XLAYER_USDT0;
+            tokens[0] = CELO_USDC;
             return tokens;
         }
-        if (chainId == XLAYER_TESTNET_CHAIN_ID) {
-            tokens = new address[](2);
-            tokens[0] = vm.envOr("AGENTPAY_XLAYER_TESTNET_USDT0_ADDRESS", XLAYER_TESTNET_USDT0);
-            tokens[1] = vm.envOr("AGENTPAY_XLAYER_TESTNET_USDC_ADDRESS", XLAYER_TESTNET_USDC);
+        if (chainId == CELO_SEPOLIA_CHAIN_ID) {
+            tokens = new address[](3);
+            tokens[0] = vm.envOr("AGENTPAY_CELO_SEPOLIA_USDC_ADDRESS", CELO_SEPOLIA_USDC);
+            tokens[1] = vm.envOr("AGENTPAY_CELO_SEPOLIA_USDT_ADDRESS", CELO_SEPOLIA_USDT);
+            tokens[2] = vm.envOr("AGENTPAY_CELO_SEPOLIA_USDM_ADDRESS", CELO_SEPOLIA_USDM);
             return tokens;
         }
         revert UnsupportedDeployChain(chainId);

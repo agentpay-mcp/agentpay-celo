@@ -22,13 +22,13 @@ describe("runLocalAgentPayDemo", () => {
     assert.equal(result.x402.standardX402SignatureRequired, true);
     assert.equal(result.x402.resource.serviceName, "Market API");
     assert.equal(result.quote.paymentType, "SWAP_BRIDGE_PAY");
-    assert.equal(result.quote.maxNativeFeeDisplay, "0.0025 OKB");
+    assert.equal(result.quote.maxNativeFeeDisplay, "0.0025 CELO");
     assert.equal(result.routeAllowance.status, "ACTIVE");
     assert.equal(result.routeAllowance.routeTargetAllowed, true);
     assert.equal(result.prepared.paymentIntentId, "pay_demo");
     assert.equal(result.prepared.approvalPhrase, "APPROVE pay_demo");
-    assert.equal(result.prepared.summary.maxNativeFeeDisplay, "0.0025 OKB");
-    assert.equal(result.prepared.summary.purpose, "x402 payment for Market API: Premium market data");
+    assert.equal(result.prepared.summary.maxNativeFeeDisplay, "0.0025 CELO");
+    assert.match(result.prepared.summary.purpose, /^x402 payment for Market API: Premium market data \[x402-request:0x[a-f0-9]{64}\]$/);
     assert.equal(result.executed.status, "EXECUTING");
     assert.equal(result.tracked.status, "COMPLETED");
     assert.equal(result.x402Retry.status, "RESOURCE_FETCHED");

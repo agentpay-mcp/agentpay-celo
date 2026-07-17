@@ -13,6 +13,7 @@ describe("README", () => {
     assert.match(contents, /skills\/agentpay\/SKILL\.md/);
     assert.match(contents, /detects the target runtime/i);
     assert.match(contents, /npx @agentpay-ai\/agentpay install/);
+    assert.match(quickStart, /https:\/\/wallet\.agentpay\.site\/mcp/);
     assert.match(contents, /https:\/\/mcp\.agentpay\.site\/mcp/);
     assert.match(contents, /normal users do not need Supabase, RPC, executor, deployer, or bytecode config/i);
     assert.match(contents, /install --self-hosted/);
@@ -25,7 +26,7 @@ describe("README", () => {
     assert.match(contents, /packages\/cli/);
     assert.match(contents, /agentpay serve-http/);
     assert.match(contents, /public HTTPS A2MCP|public MCP endpoint/i);
-    assert.match(contents, /OKX Agent Payments Protocol/);
+    assert.match(contents, /Celo x402|x402 seller gate/i);
     assert.match(contents, /AGENTPAY_A2MCP_PAYMENT_ENABLED/);
     assert.match(contents, /PAYMENT-REQUIRED/);
     assert.doesNotMatch(contents, /docs\//);
@@ -42,6 +43,7 @@ describe("README", () => {
 
     assert.match(contents, /npx @agentpay-ai\/agentpay install/);
     assert.match(contents, /return to your agent chat/i);
+    assert.match(quickStart, /https:\/\/wallet\.agentpay\.site\/mcp/);
     assert.match(contents, /https:\/\/mcp\.agentpay\.site\/mcp/);
     assert.match(contents, /No user secrets are required|do not manage Supabase/i);
     assert.match(contents, /install --self-hosted/);
@@ -50,14 +52,14 @@ describe("README", () => {
     assert.match(contents, /network: "mainnet" \| "testnet"/);
     assert.match(contents, /pay 5 USDT/i);
     assert.match(contents, /agentpay serve-http/);
-    assert.match(contents, /OKX Agent Payments Protocol/);
+    assert.match(contents, /Celo x402|x402 seller gate/i);
     assert.match(contents, /AGENTPAY_A2MCP_PAYMENT_ENABLED/);
     assert.doesNotMatch(quickStart, /agentpay doctor/i);
     assert.doesNotMatch(quickStart, /agentpay setup-web/i);
     assert.doesNotMatch(quickStart, /config\.json/);
   });
 
-  it("keeps public AgentPay docs aligned to X Layer for the OKX branch", async () => {
+  it("keeps public AgentPay docs aligned to Celo for the standalone hackathon branch", async () => {
     const files = [
       "README.md",
       "packages/cli/README.md",
@@ -71,8 +73,8 @@ describe("README", () => {
     for (const file of files) {
       const contents = await readFile(file, "utf8");
 
-      assert.match(contents, /X Layer|XLAYER_RPC_URL|USDT0/);
-      assert.doesNotMatch(contents, /\bBNB\b|BNB Chain|BNB_RPC_URL|AGENTPAY_BNB/);
+      assert.match(contents, /Celo|CELO_RPC_URL|USDm/);
+      assert.doesNotMatch(contents, /XLAYER_RPC_URL|OKX Agent Payments Protocol/);
     }
   });
 
@@ -89,15 +91,32 @@ describe("README", () => {
     for (const file of files) {
       const contents = await readFile(file, "utf8");
 
-      assert.match(contents, /mainnet or testnet/i, `${file} must ask for X Layer network choice`);
+      assert.match(contents, /mainnet or (?:testnet|Sepolia)/i, `${file} must ask for Celo network choice`);
       assert.match(contents, /network: "mainnet" \| "testnet"/, `${file} must mention tool network input`);
       assert.match(contents, /switch networks per request/i, `${file} must describe per-request network switching`);
       assert.match(contents, /Cross-chain.*payment/i, `${file} must keep cross-chain as a payment-time choice`);
+      assert.match(contents, /(?:self-service|chat).*wallet creation.*Celo Sepolia/i, `${file} must keep public wallet creation on Sepolia`);
+      assert.match(contents, /mainnet.*operator-managed/i, `${file} must identify the gated mainnet account path`);
       assert.doesNotMatch(
         contents,
         /cross-chain route,? before creating an AgentPay wallet/i,
         `${file} must not present cross-chain as a wallet-creation option`,
       );
+    }
+  });
+
+  it("keeps the agreed hackathon payment scope visible", async () => {
+    const contents = await readFile("README.md", "utf8");
+
+    for (const capability of [
+      /send payments/i,
+      /invoice/i,
+      /x402/i,
+      /batch payout/i,
+      /remittance/i,
+      /agent-to-agent/i,
+    ]) {
+      assert.match(contents, capability);
     }
   });
 
@@ -150,6 +169,7 @@ describe("README", () => {
       assert.match(contents, /retry_x402_request|receipt-proof retry|receipt proof/i, `${file} must describe x402 retry`);
       assert.match(contents, /PAYMENT-RESPONSE/, `${file} must mention the x402 V2 settlement response header`);
       assert.match(contents, /payment-identifier/i, `${file} must mention x402 idempotency support`);
+      assert.match(contents, /(?:method.*body.*bound|bound.*method.*body)/i, `${file} must bind the x402 request shape`);
       assert.match(contents, /search_x402_services|Bazaar/i, `${file} must describe x402 Bazaar discovery`);
       assert.match(
         contents,

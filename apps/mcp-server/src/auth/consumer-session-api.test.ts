@@ -67,7 +67,7 @@ describe("consumer SIWE session API", () => {
       new Request("https://wallet.agentpay.site/auth/siwe/challenge", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ ownerAddress: owner.address, accountAddress, chainId: 1952 }),
+        body: JSON.stringify({ ownerAddress: owner.address, accountAddress, chainId: 11142220 }),
       }),
     );
     assert.equal(challengeResponse.status, 200);
@@ -96,7 +96,7 @@ describe("consumer SIWE session API", () => {
     const challengeResponse = await api.handle(
       new Request("https://wallet.agentpay.site/auth/siwe/challenge", {
         method: "POST",
-        body: JSON.stringify({ ownerAddress: owner.address, accountAddress, chainId: 1952 }),
+        body: JSON.stringify({ ownerAddress: owner.address, accountAddress, chainId: 11142220 }),
       }),
     );
     const challengeBody = (await challengeResponse.json()) as { challengeId: string };
@@ -120,7 +120,7 @@ describe("consumer SIWE session API", () => {
       uri: "https://wallet.agentpay.site/mcp",
       ownerAddress: owner.address,
       accountAddress,
-      chainId: 1952,
+      chainId: 11142220,
       nonce: "nonce_oauth_123456",
       flow: "oauth_authorization",
       issuedAt: "2026-07-12T00:00:00.000Z",

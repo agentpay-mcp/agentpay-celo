@@ -47,21 +47,21 @@ const demoX402PaymentRequired = {
 const demoWallet: AgentWallet = {
   ownerAddress: "0x2222222222222222222222222222222222222222",
   accountAddress: "0x3333333333333333333333333333333333333333",
-  homeChainId: 196,
+  homeChainId: 11142220,
   executorAddress: "0x4444444444444444444444444444444444444444",
   status: "ACTIVE",
 };
 
 const demoRouteQuote: RouteQuote = {
   routeProvider: "LI.FI",
-  sourceTokenAddress: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+  sourceTokenAddress: "0x01C5C0122039549AD1493B8220cABEdD739BC44E",
   destinationTokenAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
   maxAmountIn: "0.011",
   maxNativeFee: "2500000000000000",
   routeTarget: "0x7777777777777777777777777777777777777777",
   routeCalldata: "0x1234",
   routeCalldataHash: "0x56570de287d73cd1cb6092bb8fdee6173974955fdef345ae579ee9f475ea7432",
-  routeSummary: "Swap USDT0 on X Layer, bridge, and pay USDC on Base.",
+  routeSummary: "Bridge USDC from Celo Sepolia and pay USDC on Base.",
   estimatedFee: "0.12",
   estimatedEtaSeconds: 120,
 };
@@ -100,7 +100,7 @@ export async function runLocalAgentPayDemo(): Promise<LocalAgentPayDemoResult> {
     {
       supabaseUrl: "https://agentpay-demo.supabase.co",
       serviceRoleKey: "demo-service-role-key",
-      xlayerRpcUrl: "https://xlayer-demo-rpc.example",
+      celoRpcUrl: "https://celo-sepolia-demo-rpc.example",
       executorPrivateKey: `0x${"1".repeat(64)}`,
       setupWebUrl: "https://setup.agentpay.local/setup",
     },
@@ -113,13 +113,16 @@ export async function runLocalAgentPayDemo(): Promise<LocalAgentPayDemoResult> {
       createSetupIntentId: () => "setup_demo",
       approvalTtlSeconds: 900,
       setupTtlSeconds: 900,
-      x402Fetch: async () =>
-        new Response(JSON.stringify({ market: "premium" }), {
-          status: 200,
-          headers: {
-            "x-payment-response": "settled",
-          },
-        }),
+      x402HttpClient: {
+        async request() {
+          return new Response(JSON.stringify({ market: "premium" }), {
+            status: 200,
+            headers: {
+              "x-payment-response": "settled",
+            },
+          });
+        },
+      },
     },
   );
 
@@ -173,7 +176,7 @@ export async function runLocalAgentPayDemo(): Promise<LocalAgentPayDemoResult> {
       `Initial wallet: ${initialWallet.status}.`,
       `Setup intent: ${setup.setupIntentId} at ${setup.setupUrl}.`,
       `Setup completed: ${completedSetup.accountAddress}.`,
-      `Wallet: ${demoWallet.accountAddress} on X Layer.`,
+      `Wallet: ${demoWallet.accountAddress} on Celo Sepolia.`,
       `Invoice parsed: ${invoice.invoiceId ?? "without id"}.`,
       `x402 parsed: ${x402.resource.serviceName}; AgentPay proof retry available after approval.`,
       `Quote: spend up to ${quote.maxAmountIn} ${quote.sourceTokenSymbol}; max native fee ${quote.maxNativeFeeDisplay}.`,
@@ -341,7 +344,7 @@ function createDemoFactories(state: DemoState): AgentPayRuntimeFactories {
         },
         tokenBalances: {
           async getTokenBalance(request: { tokenSymbol: string }) {
-            return { amount: request.tokenSymbol === "USDT0" ? "25" : "0" };
+            return { amount: request.tokenSymbol === "USDC" ? "25" : "0" };
           },
         },
         nativeBalances: {

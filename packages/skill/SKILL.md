@@ -1,13 +1,13 @@
 ---
 name: agentpay
-description: Use AgentPay MCP tools when a user wants an AI agent to create an AgentPay wallet, check balance, prepare a stablecoin payment, swap, bridge, pay across chains, or track payment status. Requires a verified owner EIP-712 signature before execution.
+description: Use AgentPay MCP tools for owner-authorized Celo stablecoin payments, invoices, x402 purchases, batch payouts, remittance routes, agent-to-agent payments, balance checks, and payment tracking. Requires a verified owner EIP-712 signature before execution.
 ---
 
 # AgentPay
 
-AgentPay is an MCP payment plugin for owner-authorized cross-chain payments from an X Layer smart account.
+AgentPay is an MCP payment plugin for owner-authorized stablecoin payments from a Celo smart account.
 
-Use this skill when the user asks to create an AgentPay wallet, pay a wallet or invoice, swap and bridge funds, send USDT/USDC, check balance, or track an AgentPay transaction.
+Use this skill when the user asks to create an AgentPay wallet, send USDC/USDT/USDm, pay an invoice, purchase an x402 service, prepare a batch payout, quote a remittance route, pay another agent, check balance, or track an AgentPay transaction.
 
 ## Scope
 
@@ -72,7 +72,7 @@ Expected AgentPay tools:
 - `prepare_wallet_creation`: create a setup intent and return a signing link.
 - `check_wallet_creation`: check whether the setup intent has completed and return the AgentPay smart account address.
 - `get_agent_wallet`: return owner, executor, smart account address, home chain, and status.
-- `get_balance`: read USDT/USDC and relevant native balances.
+- `get_balance`: read Celo USDC/USDT/USDm and CELO balances.
 - `parse_invoice_payment`: parse structured invoice text into `prepare_payment` fields.
 - `search_x402_services`: search x402 Bazaar when the user wants a paid API/service but does not provide a URL.
 - `prepare_x402_service_request`: prepare a selected x402 Bazaar HTTP resource and synthetic `PAYMENT-REQUIRED` object.
@@ -94,23 +94,23 @@ If a tool name differs in the active MCP server, use the closest AgentPay tool w
 
 ## Network Selection
 
-AgentPay supports X Layer mainnet and testnet.
+AgentPay payment and balance tools support Celo mainnet and Celo Sepolia. Self-service chat wallet creation is currently available on Celo Sepolia. Mainnet uses an operator-managed, readiness-gated account path.
 
 If the user does not clearly name a network, ask whether they want mainnet or testnet before calling wallet, balance, route-target, admin, contract-call, quote, or payment preparation tools. Pass the selected value as `network: "mainnet" | "testnet"` whenever a tool accepts it. Users can switch networks per request; do not assume a wallet, balance, allowlist, or payment intent on one network applies to the other.
 
-Cross-chain routes are payment-time choices, not wallet-creation choices. Create the wallet on X Layer mainnet or X Layer testnet first, then decide during quote or payment preparation whether the payment stays on that network or uses a cross-chain route.
+Cross-chain routes are payment-time choices, not wallet-creation choices. Create a Celo Sepolia wallet through chat, or use an already activated operator-managed Celo mainnet account, then decide during quote or payment preparation whether the payment stays on Celo or uses a remittance/swap-and-pay route.
 
 ## Wallet Creation Workflow
 
 When the user asks to create an AgentPay wallet:
 
-1. Confirm X Layer mainnet or testnet if the user did not specify it.
-2. Call `prepare_wallet_creation` with the selected network.
+1. Self-service wallet creation is available on Celo Sepolia. If the user asks to create a new mainnet wallet, explain that mainnet activation is operator-managed and do not call the public setup tool.
+2. Call `prepare_wallet_creation` with `network: "testnet"` for Celo Sepolia.
 3. Give the user the setup signing link.
 4. Explain that the signing page proves wallet ownership and does not approve any payment.
 5. Wait for the user to sign on the setup page.
 6. Call `check_wallet_creation`.
-7. When complete, show the AgentPay smart account address and network, then tell the user to fund it with supported tokens on that X Layer network.
+7. When complete, show the AgentPay smart account address and network, then tell the user to fund it with supported Celo USDC, USDT, or USDm.
 
 Never claim the wallet is ready until `check_wallet_creation` confirms completion.
 
@@ -124,7 +124,7 @@ Show the action, account address, owner address, chain, transaction target, and 
 
 When the user asks about funds or before preparing payment:
 
-1. Confirm X Layer mainnet or testnet if the request is ambiguous.
+1. Confirm Celo mainnet or Sepolia if the request is ambiguous.
 2. Call `get_agent_wallet` with the selected network if the active wallet is unknown.
 3. Call `get_balance` with the selected network.
 4. Show balances with token symbols, chain names, and wallet address.
@@ -144,24 +144,36 @@ When the user asks to pay an invoice:
 
 Do not infer missing invoice fields from vague prose. Ask the user for a complete invoice or the missing field.
 
+## Batch Payout Workflow
+
+Treat a batch payout as a bounded collection of independent AgentPay payment intents. Validate the complete recipient list first, reject duplicates or malformed rows, show the total source exposure, then call `prepare_payment` once per recipient. Each prepared intent needs its own immutable owner signature, execution, status tracking, and audit events; never reuse one signature or approval for another recipient. Stop and report partial progress if any item fails.
+
+## Remittance Workflow
+
+For remittance or swap-and-pay requests, confirm the Celo source network, source token, destination chain/token, recipient, minimum acceptable output, and purpose. Call `quote_payment_route`, show fees, route target, calldata hash, native value, and minimum output, then follow the normal payment workflow. Cross-chain routing is optional; same-chain Celo remittance stays direct when possible.
+
+## Agent-to-Agent Workflow
+
+For an agent-to-agent payment, resolve the receiving agent's verified payment address and show it to the owner as the recipient. Use the normal `prepare_payment` flow and include the receiving agent identifier in the purpose when supplied. Agent identity metadata never replaces address verification or the owner's exact EIP-712 signature.
+
 ## x402 Workflow
 
 If the user asks for a paid x402/API service but does not provide a URL, call `search_x402_services` first. Show the Bazaar candidates, ask the user to choose one, collect required parameters, then call `prepare_x402_service_request`. Use the returned `paymentRequired` and `request` with the normal x402 flow below.
 
 When an HTTP endpoint returns an x402 v2 `PAYMENT-REQUIRED` response:
 
-1. Call `parse_x402_payment_required` with the copied response object or base64 header.
+1. Call `parse_x402_payment_required` with the copied response object or base64 header and the exact original request. Its URL, method, body, and safe headers are bound into the owner-signed purpose. If the original request is unavailable, omit it only for the secure GET-without-body fallback.
 2. Show the resource, scheme, network, token, amount, recipient, and timeout.
 3. Tell the user that AgentPay can prepare the stablecoin transfer with the returned `paymentInput`.
 4. Continue with the normal payment workflow using the full returned `paymentInput`, including its `paymentType`.
-5. After `execute_payment` and `track_payment` return `COMPLETED`, call `retry_x402_request` with the original `PAYMENT-REQUIRED` object/header and the completed `paymentIntentId`.
+5. After `execute_payment` and `track_payment` return `COMPLETED`, call `retry_x402_request` with the original `PAYMENT-REQUIRED` object/header, the exact same request, and the completed `paymentIntentId`.
 6. Return the protected resource response to the user when the retry succeeds.
 
 `retry_x402_request` attaches the AgentPay receipt proof as both `X-PAYMENT` and `PAYMENT-SIGNATURE`, reads V2 `PAYMENT-RESPONSE` with legacy `X-PAYMENT-RESPONSE` fallback, and adds `payment-identifier` idempotency data when the server advertises it. Do not claim universal x402 exact facilitator compatibility unless the merchant supports this AgentPay receipt-proof bridge or the integration uses a native x402 signer/facilitator path.
 
 ## Contract Call Workflow
 
-Use `prepare_contract_call` only for same-chain X Layer contract calls where the user provides or confirms the target address, calldata, maximum token spend, and purpose.
+Use `prepare_contract_call` only for same-chain Celo contract calls where the user provides or confirms the target address, calldata, maximum token spend, and purpose.
 
 Before execution:
 
@@ -176,7 +188,7 @@ Never prepare contract calls from vague prose, never modify calldata after prepa
 
 For every payment:
 
-1. Understand the requested recipient, amount, token, X Layer source network, destination chain, and purpose. Ask for mainnet or testnet if omitted.
+1. Understand the requested recipient, amount, token, Celo source network, destination chain, and purpose. Ask for mainnet or testnet if omitted.
 2. Call `quote_payment_route` when route preview is useful or the source/destination token or chain may differ.
 3. Call `prepare_payment`.
 4. Show the returned payment summary to the user. When `authorization` is present, show the canonical typed-data details and exact `authorizationHash`.

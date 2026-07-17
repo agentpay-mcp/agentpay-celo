@@ -38,7 +38,7 @@ class FakeSelectQuery {
       data: {
         owner_address: "0x2222222222222222222222222222222222222222",
         account_address: "0x3333333333333333333333333333333333333333",
-        home_chain_id: 196,
+        home_chain_id: 42220,
         executor_address: "0x4444444444444444444444444444444444444444",
         status: "ACTIVE" as const,
       },
@@ -138,7 +138,7 @@ class FakePaymentIntentQuery {
             owner_address: "0x2222222222222222222222222222222222222222",
             status: "AWAITING_APPROVAL",
             payment_type: "WALLET_PAYMENT",
-            source_chain_id: 196,
+            source_chain_id: 42220,
             destination_chain_id: 8453,
             source_token_address: "0x5555555555555555555555555555555555555555",
             source_token_symbol: "USDT0",
@@ -298,7 +298,7 @@ class FakeSetupIntentQuery {
         error_code: null,
         error_message: null,
         completed_at: "2026-07-03T04:02:00.000Z",
-        home_chain_id: 196,
+        home_chain_id: 42220,
       },
       error: null,
     });
@@ -321,7 +321,7 @@ describe("createSupabaseAgentPayRepositories", () => {
     assert.deepEqual(wallet, {
       ownerAddress: "0x2222222222222222222222222222222222222222",
       accountAddress: "0x3333333333333333333333333333333333333333",
-      homeChainId: 196,
+      homeChainId: 42220,
       executorAddress: "0x4444444444444444444444444444444444444444",
       status: "ACTIVE",
     });
@@ -334,7 +334,7 @@ describe("createSupabaseAgentPayRepositories", () => {
     ]);
   });
 
-  it("loads the latest active wallet for a requested X Layer network", async () => {
+  it("loads the latest active wallet for a requested Celo network", async () => {
     const query = new FakeSelectQuery();
     const client = {
       from(table: string) {
@@ -344,12 +344,12 @@ describe("createSupabaseAgentPayRepositories", () => {
     };
 
     const repositories = createSupabaseAgentPayRepositories(client as unknown as AgentPaySupabaseClient);
-    await repositories.wallets.getActiveWallet({ homeChainId: 1952 });
+    await repositories.wallets.getActiveWallet({ homeChainId: 11142220 });
 
     assert.deepEqual(query.calls, [
       ["select", ["owner_address, account_address, home_chain_id, executor_address, status"]],
       ["eq", ["status", "ACTIVE"]],
-      ["eq", ["home_chain_id", 1952]],
+      ["eq", ["home_chain_id", 11142220]],
       ["order", ["created_at", { ascending: false }]],
       ["limit", [1]],
       ["maybeSingle", []],
@@ -378,7 +378,7 @@ describe("createSupabaseAgentPayRepositories", () => {
       ownerAddress: "0x2222222222222222222222222222222222222222",
       status: "AWAITING_APPROVAL",
       paymentType: "WALLET_PAYMENT",
-      sourceChainId: 196,
+      sourceChainId: 42220,
       destinationChainId: 8453,
       sourceTokenAddress: "0x5555555555555555555555555555555555555555",
       sourceTokenSymbol: "USDT0",
@@ -408,7 +408,7 @@ describe("createSupabaseAgentPayRepositories", () => {
       owner_address: "0x2222222222222222222222222222222222222222",
       status: "AWAITING_APPROVAL",
       payment_type: "WALLET_PAYMENT",
-      source_chain_id: 196,
+      source_chain_id: 42220,
       destination_chain_id: 8453,
       source_token_address: "0x5555555555555555555555555555555555555555",
       source_token_symbol: "USDT0",
@@ -570,7 +570,7 @@ describe("createSupabaseAgentPayRepositories", () => {
       tenantId: "tenant_a",
       ownerAddress: "0x2222222222222222222222222222222222222222",
       accountAddress: "0x3333333333333333333333333333333333333333",
-      homeChainId: 196,
+      homeChainId: 42220,
       audience: "https://wallet.agentpay.site/mcp",
       environment: "production",
       scopes: ["payment:review"],
@@ -713,7 +713,7 @@ describe("createSupabaseAgentPayRepositories", () => {
         owner_address: "0x2222222222222222222222222222222222222222",
         status: "EXECUTING",
         payment_type: "WALLET_PAYMENT",
-        source_chain_id: 196,
+        source_chain_id: 42220,
         destination_chain_id: 8453,
         source_token_address: "0x5555555555555555555555555555555555555555",
         source_token_symbol: "USDT0",
@@ -870,7 +870,7 @@ describe("createSupabaseAgentPayRepositories", () => {
       messageToSign: "AgentPay wallet setup",
       status: "PENDING",
       expiresAt: "2026-07-03T04:15:00.000Z",
-      homeChainId: 1952,
+      homeChainId: 11142220,
     });
 
     assert.deepEqual(query.inserted, {
@@ -880,7 +880,7 @@ describe("createSupabaseAgentPayRepositories", () => {
       message_to_sign: "AgentPay wallet setup",
       status: "PENDING",
       expires_at: "2026-07-03T04:15:00.000Z",
-      home_chain_id: 1952,
+      home_chain_id: 11142220,
     });
   });
 
@@ -954,7 +954,7 @@ describe("createSupabaseAgentPayRepositories", () => {
     await repositories.wallets.createAgentWallet({
       ownerAddress: "0x2222222222222222222222222222222222222222",
       accountAddress: "0x3333333333333333333333333333333333333333",
-      homeChainId: 196,
+      homeChainId: 42220,
       executorAddress: "0x4444444444444444444444444444444444444444",
       status: "ACTIVE",
     });
@@ -962,7 +962,7 @@ describe("createSupabaseAgentPayRepositories", () => {
     assert.deepEqual(query.inserted, {
       owner_address: "0x2222222222222222222222222222222222222222",
       account_address: "0x3333333333333333333333333333333333333333",
-      home_chain_id: 196,
+      home_chain_id: 42220,
       executor_address: "0x4444444444444444444444444444444444444444",
       status: "ACTIVE",
     });
@@ -975,7 +975,7 @@ describe("createSupabaseAgentPayRepositories", () => {
       tenant_id: "tenant_a",
       owner_address: "0x2222222222222222222222222222222222222222",
       account_address: "0x3333333333333333333333333333333333333333",
-      source_chain_id: 196,
+      source_chain_id: 42220,
       authorization_hash: `0x${"a".repeat(64)}`,
       token_digest: `0x${"b".repeat(64)}`,
       status: "PENDING",
@@ -999,7 +999,7 @@ describe("createSupabaseAgentPayRepositories", () => {
       tenantId: "tenant_a",
       ownerAddress: reviewRow.owner_address,
       accountAddress: reviewRow.account_address,
-      homeChainId: 196,
+      homeChainId: 42220,
       audience: "https://wallet.agentpay.site/mcp",
       environment: "staging",
       scopes: ["payment:review"],
@@ -1035,7 +1035,7 @@ describe("createSupabaseAgentPayRepositories", () => {
       tenant_id: "tenant_a",
       owner_address: "0x2222222222222222222222222222222222222222",
       account_address: "0x3333333333333333333333333333333333333333",
-      source_chain_id: 196,
+      source_chain_id: 42220,
       authorization_hash: `0x${"a".repeat(64)}`,
       token_digest: `0x${"b".repeat(64)}`,
       status: "SIGNED",
@@ -1076,8 +1076,8 @@ describe("createSupabaseAgentPayRepositories", () => {
     const identityRow = {
       id: 1,
       environment: "production",
-      chain_id: 196,
-      caip2: "eip155:196",
+      chain_id: 42220,
+      caip2: "eip155:42220",
       supabase_project_ref: "abcdefghijklmnopqrst",
       migration_head: "20260713140000_runtime_environment_identity",
       release_commit: null,
@@ -1095,7 +1095,7 @@ describe("createSupabaseAgentPayRepositories", () => {
       token_address: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
       token_code_hash: `0x${"c".repeat(64)}`,
       token_decimals: 6,
-      x402_network: "eip155:196",
+      x402_network: "eip155:42220",
       x402_asset: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
       x402_price: "$0.01",
       x402_price_atomic: "10000",
@@ -1122,7 +1122,7 @@ describe("createSupabaseAgentPayRepositories", () => {
     const repositories = createSupabaseAgentPayRepositories(client as unknown as AgentPaySupabaseClient);
     const identity = await repositories.runtimeEnvironment.getIdentity();
     assert.equal(identity?.environment, "production");
-    assert.equal(identity?.chainId, 196);
+    assert.equal(identity?.chainId, 42220);
     assert.equal(identity?.executionMode, "OFF");
     assert.equal(identity?.status, "SHADOW_ONLY");
   });
@@ -1270,7 +1270,7 @@ describe("toPaymentIntentRow", () => {
       ownerAddress: "0x2222222222222222222222222222222222222222",
       status: "AWAITING_APPROVAL",
       paymentType: "WALLET_PAYMENT",
-      sourceChainId: 196,
+      sourceChainId: 42220,
       destinationChainId: 8453,
       sourceTokenAddress: "0x5555555555555555555555555555555555555555",
       sourceTokenSymbol: "USDT0",

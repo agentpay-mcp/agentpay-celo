@@ -9,7 +9,9 @@ import type {
 const agentPayAccountConstructorAbi = [
   "constructor(address initialOwner,address initialExecutor,address[] initialAllowedTokens,address[] initialAllowedRouteTargets)",
 ];
-export const MAINNET_USDT0_ADDRESS = "0x779Ded0c9e1022225f8E0630b35a9b54bE713736";
+export const MAINNET_USDC_ADDRESS = "0xcebA9300f2b948710d2653dD7B07f33A8B32118C";
+export const MAINNET_USDT_ADDRESS = "0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e";
+export const MAINNET_USDM_ADDRESS = "0x765DE816845861e75A25fCA122bb6898B8B1282a";
 
 export const AGENT_PAY_ACCOUNT_V2_REQUIRED_SELECTORS = [
   functionSelector(
@@ -79,8 +81,8 @@ export function createEthersAgentPayAccountDeployer(
   const factories = new Map<string, AgentPayAccountContractFactory>();
 
   async function getFactory(homeChainId: number): Promise<AgentPayAccountContractFactory> {
-    if (homeChainId === 196 && !config.bytecodeHash) {
-      throw new Error("X Layer mainnet deployment requires AGENTPAY_ACCOUNT_BYTECODE_HASH pinning.");
+    if (homeChainId === 42220 && !config.bytecodeHash) {
+      throw new Error("Celo mainnet deployment requires AGENTPAY_ACCOUNT_BYTECODE_HASH pinning.");
     }
     const rpcUrl = resolveSetupRpcUrlForChain(config, homeChainId);
     const cacheKey = `${homeChainId}:${rpcUrl}`;
@@ -109,24 +111,21 @@ export function createEthersAgentPayAccountDeployer(
 
 export function assertMainnetDeploymentAllowlist(request: Pick<AgentPayAccountDeploymentRequest, "homeChainId" | "initialAllowedTokenAddresses" | "initialAllowedRouteTargets">): void {
   assertSupportedSetupChain(request.homeChainId);
-  if (request.homeChainId !== 196) {
+  if (request.homeChainId !== 42220) {
     return;
   }
 
-  if (
-    request.initialAllowedTokenAddresses.length !== 1 ||
-    request.initialAllowedTokenAddresses[0]?.toLowerCase() !== MAINNET_USDT0_ADDRESS.toLowerCase()
-  ) {
-    throw new Error("X Layer mainnet deployment requires the canonical USDT0 token allowlist only.");
+  if (!matchesCanonicalMainnetStablecoins(request.initialAllowedTokenAddresses)) {
+    throw new Error("Celo mainnet deployment requires the canonical Celo USDC-only canary allowlist.");
   }
   if (request.initialAllowedRouteTargets.length !== 0) {
-    throw new Error("X Layer mainnet deployment requires an empty route-target allowlist.");
+    throw new Error("Celo mainnet deployment requires an empty route-target allowlist.");
   }
 }
 
 export function assertSupportedSetupChain(chainId: number): void {
-  if (chainId !== 196 && chainId !== 1952) {
-    throw new Error(`Unsupported AgentPay setup chain ${chainId}; only X Layer mainnet (196) and testnet (1952) are allowed.`);
+  if (chainId !== 42220 && chainId !== 11142220) {
+    throw new Error(`Unsupported AgentPay setup chain ${chainId}; only Celo mainnet (42220) and Celo Sepolia (11142220) are allowed.`);
   }
 }
 
@@ -157,16 +156,21 @@ export function resolveSetupRpcUrlForChain(
   config: Pick<EthersAgentPayAccountDeployerConfig, "rpcUrl" | "rpcUrls">,
   chainId: number,
 ): string {
-  if (chainId === 196 && !config.rpcUrls?.[196]) {
-    throw new Error("X Layer mainnet deployment requires an explicit XLAYER_MAINNET_RPC_URL mapping.");
+  if (chainId === 42220 && !config.rpcUrls?.[42220]) {
+    throw new Error("Celo mainnet deployment requires an explicit CELO_MAINNET_RPC_URL mapping.");
   }
   return config.rpcUrls?.[chainId] ?? config.rpcUrl;
 }
 
 export function assertSetupRpcChain(expectedChainId: number, actualChainId: number): void {
   if (expectedChainId !== actualChainId) {
-    throw new Error(`Setup RPC chain mismatch: expected X Layer chain ${expectedChainId}, received ${actualChainId}.`);
+    throw new Error(`Setup RPC chain mismatch: expected Celo chain ${expectedChainId}, received ${actualChainId}.`);
   }
+}
+
+function matchesCanonicalMainnetStablecoins(addresses: readonly string[]): boolean {
+  const normalized = new Set(addresses.map((address) => address.toLowerCase()));
+  return normalized.size === 1 && normalized.has(MAINNET_USDC_ADDRESS.toLowerCase());
 }
 
 function functionSelector(signature: string): string {

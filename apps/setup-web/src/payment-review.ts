@@ -453,7 +453,7 @@ function renderPaymentReviewPage(nonce: string): string {
           <p class="eyebrow">Canonical authorization</p>
           <pre id="typed-data">-</pre>
           <button id="sign" type="button" disabled>Connect wallet to Review &amp; Sign</button>
-          <p class="fine-print">The connected wallet must match the owner and source X Layer network. Signing is a gasless message signature; no OKB, token approval, or transaction is requested.</p>
+          <p class="fine-print">The connected wallet must match the owner and source Celo network. Signing is a gasless message signature; no CELO, token approval, or transaction is requested.</p>
         </div>
       </section>
     </main>
@@ -491,7 +491,6 @@ function renderPaymentReviewPage(nonce: string): string {
         const accountMatches = (account, expected) => String(account).toLowerCase() === String(expected).toLowerCase();
         const providerCandidates = () => {
           const candidates = [
-            { provider: window.okxwallet, name: "OKX Wallet" },
             { provider: window.ethereum, name: "Injected EVM wallet" },
             ...(Array.isArray(window.ethereum?.providers)
               ? window.ethereum.providers.map((provider, index) => ({ provider, name: "Injected wallet " + (index + 1) }))
@@ -549,7 +548,7 @@ function renderPaymentReviewPage(nonce: string): string {
             setNotice("Connect the owner wallet shown in the review details.", "error"); sign.disabled = false; sign.textContent = "Connect owner wallet"; return false;
           }
           if (String(chainId).toLowerCase() !== chainHex(state.payload.authorization.domain.chainId).toLowerCase()) {
-            setNotice("Switch to the source X Layer network before signing.", "error"); sign.disabled = false; sign.textContent = "Switch network to sign"; return false;
+            setNotice("Switch to the source Celo network before signing.", "error"); sign.disabled = false; sign.textContent = "Switch network to sign"; return false;
           }
           setNotice("Everything matches. Review the details, then sign the authorization."); sign.disabled = false; sign.textContent = "Review & Sign"; return true;
         };

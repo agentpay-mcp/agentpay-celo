@@ -13,6 +13,7 @@ const paidExecutionCanaryLedgerMigrationPath = "supabase/migrations/202607131700
 const canaryOwnerRebindingMigrationPath = "supabase/migrations/20260714180000_canary_owner_rebinding.sql";
 const oauthConsumerAuthorizationMigrationPath = "supabase/migrations/20260715110000_oauth_consumer_authorization.sql";
 const paymentIntentAuditMigrationPath = "supabase/migrations/20260715153000_payment_intent_atomic_audit.sql";
+const celoBoundaryMigrationPath = "supabase/migrations/20260717120000_celo_home_chain_boundary.sql";
 const migrationsDir = "supabase/migrations";
 const requiredTables = ["setup_intents", "agent_wallets", "payment_intents", "payment_events"];
 const requiredSecurityStatements = [
@@ -332,5 +333,26 @@ describe("AgentPay Supabase migration", () => {
     }
     assert.ok(sql.includes("revoke all on function public.record_payment_intent_state_event"));
     assert.ok(sql.includes("notify pgrst, 'reload schema'"));
+  });
+
+  it("replaces legacy X Layer persistence constraints with the Celo home-chain boundary", async () => {
+    const sql = normalizeSql(await readFile(celoBoundaryMigrationPath, "utf8"));
+
+    assert.ok(sql.startsWith("begin;"));
+    assert.ok(sql.endsWith("commit;"));
+    for (const statement of [
+      "alter column home_chain_id set default 42220",
+      "check (home_chain_id in (42220, 11142220))",
+      "check (chain_id in (42220, 11142220))",
+      "check (source_chain_id in (42220, 11142220))",
+      "check (source_token_symbol in ('usdc', 'usdt', 'usdm'))",
+      "check (destination_token_symbol in ('usdt0', 'usdc', 'usdt', 'usdm'))",
+      "check (caip2 in ('eip155:42220', 'eip155:11142220'))",
+      "check ((chain_id = 42220 and caip2 = 'eip155:42220') or (chain_id = 11142220 and caip2 = 'eip155:11142220'))",
+      "notify pgrst, 'reload schema'",
+    ]) {
+      assert.ok(sql.includes(statement), statement);
+    }
+    assert.ok(!sql.includes("default 196"));
   });
 });

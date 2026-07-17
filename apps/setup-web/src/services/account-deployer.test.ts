@@ -8,7 +8,9 @@ import {
   assertAgentPayAccountV2Bytecode,
   createContractFactoryAgentPayAccountDeployer,
   createEthersAgentPayAccountDeployer,
-  MAINNET_USDT0_ADDRESS,
+  MAINNET_USDC_ADDRESS,
+  MAINNET_USDM_ADDRESS,
+  MAINNET_USDT_ADDRESS,
   resolveSetupRpcUrlForChain,
   assertSupportedSetupChain,
 } from "./account-deployer.ts";
@@ -46,7 +48,7 @@ describe("createContractFactoryAgentPayAccountDeployer", () => {
         "0x6666666666666666666666666666666666666666",
       ],
       initialAllowedRouteTargets: ["0x7777777777777777777777777777777777777777"],
-      homeChainId: 1952,
+      homeChainId: 11142220,
     });
 
     assert.deepEqual(calls, [
@@ -67,7 +69,7 @@ describe("createContractFactoryAgentPayAccountDeployer", () => {
     });
   });
 
-  it("rejects mainnet USDC/custom tokens and route targets before factory deployment", async () => {
+  it("allows only canonical USDC with no route targets for a mainnet canary deployment", async () => {
     let deployCalls = 0;
     const deployer = createContractFactoryAgentPayAccountDeployer({
       async deploy() {
@@ -82,28 +84,32 @@ describe("createContractFactoryAgentPayAccountDeployer", () => {
     const baseRequest = {
       ownerAddress: "0x2222222222222222222222222222222222222222",
       executorAddress: "0x4444444444444444444444444444444444444444",
-      homeChainId: 196,
+      homeChainId: 42220,
       initialAllowedRouteTargets: [],
     };
 
+    await deployer.deployAgentPayAccount({
+      ...baseRequest,
+      initialAllowedTokenAddresses: [MAINNET_USDC_ADDRESS],
+    });
     await assert.rejects(
       () =>
         deployer.deployAgentPayAccount({
           ...baseRequest,
-          initialAllowedTokenAddresses: ["0x74b7F16337b8972027F6196A17a631aC6dE26d22"],
+          initialAllowedTokenAddresses: [MAINNET_USDC_ADDRESS, MAINNET_USDT_ADDRESS, MAINNET_USDM_ADDRESS],
         }),
-      /canonical USDT0/i,
+      /USDC-only/i,
     );
     await assert.rejects(
       () =>
         deployer.deployAgentPayAccount({
           ...baseRequest,
-          initialAllowedTokenAddresses: [MAINNET_USDT0_ADDRESS],
+          initialAllowedTokenAddresses: [MAINNET_USDC_ADDRESS],
           initialAllowedRouteTargets: ["0x7777777777777777777777777777777777777777"],
         }),
       /empty route-target/i,
     );
-    assert.equal(deployCalls, 0);
+    assert.equal(deployCalls, 1);
   });
 });
 
@@ -124,30 +130,30 @@ describe("assertAgentPayAccountV2Bytecode", () => {
 
 describe("assertSetupRpcChain", () => {
   it("fails closed when the selected RPC is on a different chain", () => {
-    assert.doesNotThrow(() => assertSetupRpcChain(1952, 1952));
-    assert.throws(() => assertSetupRpcChain(1952, 196), /chain mismatch/);
+    assert.doesNotThrow(() => assertSetupRpcChain(11142220, 11142220));
+    assert.throws(() => assertSetupRpcChain(11142220, 42220), /chain mismatch/);
   });
 });
 
 describe("setup RPC boundary", () => {
   it("requires an explicit chain-specific mainnet RPC mapping", () => {
     assert.throws(
-      () => resolveSetupRpcUrlForChain({ rpcUrl: "https://generic.example" }, 196),
-      /XLAYER_MAINNET_RPC_URL/i,
+      () => resolveSetupRpcUrlForChain({ rpcUrl: "https://generic.example" }, 42220),
+      /CELO_MAINNET_RPC_URL/i,
     );
     assert.equal(
       resolveSetupRpcUrlForChain(
-        { rpcUrl: "https://generic.example", rpcUrls: { 196: "https://rpc.xlayer.tech" } },
-        196,
+        { rpcUrl: "https://generic.example", rpcUrls: { 42220: "https://rpc.celo.tech" } },
+        42220,
       ),
-      "https://rpc.xlayer.tech",
+      "https://rpc.celo.tech",
     );
   });
 
-  it("rejects non-X Layer deployment chains", () => {
-    assert.doesNotThrow(() => assertSupportedSetupChain(196));
-    assert.doesNotThrow(() => assertSupportedSetupChain(1952));
-    assert.throws(() => assertSupportedSetupChain(1), /only X Layer/i);
+  it("rejects non-Celo deployment chains", () => {
+    assert.doesNotThrow(() => assertSupportedSetupChain(42220));
+    assert.doesNotThrow(() => assertSupportedSetupChain(11142220));
+    assert.throws(() => assertSupportedSetupChain(1), /only Celo/i);
   });
 });
 
@@ -164,9 +170,9 @@ describe("mainnet bytecode deployment policy", () => {
       deployer.deployAgentPayAccount({
         ownerAddress: "0x2222222222222222222222222222222222222222",
         executorAddress: "0x4444444444444444444444444444444444444444",
-        initialAllowedTokenAddresses: [MAINNET_USDT0_ADDRESS],
+        initialAllowedTokenAddresses: [MAINNET_USDC_ADDRESS],
         initialAllowedRouteTargets: [],
-        homeChainId: 196,
+        homeChainId: 42220,
       }),
       /BYTECODE_HASH pinning/,
     );

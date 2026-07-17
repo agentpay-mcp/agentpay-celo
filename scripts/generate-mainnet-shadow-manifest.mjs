@@ -45,7 +45,7 @@ export async function generateMainnetShadowManifest({ outputPath = MAINNET_SHADO
 
 function helpText() {
   return [
-    "Generate the non-secret X Layer mainnet SHADOW_ONLY/OFF manifest.",
+    "Generate the non-secret Celo mainnet SHADOW_ONLY/OFF manifest.",
     "",
     "Usage:",
     "  npm run manifest:mainnet:shadow [-- --out path]",

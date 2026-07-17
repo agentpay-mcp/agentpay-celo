@@ -1,24 +1,11 @@
 # @agentpay-ai/shared
 
-Shared schemas, chain metadata, token helpers, and intent types for AgentPay.
+Shared AgentPay schemas and helpers:
 
-Use this package when building AgentPay-compatible tools that need the same validation rules as the MCP server, setup web, and CLI.
+- Celo mainnet and Celo Sepolia chain metadata;
+- canonical Celo USDC, USDT, and USDm addresses and decimals;
+- balance, invoice, x402, and payment-intent validation;
+- direct and route EIP-712 authorization builders;
+- exact approval, nonce, deadline, route, and receipt helpers used by the MCP and setup surfaces.
 
-## Included Modules
-
-- Legacy approval phrase parsing and payment intent types.
-- Canonical AgentPayAccountV2 EIP-712 typed-data builders and authorization schemas.
-- Opaque Review & Sign token and signature-handoff schemas.
-- X Layer stablecoin metadata and balance helpers.
-- Wallet setup, invoice, x402, x402 Bazaar discovery, account admin, and payment tracking schemas, including x402 `PAYMENT-RESPONSE` and `payment-identifier` proof helpers.
-- Route calldata hashing helpers used by guarded contract calls.
-
-## Example
-
-```ts
-import { preparePaymentInputSchema } from "@agentpay-ai/shared";
-
-const input = preparePaymentInputSchema.parse(candidatePayment);
-```
-
-AgentPay validates untrusted inputs at runtime boundaries with Zod. Keep that pattern when extending the package.
+The source home-chain schemas accept only Celo mainnet (`42220`) and Celo Sepolia (`11142220`). Destination metadata can still describe supported cross-chain remittance assets without turning those chains into AgentPay home chains.

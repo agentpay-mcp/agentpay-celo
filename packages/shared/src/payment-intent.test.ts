@@ -13,7 +13,7 @@ import {
 } from "./index.ts";
 
 describe("quotePaymentRouteInputSchema", () => {
-  it("defaults sourceTokenSymbol to X Layer USDt0 without requiring a purpose", () => {
+  it("defaults sourceTokenSymbol to Celo USDC without requiring a purpose", () => {
     const parsed = quotePaymentRouteInputSchema.parse({
       recipientAddress: "0x1111111111111111111111111111111111111111",
       destinationChainId: 8453,
@@ -26,7 +26,7 @@ describe("quotePaymentRouteInputSchema", () => {
       destinationChainId: 8453,
       destinationTokenSymbol: "USDC",
       amountOut: "10",
-      sourceTokenSymbol: "USDT0",
+      sourceTokenSymbol: "USDC",
     });
   });
 });
@@ -41,7 +41,7 @@ describe("preparePaymentInputSchema", () => {
       purpose: " design bounty ",
     });
 
-    assert.equal(parsed.sourceTokenSymbol, "USDT0");
+    assert.equal(parsed.sourceTokenSymbol, "USDC");
     assert.equal(parsed.paymentType, "WALLET_PAYMENT");
     assert.equal(parsed.purpose, "design bounty");
   });
@@ -94,6 +94,21 @@ describe("preparePaymentInputSchema", () => {
         purpose: "design bounty",
       }),
     );
+  });
+
+  it("accepts Celo mainnet and Sepolia selectors and rejects legacy X Layer selectors", () => {
+    const baseInput = {
+      recipientAddress: "0x1111111111111111111111111111111111111111",
+      destinationChainId: 42220,
+      destinationTokenSymbol: "USDC",
+      amountOut: "10.50",
+      purpose: "supplier payout",
+    } as const;
+
+    assert.equal(preparePaymentInputSchema.parse({ ...baseInput, homeChainId: 42220 }).homeChainId, 42220);
+    assert.equal(preparePaymentInputSchema.parse({ ...baseInput, homeChainId: 11142220 }).homeChainId, 11142220);
+    assert.throws(() => preparePaymentInputSchema.parse({ ...baseInput, homeChainId: 196 }));
+    assert.throws(() => preparePaymentInputSchema.parse({ ...baseInput, sourceTokenSymbol: "USDT0" }));
   });
 });
 

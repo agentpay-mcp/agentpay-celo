@@ -15,21 +15,22 @@ contract DeployMockStablecoins {
 
     MockStablecoinVm internal constant vm = MockStablecoinVm(VM_ADDRESS);
 
-    event MockStablecoinsDeployed(address indexed usdt0, address indexed usdc, address indexed owner);
+    event MockStablecoinsDeployed(address indexed usdc, address indexed usdt, address indexed usdm, address owner);
 
-    function run() external returns (MockStablecoin usdt0, MockStablecoin usdc) {
+    function run() external returns (MockStablecoin usdc, MockStablecoin usdt, MockStablecoin usdm) {
         uint256 deployerPrivateKey = vm.envUint("SETUP_DEPLOYER_PRIVATE_KEY");
         address owner = vm.envAddress("AGENTPAY_OWNER_ADDRESS");
 
         vm.startBroadcast(deployerPrivateKey);
-        (usdt0, usdc) = deploy(owner);
+        (usdc, usdt, usdm) = deploy(owner);
         vm.stopBroadcast();
     }
 
-    function deploy(address owner) public returns (MockStablecoin usdt0, MockStablecoin usdc) {
-        usdt0 = new MockStablecoin("Mock USDT0", "USDT0", 6, owner);
+    function deploy(address owner) public returns (MockStablecoin usdc, MockStablecoin usdt, MockStablecoin usdm) {
         usdc = new MockStablecoin("Mock USDC", "USDC", 6, owner);
+        usdt = new MockStablecoin("Mock USDT", "USDT", 6, owner);
+        usdm = new MockStablecoin("Mock USDm", "USDm", 18, owner);
 
-        emit MockStablecoinsDeployed(address(usdt0), address(usdc), owner);
+        emit MockStablecoinsDeployed(address(usdc), address(usdt), address(usdm), owner);
     }
 }

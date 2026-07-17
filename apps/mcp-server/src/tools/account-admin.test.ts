@@ -28,17 +28,17 @@ describe("prepareAccountAdminTransaction", () => {
       action: "PAUSE",
       ownerAddress: "0x2222222222222222222222222222222222222222",
       accountAddress: "0x3333333333333333333333333333333333333333",
-      chainId: 196,
-      chain: "X Layer",
+      chainId: 42220,
+      chain: "Celo",
       transaction: {
         from: "0x2222222222222222222222222222222222222222",
         to: "0x3333333333333333333333333333333333333333",
         value: "0",
-        chainId: 196,
+        chainId: 42220,
         data: accountAdminInterface.encodeFunctionData("pause"),
       },
       instructionToAgent:
-        "Ask the owner wallet 0x2222222222222222222222222222222222222222 to submit this PAUSE transaction on X Layer. This is an owner admin action and does not approve any payment.",
+        "Ask the owner wallet 0x2222222222222222222222222222222222222222 to submit this PAUSE transaction on Celo. This is an owner admin action and does not approve any payment.",
     });
   });
 
@@ -88,7 +88,7 @@ function activeWallet() {
   return {
     ownerAddress: "0x2222222222222222222222222222222222222222",
     accountAddress: "0x3333333333333333333333333333333333333333",
-    homeChainId: 196,
+    homeChainId: 42220,
     executorAddress: "0x4444444444444444444444444444444444444444",
     status: "ACTIVE" as const,
   };

@@ -9,29 +9,30 @@ import type { MainnetAccountVerificationResult } from "../services/mainnet-accou
 export type ExecutionMode = "OFF" | "CANARY" | "PUBLIC" | "DRAIN";
 export type RuntimeIdentityStatus = "SHADOW_ONLY" | "DEPLOYED" | "READY" | "DRAINING";
 
-export const MAINNET_CHAIN_ID = 196;
-export const MAINNET_CAIP2 = "eip155:196";
-export const MAINNET_USDT0_ADDRESS = "0x779Ded0c9e1022225f8E0630b35a9b54bE713736";
-export const MAINNET_USDT0_CODE_HASH =
-  "0x4d9be648c5bf39973670d9f8b481d5d0b971e6a2db2deccc6b98cde21c5dd83e";
-export const MAINNET_MIGRATION_HEAD = "20260715153000_payment_intent_atomic_audit";
+export const MAINNET_CHAIN_ID = 42220;
+export const MAINNET_CAIP2 = "eip155:42220";
+export const MAINNET_USDC_ADDRESS = "0xcebA9300f2b948710d2653dD7B07f33A8B32118C";
+export const MAINNET_USDC_CODE_HASH =
+  "0x14254a76b7b2554180021c6390e814e73dee647ae91b7198da08de5145214493";
+export const MAINNET_MIGRATION_HEAD = "20260717120000_celo_home_chain_boundary";
 export const DEFAULT_PRODUCTION_MANIFEST_PATH = fileURLToPath(
-  new URL("../../../../ops/manifests/xlayer-mainnet.shadow.json", import.meta.url),
+  new URL("../../../../ops/manifests/celo-mainnet.shadow.json", import.meta.url),
 );
 
-const MAINNET_USDC_ADDRESS = "0x74b7F16337b8972027F6196A17a631aC6dE26d22";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const ADDRESS_PATTERN = /^0x[a-f0-9]{40}$/i;
 const HEX_HASH_PATTERN = /^0x[a-f0-9]{64}$/i;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/i;
 const COMMIT_PATTERN = /^[a-f0-9]{40}$/i;
 const PRODUCTION_ENVIRONMENT_KEYS = [
-  "XLAYER_RPC_URL",
-  "XLAYER_TESTNET_RPC_URL",
-  "AGENTPAY_XLAYER_TESTNET_USDT0_ADDRESS",
-  "AGENTPAY_XLAYER_TESTNET_USDC_ADDRESS",
-  "AGENTPAY_XLAYER_USDT0_ADDRESS",
-  "AGENTPAY_XLAYER_USDC_ADDRESS",
+  "CELO_RPC_URL",
+  "CELO_SEPOLIA_RPC_URL",
+  "AGENTPAY_CELO_SEPOLIA_USDC_ADDRESS",
+  "AGENTPAY_CELO_SEPOLIA_USDT_ADDRESS",
+  "AGENTPAY_CELO_SEPOLIA_USDM_ADDRESS",
+  "AGENTPAY_CELO_USDC_ADDRESS",
+  "AGENTPAY_CELO_USDT_ADDRESS",
+  "AGENTPAY_CELO_USDM_ADDRESS",
   "SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
   "DIRECT_URL",
@@ -83,10 +84,7 @@ export interface ProductionPaymentConfigSnapshot {
   assetDecimals: number;
   syncSettle?: boolean;
   facilitatorUrl?: string;
-  okxBaseUrl?: string;
-  okxApiKey?: string;
-  okxSecretKey?: string;
-  okxPassphrase?: string;
+  facilitatorApiKey?: string;
 }
 
 export interface ProductionReadinessResult {
@@ -124,27 +122,27 @@ export function validateProductionEnvironment(env: Record<string, string | undef
   const has = (name: string) => typeof env[name] === "string" && env[name]!.trim() !== "";
 
   if (env.AGENTPAY_ENVIRONMENT !== "production") add("AGENTPAY_ENVIRONMENT", "must be production");
-  if (String(env.AGENTPAY_HOME_CHAIN_ID ?? "") !== String(MAINNET_CHAIN_ID)) add("AGENTPAY_HOME_CHAIN_ID", "must be 196");
+  if (String(env.AGENTPAY_HOME_CHAIN_ID ?? "") !== String(MAINNET_CHAIN_ID)) add("AGENTPAY_HOME_CHAIN_ID", "must be 42220");
   if (env.AGENTPAY_ACCOUNT_VERSION !== "v2") add("AGENTPAY_ACCOUNT_VERSION", "must be v2");
 
   for (const name of [
     "SUPABASE_PRODUCTION_URL",
     "SUPABASE_PRODUCTION_SERVICE_ROLE_KEY",
-    "XLAYER_MAINNET_RPC_URL",
+    "CELO_MAINNET_RPC_URL",
     "AGENTPAY_SESSION_HASH_KEY",
     "AGENTPAY_REVIEW_TOKEN_SECRET",
   ]) {
     if (!has(name)) add(name, "is required for production");
   }
 
-  if (has("XLAYER_MAINNET_RPC_URL")) {
+  if (has("CELO_MAINNET_RPC_URL")) {
     try {
-      const rpcUrl = new URL(env.XLAYER_MAINNET_RPC_URL!);
-      if (rpcUrl.protocol !== "https:" || rpcUrl.hostname !== "rpc.xlayer.tech") {
-        add("XLAYER_MAINNET_RPC_URL", "must be the pinned mainnet HTTPS host");
+      const rpcUrl = new URL(env.CELO_MAINNET_RPC_URL!);
+      if (rpcUrl.protocol !== "https:" || rpcUrl.hostname !== "forno.celo.org") {
+        add("CELO_MAINNET_RPC_URL", "must be the pinned Celo mainnet HTTPS host");
       }
     } catch {
-      add("XLAYER_MAINNET_RPC_URL", "must be a valid HTTPS URL");
+      add("CELO_MAINNET_RPC_URL", "must be a valid HTTPS URL");
     }
   }
 
@@ -185,21 +183,21 @@ export function validateProductionManifest(manifest: unknown): { valid: boolean;
   if (!EXECUTION_MODES.has(record.executionMode)) add("executionMode", "must be OFF, CANARY, PUBLIC, or DRAIN");
   if (record.environment !== "production") add("environment", "must be production");
   if (record.schemaVersion !== 1) add("schemaVersion", "must be 1");
-  if (record.chain?.chainId !== MAINNET_CHAIN_ID) add("chain.chainId", "must be 196");
-  if (record.chain?.caip2 !== MAINNET_CAIP2) add("chain.caip2", "must be eip155:196");
-  if (record.chain?.rpcEnvRef !== "XLAYER_MAINNET_RPC_URL") add("chain.rpcEnvRef", "must be XLAYER_MAINNET_RPC_URL");
+  if (record.chain?.chainId !== MAINNET_CHAIN_ID) add("chain.chainId", "must be 42220");
+  if (record.chain?.caip2 !== MAINNET_CAIP2) add("chain.caip2", "must be eip155:42220");
+  if (record.chain?.rpcEnvRef !== "CELO_MAINNET_RPC_URL") add("chain.rpcEnvRef", "must be CELO_MAINNET_RPC_URL");
   if (record.database?.environment !== "production") add("database.environment", "must be production");
   if (record.database?.migrationHead !== MAINNET_MIGRATION_HEAD) add("database.migrationHead", "does not match the identity migration head");
   if (record.release?.migrationHead !== MAINNET_MIGRATION_HEAD) add("release.migrationHead", "does not match the identity migration head");
   if (record.contract?.version !== "v2") add("contract.version", "must be v2");
   if (record.contract?.domain?.name !== "AgentPay" || record.contract?.domain?.version !== "1" || record.contract?.domain?.chainId !== MAINNET_CHAIN_ID) {
-    add("contract.domain", "must be AgentPay/1 on chain 196");
+    add("contract.domain", "must be AgentPay/1 on chain 42220");
   }
-  if (record.token?.symbol !== "USDT0" || record.token?.address?.toLowerCase() !== MAINNET_USDT0_ADDRESS.toLowerCase()) add("token", "must be mainnet USDT0");
-  if (record.token?.decimals !== 6 || record.token?.codeHash?.toLowerCase() !== MAINNET_USDT0_CODE_HASH.toLowerCase()) add("token", "code hash and decimals must match mainnet USDT0");
-  if (JSON.stringify(record.contract?.allowedTokens ?? []) !== JSON.stringify([MAINNET_USDT0_ADDRESS])) add("contract.allowedTokens", "must contain only mainnet USDT0");
+  if (record.token?.symbol !== "USDC" || record.token?.address?.toLowerCase() !== MAINNET_USDC_ADDRESS.toLowerCase()) add("token", "must be Celo mainnet USDC");
+  if (record.token?.decimals !== 6 || record.token?.codeHash?.toLowerCase() !== MAINNET_USDC_CODE_HASH.toLowerCase()) add("token", "code hash and decimals must match Celo mainnet USDC");
+  if (JSON.stringify(record.contract?.allowedTokens ?? []) !== JSON.stringify([MAINNET_USDC_ADDRESS])) add("contract.allowedTokens", "must contain only Celo mainnet USDC");
   if (!Array.isArray(record.contract?.allowedRouteTargets) || record.contract.allowedRouteTargets.length !== 0) add("contract.allowedRouteTargets", "must be empty");
-  if (record.x402?.network !== MAINNET_CAIP2 || record.x402?.asset !== "USDT0" || record.x402?.tokenAddress?.toLowerCase() !== MAINNET_USDT0_ADDRESS.toLowerCase()) add("x402", "must target mainnet USDT0 on eip155:196");
+  if (record.x402?.network !== MAINNET_CAIP2 || record.x402?.asset !== "USDC" || record.x402?.tokenAddress?.toLowerCase() !== MAINNET_USDC_ADDRESS.toLowerCase()) add("x402", "must target Celo mainnet USDC on eip155:42220");
   if (record.x402?.decimals !== 6 || record.x402?.price !== "$0.01" || record.x402?.priceAtomic !== "10000" || record.x402?.syncSettle !== true) add("x402", "must use 6 decimals, $0.01/10000, and synchronous settlement");
   if (JSON.stringify(record.x402?.toolAllowlist ?? []) !== JSON.stringify(["execute_payment"])) add("x402.toolAllowlist", "must contain only execute_payment");
   if (mode === "OFF" && status !== "SHADOW_ONLY" && status !== "DEPLOYED") add("executionMode", "OFF is only valid before activation");
@@ -308,16 +306,16 @@ export function assertProductionExecutionAllowed(
   const direct =
     intent.sourceChainId === MAINNET_CHAIN_ID &&
     intent.destinationChainId === MAINNET_CHAIN_ID &&
-    intent.sourceTokenSymbol === "USDT0" &&
-    intent.destinationTokenSymbol === "USDT0" &&
-    intent.sourceTokenAddress.toLowerCase() === MAINNET_USDT0_ADDRESS.toLowerCase() &&
-    intent.destinationTokenAddress.toLowerCase() === MAINNET_USDT0_ADDRESS.toLowerCase() &&
+    intent.sourceTokenSymbol === "USDC" &&
+    intent.destinationTokenSymbol === "USDC" &&
+    intent.sourceTokenAddress.toLowerCase() === MAINNET_USDC_ADDRESS.toLowerCase() &&
+    intent.destinationTokenAddress.toLowerCase() === MAINNET_USDC_ADDRESS.toLowerCase() &&
     intent.routeProvider === "DIRECT" &&
     intent.routeTarget.toLowerCase() === ZERO_ADDRESS &&
     intent.routeCalldata === "0x" &&
     intent.maxNativeFee === "0";
   if (!direct) {
-    throw new Error("PRODUCTION_EXECUTION_RESTRICTED: only direct chain-196 USDT0 payments are enabled.");
+    throw new Error("PRODUCTION_EXECUTION_RESTRICTED: only direct Celo mainnet USDC payments are enabled.");
   }
 }
 
@@ -379,12 +377,12 @@ function validatePaymentConfig(config: ProductionPaymentConfigSnapshot | undefin
     errors.push("payment config: public mode requires enabled x402 payment");
     return errors;
   }
-  if (config.network !== MAINNET_CAIP2) errors.push("payment config: network must be eip155:196");
-  if (config.asset?.toLowerCase() !== MAINNET_USDT0_ADDRESS.toLowerCase()) {
-    errors.push("payment config: asset must be the canonical mainnet USDT0 contract");
+  if (config.network !== MAINNET_CAIP2) errors.push("payment config: network must be eip155:42220");
+  if (config.asset?.toLowerCase() !== MAINNET_USDC_ADDRESS.toLowerCase()) {
+    errors.push("payment config: asset must be the canonical Celo mainnet USDC contract");
   }
   if (config.price !== "$0.01") errors.push("payment config: price must be $0.01");
-  if (config.assetDecimals !== 6) errors.push("payment config: asset decimals must be 6 for USDT0");
+  if (config.assetDecimals !== 6) errors.push("payment config: asset decimals must be 6 for USDC");
   if (config.syncSettle !== true) errors.push("payment config: synchronous settlement must be explicitly true");
   if (!ADDRESS_PATTERN.test(config.payTo) || config.payTo.toLowerCase() === ZERO_ADDRESS) errors.push("payment config: payTo must be a non-zero EVM address");
   if (config.facilitatorUrl) {
@@ -394,18 +392,11 @@ function validatePaymentConfig(config: ProductionPaymentConfigSnapshot | undefin
     } catch {
       errors.push("payment config: facilitator URL is invalid");
     }
-  } else if (!(config.okxApiKey && config.okxSecretKey && config.okxPassphrase)) {
-    errors.push("payment config: facilitator URL or complete OKX credentials are required");
+  } else {
+    errors.push("payment config: facilitator URL is required");
   }
-  if (config.okxBaseUrl) {
-    try {
-      const url = new URL(config.okxBaseUrl);
-      if (url.protocol !== "https:" || ["localhost", "127.0.0.1", "::1"].includes(url.hostname)) {
-        errors.push("payment config: OKX base URL must be HTTPS and non-loopback");
-      }
-    } catch {
-      errors.push("payment config: OKX base URL is invalid");
-    }
+  if (config.facilitatorUrl === "https://api.x402.celo.org" && !config.facilitatorApiKey) {
+    errors.push("payment config: AGENTPAY_CELO_X402_API_KEY is required for the hosted Celo facilitator");
   }
   return errors;
 }

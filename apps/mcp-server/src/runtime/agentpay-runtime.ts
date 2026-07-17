@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-import type { ExecutePaymentInput } from "@agentpay-ai/shared";
+import type { CeloHomeChainId, ExecutePaymentInput } from "@agentpay-ai/shared";
 import type { PreparePaymentInput } from "@agentpay-ai/shared";
 import type { GetPaymentSignatureInput } from "@agentpay-ai/shared";
 import type { GetBalanceInput } from "@agentpay-ai/shared";
@@ -68,7 +68,12 @@ import {
   createPrepareX402ServiceRequestHandler,
   createSearchX402ServicesHandler,
 } from "../tools/x402-bazaar.ts";
-import { createParseX402PaymentRequiredHandler, createRetryX402RequestHandler } from "../tools/x402.ts";
+import {
+  createParseX402PaymentRequiredHandler,
+  createPinnedX402HttpClient,
+  createRetryX402RequestHandler,
+  type X402RetryHttpClient,
+} from "../tools/x402.ts";
 import { createPrepareAccountAdminTransactionHandler } from "../tools/account-admin.ts";
 import type { PrepareAccountAdminTransactionDependencies } from "../tools/account-admin.ts";
 import {
@@ -109,23 +114,25 @@ import type {
 } from "../tools/wallet-setup.ts";
 import type { ExecutionMode } from "./production-readiness.ts";
 
-const REQUIRED_LOCAL_ENV_NAMES = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "XLAYER_RPC_URL", "EXECUTOR_PRIVATE_KEY"];
+const REQUIRED_LOCAL_ENV_NAMES = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "CELO_RPC_URL", "EXECUTOR_PRIVATE_KEY"];
 const REQUIRED_PRODUCTION_ENV_NAMES = [
   "SUPABASE_PRODUCTION_URL",
   "SUPABASE_PRODUCTION_SERVICE_ROLE_KEY",
-  "XLAYER_MAINNET_RPC_URL",
+  "CELO_MAINNET_RPC_URL",
   "EXECUTOR_PRIVATE_KEY",
   "AGENTPAY_SESSION_HASH_KEY",
   "AGENTPAY_REVIEW_TOKEN_SECRET",
   "SETUP_WEB_URL",
 ];
 const PRODUCTION_FORBIDDEN_ENV_NAMES = [
-  "XLAYER_RPC_URL",
-  "XLAYER_TESTNET_RPC_URL",
-  "AGENTPAY_XLAYER_TESTNET_USDT0_ADDRESS",
-  "AGENTPAY_XLAYER_TESTNET_USDC_ADDRESS",
-  "AGENTPAY_XLAYER_USDT0_ADDRESS",
-  "AGENTPAY_XLAYER_USDC_ADDRESS",
+  "CELO_RPC_URL",
+  "CELO_SEPOLIA_RPC_URL",
+  "AGENTPAY_CELO_SEPOLIA_USDC_ADDRESS",
+  "AGENTPAY_CELO_SEPOLIA_USDT_ADDRESS",
+  "AGENTPAY_CELO_SEPOLIA_USDM_ADDRESS",
+  "AGENTPAY_CELO_USDC_ADDRESS",
+  "AGENTPAY_CELO_USDT_ADDRESS",
+  "AGENTPAY_CELO_USDM_ADDRESS",
   "SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
   "DIRECT_URL",
@@ -133,21 +140,21 @@ const PRODUCTION_FORBIDDEN_ENV_NAMES = [
 const DEFAULT_SETUP_WEB_URL = "http://localhost:3000/setup";
 const privateKeyPattern = /^0x[a-fA-F0-9]{64}$/;
 const addressPattern = /^0x[a-fA-F0-9]{40}$/;
-const setupHomeChainIds = new Set([196, 1952]);
+const setupHomeChainIds = new Set<CeloHomeChainId>([42220, 11142220]);
 const runtimeHttpModes = new Set(["public", "consumer"]);
 const runtimeEnvironments = new Set<SessionEnvironment>(["staging", "production"]);
 
 export interface AgentPayRuntimeConfig {
   supabaseUrl: string;
   serviceRoleKey: string;
-  xlayerRpcUrl: string;
-  xlayerRpcUrls?: Partial<Record<number, string>>;
+  celoRpcUrl: string;
+  celoRpcUrls?: Partial<Record<number, string>>;
   executorPrivateKey: string;
   lifiApiKey?: string;
   lifiBaseUrl?: string;
   x402BazaarFacilitatorUrl?: string;
   setupWebUrl?: string;
-  homeChainId?: number;
+  homeChainId?: CeloHomeChainId;
   stableTokenOverrides?: StableTokenMetadataOverrides;
   httpMode?: "public" | "consumer";
   sessionHashKey?: string;
@@ -190,7 +197,7 @@ export interface AgentPayRuntimeFactories {
 
 export interface AgentPayRuntimeOptions {
   fetch?: typeof fetch;
-  x402Fetch?: typeof fetch;
+  x402HttpClient?: X402RetryHttpClient;
   x402BazaarFetch?: typeof fetch;
   clock?: () => Date;
   createId?: () => string;
@@ -256,27 +263,27 @@ export function parseAgentPayEnv(env: NodeJS.ProcessEnv | Record<string, string 
     Object.entries(env).map(([key, value]) => [key, value?.trim() === "" ? undefined : value?.trim()]),
   ) as Record<string, string | undefined>;
   const homeChainId = parseOptionalHomeChainId(normalized.AGENTPAY_HOME_CHAIN_ID);
-  const xlayerRpcUrls = parseXLayerRpcUrls(normalized);
+  const celoRpcUrls = parseCeloRpcUrls(normalized);
   const stableTokenOverrides = parseStableTokenOverrides(normalized);
   const isProduction = normalized.AGENTPAY_ENVIRONMENT === "production";
   const requiredEnvNames = isProduction ? REQUIRED_PRODUCTION_ENV_NAMES : REQUIRED_LOCAL_ENV_NAMES;
   const supabaseUrl = isProduction ? normalized.SUPABASE_PRODUCTION_URL : normalized.SUPABASE_URL;
   const serviceRoleKey = isProduction ? normalized.SUPABASE_PRODUCTION_SERVICE_ROLE_KEY : normalized.SUPABASE_SERVICE_ROLE_KEY;
-  const xlayerRpcUrl = isProduction ? normalized.XLAYER_MAINNET_RPC_URL : normalized.XLAYER_RPC_URL;
+  const celoRpcUrl = isProduction ? normalized.CELO_MAINNET_RPC_URL : normalized.CELO_RPC_URL;
   const missing = requiredEnvNames.filter((name) => {
     if (name === "SUPABASE_URL" || name === "SUPABASE_PRODUCTION_URL") return !supabaseUrl;
     if (name === "SUPABASE_SERVICE_ROLE_KEY" || name === "SUPABASE_PRODUCTION_SERVICE_ROLE_KEY") return !serviceRoleKey;
-    if (name === "XLAYER_RPC_URL" || name === "XLAYER_MAINNET_RPC_URL") return !xlayerRpcUrl;
+    if (name === "CELO_RPC_URL" || name === "CELO_MAINNET_RPC_URL") return !celoRpcUrl;
     return !normalized[name];
   });
   const invalid = [
     supabaseUrl && !isHttpUrl(supabaseUrl) ? (isProduction ? "SUPABASE_PRODUCTION_URL" : "SUPABASE_URL") : undefined,
-    xlayerRpcUrl && !isHttpUrl(xlayerRpcUrl) ? (isProduction ? "XLAYER_MAINNET_RPC_URL" : "XLAYER_RPC_URL") : undefined,
-    normalized.XLAYER_MAINNET_RPC_URL && !isHttpUrl(normalized.XLAYER_MAINNET_RPC_URL)
-      ? "XLAYER_MAINNET_RPC_URL"
+    celoRpcUrl && !isHttpUrl(celoRpcUrl) ? (isProduction ? "CELO_MAINNET_RPC_URL" : "CELO_RPC_URL") : undefined,
+    normalized.CELO_MAINNET_RPC_URL && !isHttpUrl(normalized.CELO_MAINNET_RPC_URL)
+      ? "CELO_MAINNET_RPC_URL"
       : undefined,
-    normalized.XLAYER_TESTNET_RPC_URL && !isHttpUrl(normalized.XLAYER_TESTNET_RPC_URL)
-      ? "XLAYER_TESTNET_RPC_URL"
+    normalized.CELO_SEPOLIA_RPC_URL && !isHttpUrl(normalized.CELO_SEPOLIA_RPC_URL)
+      ? "CELO_SEPOLIA_RPC_URL"
       : undefined,
     normalized.EXECUTOR_PRIVATE_KEY && !privateKeyPattern.test(normalized.EXECUTOR_PRIVATE_KEY)
       ? "EXECUTOR_PRIVATE_KEY"
@@ -301,7 +308,7 @@ export function parseAgentPayEnv(env: NodeJS.ProcessEnv | Record<string, string 
       ? "AGENTPAY_REVIEW_TOKEN_SECRET"
       : undefined,
     isProduction && normalized.AGENTPAY_ACCOUNT_VERSION !== "v2" ? "AGENTPAY_ACCOUNT_VERSION" : undefined,
-    isProduction && normalized.AGENTPAY_HOME_CHAIN_ID !== "196" ? "AGENTPAY_HOME_CHAIN_ID" : undefined,
+    isProduction && normalized.AGENTPAY_HOME_CHAIN_ID !== "42220" ? "AGENTPAY_HOME_CHAIN_ID" : undefined,
     isProduction && PRODUCTION_FORBIDDEN_ENV_NAMES.some((name) => normalized[name])
       ? "production environment isolation"
       : undefined,
@@ -315,8 +322,8 @@ export function parseAgentPayEnv(env: NodeJS.ProcessEnv | Record<string, string 
   return omitUndefined({
     supabaseUrl,
     serviceRoleKey,
-    xlayerRpcUrl,
-    xlayerRpcUrls,
+    celoRpcUrl,
+    celoRpcUrls,
     executorPrivateKey: normalized.EXECUTOR_PRIVATE_KEY,
     lifiApiKey: normalized.LIFI_API_KEY,
     lifiBaseUrl: normalized.LIFI_BASE_URL,
@@ -338,7 +345,7 @@ export function createAgentPayRuntime(config: AgentPayRuntimeConfig, options: Ag
   configureStableTokenMetadataOverrides(config.stableTokenOverrides ?? {});
   const factories = options.factories ?? defaultAgentPayRuntimeFactories;
   const clock = options.clock ?? (() => new Date());
-  const effectiveHomeChainId = options.tenantContext?.homeChainId ?? config.homeChainId;
+  const effectiveHomeChainId = requireOptionalCeloHomeChainId(options.tenantContext?.homeChainId ?? config.homeChainId);
   const repositories = factories.createRepositories(
     omitUndefined({
       supabaseUrl: config.supabaseUrl,
@@ -356,8 +363,8 @@ export function createAgentPayRuntime(config: AgentPayRuntimeConfig, options: Ag
     }) as LifiRouteQuoteProviderConfig,
   );
   const chainAdapters = factories.createChainAdapters({
-    rpcUrl: config.xlayerRpcUrl,
-    rpcUrls: config.xlayerRpcUrls,
+    rpcUrl: config.celoRpcUrl,
+    rpcUrls: config.celoRpcUrls,
     executorPrivateKey: config.executorPrivateKey,
   });
   const x402BazaarDiscovery = factories.createX402BazaarDiscovery(
@@ -427,7 +434,7 @@ export function createAgentPayRuntime(config: AgentPayRuntimeConfig, options: Ag
     parseX402PaymentRequired: createParseX402PaymentRequiredHandler(),
     retryX402Request: createRetryX402RequestHandler({
       paymentIntents: repositories.paymentIntents,
-      fetch: options.x402Fetch ?? options.fetch ?? fetch,
+      httpClient: options.x402HttpClient ?? createPinnedX402HttpClient(),
     }),
     prepareContractCall: createPrepareContractCallHandler(
       omitUndefined({
@@ -590,68 +597,77 @@ function isLoopbackHostname(hostname: string): boolean {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "[::1]";
 }
 
-function parseOptionalHomeChainId(value: string | undefined): number | undefined {
+function parseOptionalHomeChainId(value: string | undefined): CeloHomeChainId | undefined {
   if (!value) {
     return undefined;
   }
 
   const parsed = Number(value);
-  return Number.isInteger(parsed) && setupHomeChainIds.has(parsed) ? parsed : undefined;
+  return Number.isInteger(parsed) && setupHomeChainIds.has(parsed as CeloHomeChainId)
+    ? (parsed as CeloHomeChainId)
+    : undefined;
 }
 
-function parseXLayerRpcUrls(env: Record<string, string | undefined>): Partial<Record<number, string>> | undefined {
+function parseCeloRpcUrls(env: Record<string, string | undefined>): Partial<Record<number, string>> | undefined {
   const rpcUrls = omitUndefined({
-    196: env.XLAYER_MAINNET_RPC_URL,
-    1952: env.XLAYER_TESTNET_RPC_URL,
+    42220: env.CELO_MAINNET_RPC_URL,
+    11142220: env.CELO_SEPOLIA_RPC_URL,
   }) as Partial<Record<number, string>>;
 
   return Object.keys(rpcUrls).length > 0 ? rpcUrls : undefined;
 }
 
 function parseStableTokenOverrides(env: Record<string, string | undefined>): StableTokenMetadataOverrides | undefined {
-  const xlayerOverrides = {
-    ...(env.AGENTPAY_XLAYER_USDT0_ADDRESS
+  const celoOverrides = {
+    ...(env.AGENTPAY_CELO_USDC_ADDRESS
       ? {
-          USDT0: {
-            address: env.AGENTPAY_XLAYER_USDT0_ADDRESS,
+          USDC: {
+            address: env.AGENTPAY_CELO_USDC_ADDRESS,
           },
         }
       : {}),
-    ...(env.AGENTPAY_XLAYER_USDC_ADDRESS
+    ...(env.AGENTPAY_CELO_USDT_ADDRESS
       ? {
-          USDC: {
-            address: env.AGENTPAY_XLAYER_USDC_ADDRESS,
+          USDT: {
+            address: env.AGENTPAY_CELO_USDT_ADDRESS,
+          },
+        }
+      : {}),
+    ...(env.AGENTPAY_CELO_USDM_ADDRESS
+      ? {
+          USDm: {
+            address: env.AGENTPAY_CELO_USDM_ADDRESS,
           },
         }
       : {}),
   };
-  const xlayerTestnetOverrides = {
-    ...(env.AGENTPAY_XLAYER_TESTNET_USDT0_ADDRESS
-      ? {
-          USDT0: {
-            address: env.AGENTPAY_XLAYER_TESTNET_USDT0_ADDRESS,
-          },
-        }
-      : {}),
-    ...(env.AGENTPAY_XLAYER_TESTNET_USDC_ADDRESS
+  const celoSepoliaOverrides = {
+    ...(env.AGENTPAY_CELO_SEPOLIA_USDC_ADDRESS
       ? {
           USDC: {
-            address: env.AGENTPAY_XLAYER_TESTNET_USDC_ADDRESS,
+            address: env.AGENTPAY_CELO_SEPOLIA_USDC_ADDRESS,
           },
         }
       : {}),
-    ...(env.AGENTPAY_XLAYER_TESTNET_USDT_ADDRESS
+    ...(env.AGENTPAY_CELO_SEPOLIA_USDT_ADDRESS
       ? {
           USDT: {
-            address: env.AGENTPAY_XLAYER_TESTNET_USDT_ADDRESS,
+            address: env.AGENTPAY_CELO_SEPOLIA_USDT_ADDRESS,
+          },
+        }
+      : {}),
+    ...(env.AGENTPAY_CELO_SEPOLIA_USDM_ADDRESS
+      ? {
+          USDm: {
+            address: env.AGENTPAY_CELO_SEPOLIA_USDM_ADDRESS,
           },
         }
       : {}),
   };
 
   const overrides = omitUndefined({
-    196: Object.keys(xlayerOverrides).length > 0 ? xlayerOverrides : undefined,
-    1952: Object.keys(xlayerTestnetOverrides).length > 0 ? xlayerTestnetOverrides : undefined,
+    42220: Object.keys(celoOverrides).length > 0 ? celoOverrides : undefined,
+    11142220: Object.keys(celoSepoliaOverrides).length > 0 ? celoSepoliaOverrides : undefined,
   }) as StableTokenMetadataOverrides;
 
   return Object.keys(overrides).length > 0 ? overrides : undefined;
@@ -659,12 +675,19 @@ function parseStableTokenOverrides(env: Record<string, string | undefined>): Sta
 
 function validateStableTokenOverrideAddresses(env: Record<string, string | undefined>): string[] {
   return [
-    "AGENTPAY_XLAYER_USDT0_ADDRESS",
-    "AGENTPAY_XLAYER_USDC_ADDRESS",
-    "AGENTPAY_XLAYER_TESTNET_USDT0_ADDRESS",
-    "AGENTPAY_XLAYER_TESTNET_USDC_ADDRESS",
-    "AGENTPAY_XLAYER_TESTNET_USDT_ADDRESS",
+    "AGENTPAY_CELO_USDC_ADDRESS",
+    "AGENTPAY_CELO_USDT_ADDRESS",
+    "AGENTPAY_CELO_USDM_ADDRESS",
+    "AGENTPAY_CELO_SEPOLIA_USDC_ADDRESS",
+    "AGENTPAY_CELO_SEPOLIA_USDT_ADDRESS",
+    "AGENTPAY_CELO_SEPOLIA_USDM_ADDRESS",
   ].filter((name) => env[name] && !addressPattern.test(env[name]));
+}
+
+function requireOptionalCeloHomeChainId(value: number | undefined): CeloHomeChainId | undefined {
+  if (value === undefined) return undefined;
+  if (setupHomeChainIds.has(value as CeloHomeChainId)) return value as CeloHomeChainId;
+  throw new Error(`Unsupported AgentPay Celo home chain ${value}.`);
 }
 
 function omitUndefined<T extends Record<string, unknown>>(record: T): Partial<T> {

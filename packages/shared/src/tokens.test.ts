@@ -29,6 +29,42 @@ describe("stable token metadata", () => {
     assert.equal(getStableTokenAddress(8453, "USDC"), "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913");
   });
 
+  it("returns canonical Celo mainnet x402 stablecoin metadata", () => {
+    assert.deepEqual(getStableTokenMetadata(42220, "USDC"), {
+      symbol: "USDC",
+      address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+      decimals: 6,
+    });
+    assert.deepEqual(getStableTokenMetadata(42220, "USDT"), {
+      symbol: "USDT",
+      address: "0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e",
+      decimals: 6,
+    });
+    assert.deepEqual(getStableTokenMetadata(42220, "USDm"), {
+      symbol: "USDm",
+      address: "0x765DE816845861e75A25fCA122bb6898B8B1282a",
+      decimals: 18,
+    });
+  });
+
+  it("returns canonical Celo Sepolia stablecoin metadata", () => {
+    assert.deepEqual(getStableTokenMetadata(11142220, "USDC"), {
+      symbol: "USDC",
+      address: "0x01C5C0122039549AD1493B8220cABEdD739BC44E",
+      decimals: 6,
+    });
+    assert.deepEqual(getStableTokenMetadata(11142220, "USDT"), {
+      symbol: "USDT",
+      address: "0xd077A400968890Eacc75cdc901F0356c943e4fDb",
+      decimals: 6,
+    });
+    assert.deepEqual(getStableTokenMetadata(11142220, "USDm"), {
+      symbol: "USDm",
+      address: "0xdE9e4C3ce781b4bA68120d6261cbad65ce0aB00b",
+      decimals: 18,
+    });
+  });
+
   it("returns X Layer testnet faucet stablecoin metadata", () => {
     assert.deepEqual(getStableTokenMetadata(1952, "USDT0"), {
       symbol: "USDT0",

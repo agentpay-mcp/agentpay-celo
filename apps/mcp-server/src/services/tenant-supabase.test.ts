@@ -25,7 +25,7 @@ function context(): SessionContext {
     tenantId: "tenant_a",
     ownerAddress,
     accountAddress,
-    homeChainId: 1952,
+    homeChainId: 11142220,
     audience: "https://wallet.agentpay.site/mcp",
     environment: "staging",
     scopes: ["wallet:read", "payment:prepare", "payment:read", "payment:review", "session:manage"],
@@ -82,7 +82,7 @@ class QuerySpy {
       data: {
         owner_address: ownerAddress,
         account_address: accountAddress,
-        home_chain_id: 1952,
+        home_chain_id: 11142220,
         executor_address: "0x3333333333333333333333333333333333333333",
         status: "ACTIVE",
       },
@@ -196,7 +196,7 @@ describe("tenant-scoped Supabase repositories", () => {
     } as unknown as AgentPaySupabaseClient;
 
     const repositories = createSupabaseAgentPayRepositories(client);
-    const binding = await repositories.tenantBindings.bindVerifiedOwner(ownerAddress, 196);
+    const binding = await repositories.tenantBindings.bindVerifiedOwner(ownerAddress, 42220);
 
     assert.equal(binding.tenantId, "tenant_production");
     assert.ok(
@@ -221,7 +221,7 @@ describe("tenant-scoped Supabase repositories", () => {
     );
 
     const repositories = createTenantScopedSupabaseAgentPayRepositories(client, context());
-    const wallet = await repositories.wallets.getActiveWallet({ homeChainId: 1952 });
+    const wallet = await repositories.wallets.getActiveWallet({ homeChainId: 11142220 });
 
     assert.equal(wallet?.accountAddress, accountAddress);
     assert.deepEqual(
@@ -231,7 +231,7 @@ describe("tenant-scoped Supabase repositories", () => {
         ["eq", ["tenant_id", "tenant_a"]],
         ["eq", ["owner_address", ownerAddress]],
         ["eq", ["account_address", accountAddress]],
-        ["eq", ["home_chain_id", 1952]],
+        ["eq", ["home_chain_id", 11142220]],
       ],
     );
   });
@@ -249,7 +249,7 @@ describe("tenant-scoped Supabase repositories", () => {
     await repositories.wallets.createAgentWallet({
       ownerAddress,
       accountAddress,
-      homeChainId: 1952,
+      homeChainId: 11142220,
       executorAddress: "0x3333333333333333333333333333333333333333",
       status: "ACTIVE",
     });
@@ -259,7 +259,7 @@ describe("tenant-scoped Supabase repositories", () => {
       repositories.wallets.createAgentWallet({
         ownerAddress: "0x4444444444444444444444444444444444444444",
         accountAddress,
-        homeChainId: 1952,
+        homeChainId: 11142220,
         executorAddress: "0x3333333333333333333333333333333333333333",
         status: "ACTIVE",
       }),
@@ -289,7 +289,7 @@ describe("tenant-scoped Supabase repositories", () => {
     );
 
     await assert.rejects(
-      repositories.wallets.getActiveWallet({ homeChainId: 196 }),
+      repositories.wallets.getActiveWallet({ homeChainId: 42220 }),
       (error: unknown) => (error as { code?: string }).code === "TENANT_RESOURCE_MISMATCH",
     );
   });
@@ -311,7 +311,7 @@ describe("tenant-scoped Supabase repositories", () => {
       uri: "https://wallet.agentpay.site/mcp",
       ownerAddress,
       accountAddress,
-      chainId: 1952,
+      chainId: 11142220,
       nonce: "nonce_1234567890",
       issuedAt: "2026-07-12T00:00:00.000Z",
       expiresAt: "2026-07-12T00:05:00.000Z",
@@ -330,7 +330,7 @@ describe("tenant-scoped Supabase repositories", () => {
       tenantId: "tenant_a",
       ownerAddress,
       accountAddress,
-      homeChainId: 1952,
+      homeChainId: 11142220,
       audience: "https://wallet.agentpay.site/mcp",
       environment: "staging",
       scopes: ["wallet:read"],
@@ -413,7 +413,7 @@ describe("tenant-scoped Supabase repositories", () => {
         tenantId: "tenant_a",
         ownerAddress,
         accountAddress,
-        homeChainId: 1952,
+        homeChainId: 11142220,
         audience: "https://wallet.agentpay.site/mcp",
         environment: "staging",
         scopes: ["wallet:read"],
@@ -451,7 +451,7 @@ describe("tenant-scoped Supabase repositories", () => {
       uri: "https://wallet.agentpay.site/mcp",
       ownerAddress: wallet.address,
       accountAddress,
-      chainId: 1952,
+      chainId: 11142220,
       nonce: "nonce_roundtrip",
       issuedAt: "2026-07-12T00:00:00.000Z",
       expiresAt: "2026-07-12T00:05:00.000Z",
@@ -494,7 +494,7 @@ describe("tenant-scoped Supabase repositories", () => {
       uri: "https://wallet.agentpay.site/mcp",
       ownerAddress: wallet.address,
       accountAddress,
-      chainId: 1952,
+      chainId: 11142220,
       nonce: "nonce_timestamptz_offset",
       issuedAt: "2026-07-12T00:00:00.000Z",
       expiresAt: "2026-07-12T00:05:00.000Z",
@@ -539,7 +539,7 @@ describe("tenant-scoped Supabase repositories", () => {
       uri: "https://wallet.agentpay.site/mcp",
       owner_address: ownerAddress,
       account_address: accountAddress,
-      chain_id: 1952,
+      chain_id: 11142220,
       nonce: "nonce_invalid_timestamp",
       scopes: ["wallet:read"],
       message: "invalid",

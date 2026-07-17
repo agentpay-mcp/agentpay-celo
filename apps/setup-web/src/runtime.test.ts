@@ -16,9 +16,9 @@ describe("parseSetupWebEnv", () => {
     const config = parseSetupWebEnv({
       SUPABASE_URL: " https://agentpay.supabase.co ",
       SUPABASE_SERVICE_ROLE_KEY: " service-role-key ",
-      XLAYER_RPC_URL: " https://rpc.xlayer.tech ",
-      XLAYER_MAINNET_RPC_URL: " https://mainnet.xlayer.tech ",
-      XLAYER_TESTNET_RPC_URL: " https://testnet.xlayer.tech ",
+      CELO_RPC_URL: " https://rpc.celo.tech ",
+      CELO_MAINNET_RPC_URL: " https://mainnet.celo.tech ",
+      CELO_SEPOLIA_RPC_URL: " https://testnet.celo.tech ",
       SETUP_DEPLOYER_PRIVATE_KEY: ` ${validPrivateKey} `,
       AGENTPAY_ACCOUNT_BYTECODE: " 0x60006000 ",
       SETUP_WEB_PORT: " 3333 ",
@@ -28,14 +28,14 @@ describe("parseSetupWebEnv", () => {
     assert.deepEqual(config, {
       supabaseUrl: "https://agentpay.supabase.co",
       serviceRoleKey: "service-role-key",
-      xlayerRpcUrl: "https://rpc.xlayer.tech",
-      xlayerRpcUrls: {
-        196: "https://mainnet.xlayer.tech",
-        1952: "https://testnet.xlayer.tech",
+      celoRpcUrl: "https://rpc.celo.tech",
+      celoRpcUrls: {
+        42220: "https://mainnet.celo.tech",
+        11142220: "https://testnet.celo.tech",
       },
       setupDeployerPrivateKey: validPrivateKey,
       agentPayAccountBytecode: "0x60006000",
-      homeChainId: 1952,
+      homeChainId: 11142220,
       setupWebPort: 3333,
       reviewTokenSecret: "review-token-secret-012345678901234567890123",
     });
@@ -50,7 +50,7 @@ describe("parseSetupWebEnv", () => {
       const config = parseSetupWebEnv({
         SUPABASE_URL: "https://agentpay.supabase.co",
         SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
-        XLAYER_RPC_URL: "https://rpc.xlayer.tech",
+        CELO_RPC_URL: "https://rpc.celo.tech",
         SETUP_DEPLOYER_PRIVATE_KEY: validPrivateKey,
         AGENTPAY_ACCOUNT_BYTECODE_PATH: bytecodePath,
       });
@@ -65,7 +65,7 @@ describe("parseSetupWebEnv", () => {
     const config = parseSetupWebEnv({
       SUPABASE_URL: "https://agentpay.supabase.co",
       SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
-      XLAYER_RPC_URL: "https://rpc.xlayer.tech",
+      CELO_RPC_URL: "https://rpc.celo.tech",
       SETUP_DEPLOYER_PRIVATE_KEY: validPrivateKey,
       AGENTPAY_ACCOUNT_BYTECODE: "0x60006000",
       AGENTPAY_INITIAL_ROUTE_TARGETS: ` ${routeTarget}, 0x8888888888888888888888888888888888888888 `,
@@ -77,22 +77,22 @@ describe("parseSetupWebEnv", () => {
     ]);
   });
 
-  it("parses X Layer testnet as the setup home chain", () => {
+  it("parses Celo testnet as the setup home chain", () => {
     const config = parseSetupWebEnv({
       SUPABASE_URL: "https://agentpay.supabase.co",
       SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
-      XLAYER_RPC_URL: "https://testrpc.xlayer.tech",
+      CELO_RPC_URL: "https://testrpc.celo.tech",
       SETUP_DEPLOYER_PRIVATE_KEY: validPrivateKey,
       AGENTPAY_ACCOUNT_BYTECODE: "0x60006000",
-      AGENTPAY_HOME_CHAIN_ID: " 1952 ",
-      AGENTPAY_XLAYER_TESTNET_USDT0_ADDRESS: "0x1111111111111111111111111111111111111111",
-      AGENTPAY_XLAYER_TESTNET_USDC_ADDRESS: "0x2222222222222222222222222222222222222222",
+      AGENTPAY_HOME_CHAIN_ID: " 11142220 ",
+      AGENTPAY_CELO_SEPOLIA_USDT_ADDRESS: "0x1111111111111111111111111111111111111111",
+      AGENTPAY_CELO_SEPOLIA_USDC_ADDRESS: "0x2222222222222222222222222222222222222222",
     });
 
-    assert.equal(config.homeChainId, 1952);
+    assert.equal(config.homeChainId, 11142220);
     assert.deepEqual(config.stableTokenOverrides, {
-      1952: {
-        USDT0: {
+      11142220: {
+        USDT: {
           address: "0x1111111111111111111111111111111111111111",
         },
         USDC: {
@@ -113,7 +113,7 @@ describe("parseSetupWebEnv", () => {
           {
             SUPABASE_URL: "https://agentpay.supabase.co",
             SUPABASE_SERVICE_ROLE_KEY: "config-service-key",
-            XLAYER_RPC_URL: "https://rpc.xlayer.tech",
+            CELO_RPC_URL: "https://rpc.celo.tech",
             SETUP_DEPLOYER_PRIVATE_KEY: validPrivateKey,
             AGENTPAY_ACCOUNT_BYTECODE: "0x60006000",
           },
@@ -144,7 +144,7 @@ describe("parseSetupWebEnv", () => {
         parseSetupWebEnv({
           SUPABASE_URL: "notaurl",
           SUPABASE_SERVICE_ROLE_KEY: "service-role-secret",
-          XLAYER_RPC_URL: "",
+          CELO_RPC_URL: "",
           SETUP_DEPLOYER_PRIVATE_KEY: "secret-private-key",
         AGENTPAY_ACCOUNT_BYTECODE: "nothex",
         AGENTPAY_INITIAL_ROUTE_TARGETS: "0xnot-an-address",
@@ -153,7 +153,7 @@ describe("parseSetupWebEnv", () => {
       (error) => {
         assert.ok(error instanceof Error);
         assert.match(error.message, /SUPABASE_URL/);
-        assert.match(error.message, /XLAYER_RPC_URL/);
+        assert.match(error.message, /CELO_RPC_URL/);
         assert.match(error.message, /SETUP_DEPLOYER_PRIVATE_KEY/);
         assert.match(error.message, /AGENTPAY_ACCOUNT_BYTECODE/);
         assert.match(error.message, /AGENTPAY_INITIAL_ROUTE_TARGETS/);
@@ -171,7 +171,7 @@ describe("parseSetupWebEnv", () => {
         parseSetupWebEnv({
           SUPABASE_URL: "https://agentpay.supabase.co",
           SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
-          XLAYER_RPC_URL: "https://rpc.xlayer.tech",
+          CELO_RPC_URL: "https://rpc.celo.tech",
           SETUP_DEPLOYER_PRIVATE_KEY: validPrivateKey,
           AGENTPAY_ACCOUNT_BYTECODE: "0x60006000",
           AGENTPAY_ACCOUNT_VERSION: "v1",
@@ -183,7 +183,7 @@ describe("parseSetupWebEnv", () => {
         parseSetupWebEnv({
           SUPABASE_URL: "https://agentpay.supabase.co",
           SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
-          XLAYER_RPC_URL: "https://rpc.xlayer.tech",
+          CELO_RPC_URL: "https://rpc.celo.tech",
           SETUP_DEPLOYER_PRIVATE_KEY: validPrivateKey,
           AGENTPAY_ACCOUNT_BYTECODE: "0x60006000",
           AGENTPAY_ACCOUNT_BYTECODE_HASH: "0x1234",
@@ -199,7 +199,7 @@ describe("parseSetupWebEnv", () => {
           AGENTPAY_ENVIRONMENT: "production",
           SUPABASE_URL: "https://agentpay.supabase.co",
           SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
-          XLAYER_RPC_URL: "https://rpc.xlayer.tech",
+          CELO_RPC_URL: "https://rpc.celo.tech",
           SETUP_DEPLOYER_PRIVATE_KEY: validPrivateKey,
           AGENTPAY_ACCOUNT_BYTECODE: "0x60006000",
         }),
@@ -213,10 +213,10 @@ describe("parseSetupWebEnv", () => {
         parseSetupWebEnv({
           SUPABASE_URL: "https://agentpay.supabase.co",
           SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
-          XLAYER_RPC_URL: "https://rpc.xlayer.tech",
+          CELO_RPC_URL: "https://rpc.celo.tech",
           SETUP_DEPLOYER_PRIVATE_KEY: validPrivateKey,
           AGENTPAY_ACCOUNT_BYTECODE: "0x60006000",
-          AGENTPAY_HOME_CHAIN_ID: "196",
+          AGENTPAY_HOME_CHAIN_ID: "42220",
         }),
       /mainnet setup deployment surface/i,
     );
@@ -230,7 +230,7 @@ describe("createSetupWebDependencies", () => {
       {
         supabaseUrl: "https://agentpay.supabase.co",
         serviceRoleKey: "service-role-key",
-        xlayerRpcUrl: "https://rpc.xlayer.tech",
+        celoRpcUrl: "https://rpc.celo.tech",
         setupDeployerPrivateKey: validPrivateKey,
         agentPayAccountBytecode: "0x60006000",
       },
@@ -284,7 +284,7 @@ describe("createSetupWebDependencies", () => {
       [
         "deployer",
         {
-          rpcUrl: "https://rpc.xlayer.tech",
+          rpcUrl: "https://rpc.celo.tech",
           rpcUrls: undefined,
           deployerPrivateKey: validPrivateKey,
           bytecode: "0x60006000",
@@ -301,7 +301,7 @@ describe("createSetupWebDependencies", () => {
       {
         supabaseUrl: "https://agentpay.supabase.co",
         serviceRoleKey: "service-role-key",
-        xlayerRpcUrl: "https://rpc.xlayer.tech",
+        celoRpcUrl: "https://rpc.celo.tech",
         setupDeployerPrivateKey: validPrivateKey,
         agentPayAccountBytecode: "0x60006000",
         initialAllowedRouteTargets: [routeTarget],
@@ -351,17 +351,18 @@ describe("createSetupWebDependencies", () => {
       {
         ownerAddress: owner.address,
         executorAddress: "0x4444444444444444444444444444444444444444",
-        homeChainId: 1952,
+        homeChainId: 11142220,
         initialAllowedTokenAddresses: [
-          "0x9e29b3AaDa05Bf2D2c827Af80Bd28Dc0b9b4FB0c",
-          "0xcB8BF24c6cE16Ad21D707c9505421a17f2bec79D",
+          "0x01C5C0122039549AD1493B8220cABEdD739BC44E",
+          "0xd077A400968890Eacc75cdc901F0356c943e4fDb",
+          "0xdE9e4C3ce781b4bA68120d6261cbad65ce0aB00b",
         ],
         initialAllowedRouteTargets: [routeTarget],
       },
     ]);
   });
 
-  it("passes configured X Layer testnet home chain and token allowlist into wallet deployment", async () => {
+  it("passes configured Celo testnet home chain and token allowlist into wallet deployment", async () => {
     const messageToSign = "AgentPay wallet setup\nSetup intent: setup_123";
     const signature = await owner.signMessage(messageToSign);
     const deployments: unknown[] = [];
@@ -370,17 +371,17 @@ describe("createSetupWebDependencies", () => {
       {
         supabaseUrl: "https://agentpay.supabase.co",
         serviceRoleKey: "service-role-key",
-        xlayerRpcUrl: "https://testrpc.xlayer.tech",
-        xlayerRpcUrls: {
-          196: "https://mainnet.xlayer.tech",
-          1952: "https://testnet.xlayer.tech",
+        celoRpcUrl: "https://testrpc.celo.tech",
+        celoRpcUrls: {
+          42220: "https://mainnet.celo.tech",
+          11142220: "https://testnet.celo.tech",
         },
         setupDeployerPrivateKey: validPrivateKey,
         agentPayAccountBytecode: "0x60006000",
-        homeChainId: 1952,
+        homeChainId: 11142220,
         stableTokenOverrides: {
-          1952: {
-            USDT0: {
+          11142220: {
+            USDT: {
               address: "0x1111111111111111111111111111111111111111",
             },
             USDC: {
@@ -436,10 +437,11 @@ describe("createSetupWebDependencies", () => {
       {
         ownerAddress: owner.address,
         executorAddress: "0x4444444444444444444444444444444444444444",
-        homeChainId: 1952,
+        homeChainId: 11142220,
         initialAllowedTokenAddresses: [
-          "0x1111111111111111111111111111111111111111",
           "0x2222222222222222222222222222222222222222",
+          "0x1111111111111111111111111111111111111111",
+          "0xdE9e4C3ce781b4bA68120d6261cbad65ce0aB00b",
         ],
         initialAllowedRouteTargets: [],
       },
@@ -448,7 +450,7 @@ describe("createSetupWebDependencies", () => {
       {
         ownerAddress: owner.address,
         accountAddress: "0x3333333333333333333333333333333333333333",
-        homeChainId: 1952,
+        homeChainId: 11142220,
         executorAddress: "0x4444444444444444444444444444444444444444",
         status: "ACTIVE",
       },

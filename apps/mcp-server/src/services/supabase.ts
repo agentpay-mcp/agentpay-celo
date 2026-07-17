@@ -236,7 +236,7 @@ interface AuthChallengeRow {
   uri: string;
   owner_address: string;
   account_address: string;
-  chain_id: 196 | 1952;
+  chain_id: 42220 | 11142220;
   nonce: string;
   flow?: "legacy_session" | "oauth_authorization";
   scopes: string[];
@@ -252,7 +252,7 @@ interface ServiceSessionRow {
   tenant_id: string;
   owner_address: string;
   account_address: string;
-  home_chain_id: 196 | 1952;
+  home_chain_id: 42220 | 11142220;
   audience: string;
   environment: "staging" | "production";
   scopes: string[];
@@ -1190,11 +1190,11 @@ function createRepositoryBundle(client: AgentPaySupabaseClient, tenantContext?: 
         return getTenantState(client, tenantId);
       },
       async bindVerifiedOwner(ownerAddress, chainId): Promise<ResolvedTenantBinding> {
-        if (chainId !== 196 && chainId !== 1952) {
-          throw new AgentPayAuthError("SIWE_CHAIN_INVALID", "Owner tenant binding requires an X Layer chain.");
+        if (chainId !== 42220 && chainId !== 11142220) {
+          throw new AgentPayAuthError("SIWE_CHAIN_INVALID", "Owner tenant binding requires a Celo chain.");
         }
         const normalizedOwner = ownerAddress.toLowerCase();
-        const environment: SessionEnvironment = chainId === 196 ? "production" : "staging";
+        const environment: SessionEnvironment = chainId === 42220 ? "production" : "staging";
         const existing = await client
           .from("verified_owner_identities")
           .select("tenant_id, owner_address, status")

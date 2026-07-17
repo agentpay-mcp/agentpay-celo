@@ -266,7 +266,7 @@ async function handleAuthorize(url: URL, dependencies: ConsumerOAuthApiDependenc
         clientName: client.clientName ?? client.clientId,
         redirectHost: new URL(redirectUri).host,
         scopes,
-        expectedChainId: dependencies.environment === "production" ? 196 : 1952,
+        expectedChainId: dependencies.environment === "production" ? 42220 : 11142220,
         cspNonce,
       }),
       {
@@ -591,9 +591,9 @@ function requiredAddress(value: string): string {
   return getAddress(value);
 }
 
-function requiredChainId(value: unknown): 196 | 1952 {
-  if (value === 196 || value === 1952) return value;
-  throw new AgentPayAuthError("SIWE_CHAIN_INVALID", "X Layer chain is required.");
+function requiredChainId(value: unknown): 42220 | 11142220 {
+  if (value === 42220 || value === 11142220) return value;
+  throw new AgentPayAuthError("SIWE_CHAIN_INVALID", "Celo mainnet or Celo Sepolia is required.");
 }
 
 function readString(value: unknown): string {
@@ -753,7 +753,7 @@ function renderConsentPage(input: {
           if (!ownerAddress) throw new Error("No wallet account was selected.");
           const chain = await window.ethereum.request({ method: "eth_chainId" });
           const chainId = Number.parseInt(chain, 16);
-          if (chainId !== config.expectedChainId) throw new Error("Switch your wallet to the required X Layer network and try again.");
+          if (chainId !== config.expectedChainId) throw new Error("Switch your wallet to the required Celo network and try again.");
           setStatus("Preparing ownership proof…");
           const challengeResponse = await fetch("/oauth/siwe/challenge", {
             method: "POST",

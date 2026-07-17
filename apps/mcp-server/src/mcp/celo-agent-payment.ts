@@ -1,27 +1,45 @@
-import { OKXFacilitatorClient } from "@okxweb3/x402-core";
 import {
   HTTPFacilitatorClient,
   x402HTTPResourceServer,
-  type HTTPProcessResult,
   type HTTPRequestContext,
+  type HTTPResponseInstructions,
   type PaymentOption,
   type ProcessSettleResultResponse,
-} from "@okxweb3/x402-core/http";
-import { x402ResourceServer } from "@okxweb3/x402-core/server";
-import type { Network, PaymentPayload, PaymentRequirements } from "@okxweb3/x402-core/types";
-import { ExactEvmScheme } from "@okxweb3/x402-evm/exact/server";
-import { MAINNET_CAIP2, MAINNET_USDT0_ADDRESS } from "../runtime/production-readiness.ts";
+} from "@x402/core/http";
+import { x402ResourceServer } from "@x402/core/server";
+import type { Network, PaymentPayload, PaymentRequirements } from "@x402/core/types";
+import { ExactEvmScheme } from "@x402/evm/exact/server";
+import { MAINNET_CAIP2, MAINNET_USDC_ADDRESS } from "../runtime/production-readiness.ts";
 
 const enabledValues = new Set(["1", "true", "yes", "on"]);
 const disabledValues = new Set(["0", "false", "no", "off"]);
-const DEFAULT_A2MCP_PAYMENT_NETWORK = "eip155:196" satisfies Network;
+const DEFAULT_A2MCP_PAYMENT_NETWORK = MAINNET_CAIP2 satisfies Network;
 const DEFAULT_A2MCP_PAYMENT_TIMEOUT_SECONDS = 300;
 const DEFAULT_A2MCP_PAYMENT_ASSET_DECIMALS = 6;
+const CELO_SEPOLIA_CAIP2 = "eip155:11142220" satisfies Network;
+const CELO_SEPOLIA_USDC_ADDRESS = "0x01C5C0122039549AD1493B8220cABEdD739BC44E";
+const CELO_FACILITATOR_URLS: Readonly<Record<string, string>> = {
+  [MAINNET_CAIP2]: "https://api.x402.celo.org",
+  [CELO_SEPOLIA_CAIP2]: "https://api.x402.sepolia.celo.org",
+};
+const CELO_USDC_BY_NETWORK: Readonly<Record<string, string>> = {
+  [MAINNET_CAIP2]: MAINNET_USDC_ADDRESS,
+  [CELO_SEPOLIA_CAIP2]: CELO_SEPOLIA_USDC_ADDRESS,
+};
 const addressPattern = /^0x[a-fA-F0-9]{40}$/;
 const caip2EvmNetworkPattern = /^eip155:\d+$/;
 
 export interface AgentPayMcpPaymentProcessor {
-  processHTTPRequest(context: HTTPRequestContext): Promise<HTTPProcessResult>;
+  processHTTPRequest(context: HTTPRequestContext): Promise<
+    | { type: "no-payment-required" }
+    | {
+        type: "payment-verified";
+        paymentPayload: PaymentPayload;
+        paymentRequirements: PaymentRequirements;
+        declaredExtensions?: Record<string, unknown>;
+      }
+    | { type: "payment-error"; response: HTTPResponseInstructions }
+  >;
   processSettlement(
     paymentPayload: PaymentPayload,
     requirements: PaymentRequirements,
@@ -38,16 +56,13 @@ export interface AgentPayMcpPaymentConfig {
   asset?: string;
   maxTimeoutSeconds: number;
   facilitatorUrl?: string;
-  okxApiKey?: string;
-  okxSecretKey?: string;
-  okxPassphrase?: string;
-  okxBaseUrl?: string;
+  facilitatorApiKey?: string;
   syncSettle?: boolean;
-  assetTransferMethod?: "eip3009" | "permit2";
+  assetTransferMethod: "eip3009";
   assetDecimals: number;
 }
 
-export interface CreateOkxAgentPaymentProcessorOptions {
+export interface CreateCeloAgentPaymentProcessorOptions {
   mcpPath: string;
 }
 
@@ -73,21 +88,15 @@ export function parseAgentPayMcpPaymentEnv(
     DEFAULT_A2MCP_PAYMENT_ASSET_DECIMALS,
   );
   const network = normalized.AGENTPAY_A2MCP_PAYMENT_NETWORK ?? DEFAULT_A2MCP_PAYMENT_NETWORK;
-  const asset = normalized.AGENTPAY_A2MCP_PAYMENT_ASSET ??
-    (network === MAINNET_CAIP2 ? MAINNET_USDT0_ADDRESS : undefined);
+  const asset = normalized.AGENTPAY_A2MCP_PAYMENT_ASSET ?? CELO_USDC_BY_NETWORK[network];
+  const facilitatorUrl = normalized.AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL ?? CELO_FACILITATOR_URLS[network];
   const missing = [
     normalized.AGENTPAY_A2MCP_PAYMENT_PAY_TO ? undefined : "AGENTPAY_A2MCP_PAYMENT_PAY_TO",
     normalized.AGENTPAY_A2MCP_PAYMENT_PRICE ? undefined : "AGENTPAY_A2MCP_PAYMENT_PRICE",
   ].filter((name): name is string => Boolean(name));
-  const facilitatorCredentialNames = ["OKX_APP_API_KEY", "OKX_APP_SECRET_KEY", "OKX_APP_PASSPHRASE"] as const;
-  const providedFacilitatorCredentials = facilitatorCredentialNames.filter((name) => normalized[name]);
-  const hasAllOkxCredentials = providedFacilitatorCredentials.length === facilitatorCredentialNames.length;
-
-  if (!normalized.AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL && !hasAllOkxCredentials) {
-    missing.push(
-      ...facilitatorCredentialNames.filter((name) => !normalized[name]),
-      "or AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL",
-    );
+  if (!facilitatorUrl) missing.push("AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL");
+  if (!normalized.AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL && !normalized.AGENTPAY_CELO_X402_API_KEY) {
+    missing.push("AGENTPAY_CELO_X402_API_KEY");
   }
 
   const invalid = [
@@ -95,23 +104,31 @@ export function parseAgentPayMcpPaymentEnv(
       ? "AGENTPAY_A2MCP_PAYMENT_PAY_TO"
       : undefined,
     asset && !addressPattern.test(asset) ? "AGENTPAY_A2MCP_PAYMENT_ASSET" : undefined,
-    network === MAINNET_CAIP2 && asset?.toLowerCase() !== MAINNET_USDT0_ADDRESS.toLowerCase()
+    CELO_USDC_BY_NETWORK[network] && asset?.toLowerCase() !== CELO_USDC_BY_NETWORK[network].toLowerCase()
       ? "AGENTPAY_A2MCP_PAYMENT_ASSET"
       : undefined,
-    !caip2EvmNetworkPattern.test(network) ? "AGENTPAY_A2MCP_PAYMENT_NETWORK" : undefined,
+    !caip2EvmNetworkPattern.test(network) || !CELO_USDC_BY_NETWORK[network]
+      ? "AGENTPAY_A2MCP_PAYMENT_NETWORK"
+      : undefined,
     normalized.AGENTPAY_A2MCP_PAYMENT_MAX_TIMEOUT_SECONDS && !maxTimeoutSeconds
       ? "AGENTPAY_A2MCP_PAYMENT_MAX_TIMEOUT_SECONDS"
       : undefined,
     normalized.AGENTPAY_A2MCP_PAYMENT_ASSET_DECIMALS && !assetDecimals
       ? "AGENTPAY_A2MCP_PAYMENT_ASSET_DECIMALS"
       : undefined,
-    normalized.AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL &&
-    !isHttpUrl(normalized.AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL)
+    assetDecimals && assetDecimals !== DEFAULT_A2MCP_PAYMENT_ASSET_DECIMALS
+      ? "AGENTPAY_A2MCP_PAYMENT_ASSET_DECIMALS"
+      : undefined,
+    normalized.AGENTPAY_A2MCP_PAYMENT_PRICE
+      && assetDecimals
+      && !isValidAssetPrice(normalized.AGENTPAY_A2MCP_PAYMENT_PRICE, assetDecimals)
+      ? "AGENTPAY_A2MCP_PAYMENT_PRICE"
+      : undefined,
+    facilitatorUrl && !isHttpUrl(facilitatorUrl)
       ? "AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL"
       : undefined,
-    normalized.OKX_APP_BASE_URL && !isHttpUrl(normalized.OKX_APP_BASE_URL) ? "OKX_APP_BASE_URL" : undefined,
     normalized.AGENTPAY_A2MCP_PAYMENT_ASSET_TRANSFER_METHOD &&
-    !["eip3009", "permit2"].includes(normalized.AGENTPAY_A2MCP_PAYMENT_ASSET_TRANSFER_METHOD)
+    normalized.AGENTPAY_A2MCP_PAYMENT_ASSET_TRANSFER_METHOD !== "eip3009"
       ? "AGENTPAY_A2MCP_PAYMENT_ASSET_TRANSFER_METHOD"
       : undefined,
   ].filter((name): name is string => Boolean(name));
@@ -128,36 +145,31 @@ export function parseAgentPayMcpPaymentEnv(
     asset,
     maxTimeoutSeconds,
     assetDecimals,
-    facilitatorUrl: normalized.AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL,
-    okxApiKey: normalized.OKX_APP_API_KEY,
-    okxSecretKey: normalized.OKX_APP_SECRET_KEY,
-    okxPassphrase: normalized.OKX_APP_PASSPHRASE,
-    okxBaseUrl: normalized.OKX_APP_BASE_URL,
+    facilitatorUrl,
+    facilitatorApiKey: normalized.AGENTPAY_CELO_X402_API_KEY,
     syncSettle: parseOptionalBoolean(normalized.AGENTPAY_A2MCP_PAYMENT_SYNC_SETTLE, "AGENTPAY_A2MCP_PAYMENT_SYNC_SETTLE"),
-    assetTransferMethod: normalized.AGENTPAY_A2MCP_PAYMENT_ASSET_TRANSFER_METHOD as
-      | AgentPayMcpPaymentConfig["assetTransferMethod"]
-      | undefined,
+    assetTransferMethod: "eip3009" as const,
   }) as AgentPayMcpPaymentConfig;
 }
 
-export async function createOkxAgentPaymentProcessorFromEnv(
+export async function createCeloAgentPaymentProcessorFromEnv(
   env: NodeJS.ProcessEnv | Record<string, string | undefined>,
-  options: CreateOkxAgentPaymentProcessorOptions,
+  options: CreateCeloAgentPaymentProcessorOptions,
 ): Promise<AgentPayMcpPaymentProcessor | undefined> {
   const config = parseAgentPayMcpPaymentEnv(env);
 
-  return config ? createOkxAgentPaymentProcessor(config, options) : undefined;
+  return config ? createCeloAgentPaymentProcessor(config, options) : undefined;
 }
 
-export async function createOkxAgentPaymentProcessor(
+export async function createCeloAgentPaymentProcessor(
   config: AgentPayMcpPaymentConfig,
-  options: CreateOkxAgentPaymentProcessorOptions,
+  options: CreateCeloAgentPaymentProcessorOptions,
 ): Promise<AgentPayMcpPaymentProcessor> {
   const resourceServer = new x402ResourceServer(createFacilitatorClient(config));
   resourceServer.register(config.network, new ExactEvmScheme());
 
   const resourceConfig = {
-    accepts: createPaymentOption(config),
+    accepts: createCeloPaymentOption(config),
     description: "AgentPay public MCP endpoint",
     mimeType: "application/json",
     unpaidResponseBody() {
@@ -165,7 +177,7 @@ export async function createOkxAgentPaymentProcessor(
         contentType: "application/json",
         body: {
           error: "Payment required.",
-          protocol: "OKX Agent Payments Protocol",
+          protocol: "x402 on Celo",
         },
       };
     },
@@ -174,7 +186,7 @@ export async function createOkxAgentPaymentProcessor(
         contentType: "application/json",
         body: {
           error: "Payment settlement failed.",
-          protocol: "OKX Agent Payments Protocol",
+          protocol: "x402 on Celo",
         },
       };
     },
@@ -190,26 +202,30 @@ export async function createOkxAgentPaymentProcessor(
 }
 
 function createFacilitatorClient(config: AgentPayMcpPaymentConfig) {
-  if (config.facilitatorUrl) {
-    return new HTTPFacilitatorClient({ url: config.facilitatorUrl });
-  }
-
-  return new OKXFacilitatorClient(
-    omitUndefined({
-      apiKey: config.okxApiKey,
-      secretKey: config.okxSecretKey,
-      passphrase: config.okxPassphrase,
-      baseUrl: config.okxBaseUrl,
-      syncSettle: config.syncSettle,
-    }) as ConstructorParameters<typeof OKXFacilitatorClient>[0],
-  );
+  const apiKey = config.facilitatorApiKey;
+  return new HTTPFacilitatorClient({
+    url: config.facilitatorUrl,
+    ...(apiKey
+      ? {
+          createAuthHeaders: async () => ({
+            verify: { "X-API-Key": apiKey },
+            settle: { "X-API-Key": apiKey },
+            supported: { "X-API-Key": apiKey },
+          }),
+        }
+      : {}),
+  });
 }
 
-function createPaymentOption(config: AgentPayMcpPaymentConfig): PaymentOption {
+export function createCeloPaymentOption(config: AgentPayMcpPaymentConfig): PaymentOption {
   const price = config.asset
     ? {
-        amount: config.network === MAINNET_CAIP2 && config.price === "$0.01" ? "10000" : config.price,
+        amount: assetPriceToAtomic(config.price, config.assetDecimals),
         asset: config.asset,
+        extra: {
+          name: "USDC",
+          version: "2",
+        },
       }
     : config.price;
 
@@ -224,6 +240,43 @@ function createPaymentOption(config: AgentPayMcpPaymentConfig): PaymentOption {
       decimals: config.assetDecimals,
     }),
   };
+}
+
+function isValidAssetPrice(price: string, decimals: number): boolean {
+  try {
+    assetPriceToAtomic(price, decimals);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function assetPriceToAtomic(price: string, decimals: number): string {
+  if (/^[1-9]\d*$/.test(price)) {
+    return price;
+  }
+
+  const match = /^\$(\d+)(?:\.(\d+))?$/.exec(price);
+
+  if (!match) {
+    throw new Error("Seller price must be a positive atomic integer or a dollar-denominated decimal.");
+  }
+
+  const whole = match[1] ?? "0";
+  const fractional = match[2] ?? "";
+
+  if (fractional.length > decimals) {
+    throw new Error(`Seller price exceeds the configured ${decimals}-decimal asset precision.`);
+  }
+
+  const atomic = (BigInt(whole) * (10n ** BigInt(decimals)))
+    + BigInt(fractional.padEnd(decimals, "0") || "0");
+
+  if (atomic <= 0n) {
+    throw new Error("Seller price must be positive.");
+  }
+
+  return atomic.toString();
 }
 
 function createPaymentConfigErrorMessage(missing: string[], invalid: string[]): string {

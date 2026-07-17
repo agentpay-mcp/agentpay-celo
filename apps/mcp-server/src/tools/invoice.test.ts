@@ -26,7 +26,7 @@ describe("parseInvoicePaymentForAgent", () => {
         destinationTokenSymbol: "USDC",
         amountOut: "10",
         purpose: "design bounty",
-        sourceTokenSymbol: "USDT0",
+        sourceTokenSymbol: "USDC",
         paymentType: "INVOICE_PAYMENT",
       },
       instructionToAgent:

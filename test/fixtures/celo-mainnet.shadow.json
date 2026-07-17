@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "kind": "agentpay-mainnet-shadow-manifest",
+  "status": "SHADOW_ONLY",
+  "environment": "production",
+  "executionMode": "OFF",
+  "chain": {
+    "name": "Celo",
+    "chainId": 42220,
+    "caip2": "eip155:42220",
+    "nativeSymbol": "CELO",
+    "rpcEnvRef": "CELO_MAINNET_RPC_URL",
+    "expectedRpcHost": "forno.celo.org"
+  },
+  "database": {
+    "environment": "production",
+    "projectRef": null,
+    "urlEnvRef": "SUPABASE_PRODUCTION_URL",
+    "serviceRoleKeyEnvRef": "SUPABASE_PRODUCTION_SERVICE_ROLE_KEY",
+    "databaseUrlEnvRef": "DIRECT_URL_PRODUCTION",
+    "migrationHead": "20260717120000_celo_home_chain_boundary"
+  },
+  "secretRefs": {
+    "namespace": "agentpay-celo/production",
+    "executorPrivateKeyEnvRef": "EXECUTOR_PRIVATE_KEY",
+    "setupDeployerPrivateKeyEnvRef": "SETUP_DEPLOYER_PRIVATE_KEY",
+    "sessionHashKeyEnvRef": "AGENTPAY_SESSION_HASH_KEY",
+    "reviewTokenSecretEnvRef": "AGENTPAY_REVIEW_TOKEN_SECRET",
+    "rawTransactionEncryptionKeyEnvRef": "AGENTPAY_RAW_TX_ENCRYPTION_KEY"
+  },
+  "release": {
+    "commit": null,
+    "packageLockSha256": "46e782302fe830196da522e327ce65c663e1b0e42ea779262ba01e87f5709869",
+    "creationBytecodeKeccak256": "0x41fb5a4c59d1af753553e5dcf9e9ed345506ecaa8040298d17dc9c629fbd5b49",
+    "runtimeBytecodeKeccak256": null,
+    "abiSha256": null,
+    "migrationHead": "20260717120000_celo_home_chain_boundary"
+  },
+  "contract": {
+    "version": "v2",
+    "address": null,
+    "deploymentTxHash": null,
+    "creationBytecodeHash": "0x41fb5a4c59d1af753553e5dcf9e9ed345506ecaa8040298d17dc9c629fbd5b49",
+    "runtimeBytecodeHash": null,
+    "ownerAddress": null,
+    "executorAddress": null,
+    "deployerAddress": null,
+    "paused": null,
+    "domain": {
+      "name": "AgentPay",
+      "version": "1",
+      "chainId": 42220,
+      "verifyingContract": null
+    },
+    "allowedTokens": [
+      "0xcebA9300f2b948710d2653dD7B07f33A8B32118C"
+    ],
+    "allowedRouteTargets": []
+  },
+  "token": {
+    "symbol": "USDC",
+    "address": "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+    "decimals": 6,
+    "codeHash": "0x14254a76b7b2554180021c6390e814e73dee647ae91b7198da08de5145214493"
+  },
+  "x402": {
+    "enabled": false,
+    "network": "eip155:42220",
+    "asset": "USDC",
+    "tokenAddress": "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+    "decimals": 6,
+    "price": "$0.01",
+    "priceAtomic": "10000",
+    "syncSettle": true,
+    "payToEnvRef": "AGENTPAY_A2MCP_PAYMENT_PAY_TO",
+    "facilitatorEnvRef": "AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL",
+    "toolAllowlist": [
+      "execute_payment"
+    ]
+  },
+  "domains": {
+    "publicOrigin": null,
+    "consumerOrigin": "https://wallet.agentpay.site/mcp",
+    "siweAudience": "https://wallet.agentpay.site/mcp"
+  },
+  "canaryPolicy": {
+    "maxAcceptedLifecycles": 1,
+    "invoiceMaxUsdc": "0.10",
+    "accountFundingUsdc": "0.10",
+    "payerFeeWalletFundingMaxUsdc": "0.02",
+    "aspFeeUsdc": "0.01",
+    "maxNativeFee": "0",
+    "executorGasMaxCelo": "0.005",
+    "allowlistedTenantId": null,
+    "allowlistedOwnerAddress": null,
+    "allowlistedAccountAddress": null,
+    "payerAddress": null,
+    "recipientAddress": null
+  },
+  "isolation": {
+    "stagingChainId": 11142220,
+    "productionChainId": 42220,
+    "forbiddenRuntimeEnvRefs": [
+      "CELO_RPC_URL",
+      "CELO_SEPOLIA_RPC_URL",
+      "AGENTPAY_CELO_SEPOLIA_USDC_ADDRESS",
+      "AGENTPAY_CELO_SEPOLIA_USDT_ADDRESS",
+      "AGENTPAY_CELO_SEPOLIA_USDM_ADDRESS"
+    ],
+    "secretNamespaces": {
+      "staging": "agentpay-celo/staging",
+      "production": "agentpay-celo/production"
+    },
+    "separateSupabase": true,
+    "separateExecutor": true,
+    "separateDeployment": true
+  }
+}

@@ -3,24 +3,25 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { keccak256 } from "ethers";
 
-export const MAINNET_CHAIN_ID = 196;
-export const STAGING_CHAIN_ID = 1952;
-export const MAINNET_CAIP2 = "eip155:196";
-export const MAINNET_USDT0_ADDRESS = "0x779Ded0c9e1022225f8E0630b35a9b54bE713736";
-export const MAINNET_USDT0_DECIMALS = 6;
-export const MAINNET_USDT0_CODE_HASH =
-  "0x4d9be648c5bf39973670d9f8b481d5d0b971e6a2db2deccc6b98cde21c5dd83e";
+export const MAINNET_CHAIN_ID = 42220;
+export const STAGING_CHAIN_ID = 11142220;
+export const MAINNET_CAIP2 = "eip155:42220";
+export const MAINNET_USDC_ADDRESS = "0xcebA9300f2b948710d2653dD7B07f33A8B32118C";
+export const MAINNET_USDC_DECIMALS = 6;
+export const MAINNET_USDC_CODE_HASH =
+  "0x14254a76b7b2554180021c6390e814e73dee647ae91b7198da08de5145214493";
 export const MAINNET_ACCOUNT_CREATION_BYTECODE_HASH =
   "0x41fb5a4c59d1af753553e5dcf9e9ed345506ecaa8040298d17dc9c629fbd5b49";
-export const MAINNET_MIGRATION_HEAD = "20260715153000_payment_intent_atomic_audit";
+export const MAINNET_MIGRATION_HEAD = "20260717120000_celo_home_chain_boundary";
 export const FORBIDDEN_PRODUCTION_RUNTIME_ENV_REFS = Object.freeze([
-  "XLAYER_RPC_URL",
-  "XLAYER_TESTNET_RPC_URL",
-  "AGENTPAY_XLAYER_TESTNET_USDT0_ADDRESS",
-  "AGENTPAY_XLAYER_TESTNET_USDC_ADDRESS",
+  "CELO_RPC_URL",
+  "CELO_SEPOLIA_RPC_URL",
+  "AGENTPAY_CELO_SEPOLIA_USDC_ADDRESS",
+  "AGENTPAY_CELO_SEPOLIA_USDT_ADDRESS",
+  "AGENTPAY_CELO_SEPOLIA_USDM_ADDRESS",
 ]);
 export const MAINNET_SHADOW_MANIFEST_PATH = fileURLToPath(
-  new URL("../ops/manifests/xlayer-mainnet.shadow.json", import.meta.url),
+  new URL("../ops/manifests/celo-mainnet.shadow.json", import.meta.url),
 );
 
 const HEX_HASH_PATTERN = /^0x[a-f0-9]{64}$/i;
@@ -141,12 +142,12 @@ export function buildMainnetShadowManifest({ artifactDigests, generatedAt } = {}
     environment: "production",
     executionMode: "OFF",
     chain: {
-      name: "X Layer",
+      name: "Celo",
       chainId: MAINNET_CHAIN_ID,
       caip2: MAINNET_CAIP2,
-      nativeSymbol: "OKB",
-      rpcEnvRef: "XLAYER_MAINNET_RPC_URL",
-      expectedRpcHost: "rpc.xlayer.tech",
+      nativeSymbol: "CELO",
+      rpcEnvRef: "CELO_MAINNET_RPC_URL",
+      expectedRpcHost: "forno.celo.org",
     },
     database: {
       environment: "production",
@@ -157,7 +158,7 @@ export function buildMainnetShadowManifest({ artifactDigests, generatedAt } = {}
       migrationHead: MAINNET_MIGRATION_HEAD,
     },
     secretRefs: {
-      namespace: "agentpay/production",
+      namespace: "agentpay-celo/production",
       executorPrivateKeyEnvRef: "EXECUTOR_PRIVATE_KEY",
       setupDeployerPrivateKeyEnvRef: "SETUP_DEPLOYER_PRIVATE_KEY",
       sessionHashKeyEnvRef: "AGENTPAY_SESSION_HASH_KEY",
@@ -188,21 +189,21 @@ export function buildMainnetShadowManifest({ artifactDigests, generatedAt } = {}
         chainId: MAINNET_CHAIN_ID,
         verifyingContract: null,
       },
-      allowedTokens: [MAINNET_USDT0_ADDRESS],
+      allowedTokens: [MAINNET_USDC_ADDRESS],
       allowedRouteTargets: [],
     },
     token: {
-      symbol: "USDT0",
-      address: MAINNET_USDT0_ADDRESS,
-      decimals: MAINNET_USDT0_DECIMALS,
-      codeHash: MAINNET_USDT0_CODE_HASH,
+      symbol: "USDC",
+      address: MAINNET_USDC_ADDRESS,
+      decimals: MAINNET_USDC_DECIMALS,
+      codeHash: MAINNET_USDC_CODE_HASH,
     },
     x402: {
       enabled: false,
       network: MAINNET_CAIP2,
-      asset: "USDT0",
-      tokenAddress: MAINNET_USDT0_ADDRESS,
-      decimals: MAINNET_USDT0_DECIMALS,
+      asset: "USDC",
+      tokenAddress: MAINNET_USDC_ADDRESS,
+      decimals: MAINNET_USDC_DECIMALS,
       price: "$0.01",
       priceAtomic: "10000",
       syncSettle: true,
@@ -217,12 +218,12 @@ export function buildMainnetShadowManifest({ artifactDigests, generatedAt } = {}
     },
     canaryPolicy: {
       maxAcceptedLifecycles: 1,
-      invoiceMaxUsdt0: "0.10",
-      accountFundingUsdt0: "0.10",
-      payerFeeWalletFundingMaxUsdt0: "0.02",
-      aspFeeUsdt0: "0.01",
+      invoiceMaxUsdc: "0.10",
+      accountFundingUsdc: "0.10",
+      payerFeeWalletFundingMaxUsdc: "0.02",
+      aspFeeUsdc: "0.01",
       maxNativeFee: "0",
-      executorGasMaxOkb: "0.005",
+      executorGasMaxCelo: "0.005",
       allowlistedTenantId: null,
       allowlistedOwnerAddress: null,
       allowlistedAccountAddress: null,
@@ -236,8 +237,8 @@ export function buildMainnetShadowManifest({ artifactDigests, generatedAt } = {}
         ...FORBIDDEN_PRODUCTION_RUNTIME_ENV_REFS,
       ],
       secretNamespaces: {
-        staging: "agentpay/staging",
-        production: "agentpay/production",
+        staging: "agentpay-celo/staging",
+        production: "agentpay-celo/production",
       },
       separateSupabase: true,
       separateExecutor: true,
@@ -266,12 +267,12 @@ export function validateMainnetShadowManifest(manifest, { artifactDigests } = {}
 
   const chain = manifest.chain;
   if (requireRecord(chain, "chain", issues)) {
-    requireEqual(chain.name, "X Layer", "chain.name", issues);
+    requireEqual(chain.name, "Celo", "chain.name", issues);
     requireEqual(chain.chainId, MAINNET_CHAIN_ID, "chain.chainId", issues);
     requireEqual(chain.caip2, MAINNET_CAIP2, "chain.caip2", issues);
-    requireEqual(chain.nativeSymbol, "OKB", "chain.nativeSymbol", issues);
-    requireEqual(chain.rpcEnvRef, "XLAYER_MAINNET_RPC_URL", "chain.rpcEnvRef", issues);
-    requireEqual(chain.expectedRpcHost, "rpc.xlayer.tech", "chain.expectedRpcHost", issues);
+    requireEqual(chain.nativeSymbol, "CELO", "chain.nativeSymbol", issues);
+    requireEqual(chain.rpcEnvRef, "CELO_MAINNET_RPC_URL", "chain.rpcEnvRef", issues);
+    requireEqual(chain.expectedRpcHost, "forno.celo.org", "chain.expectedRpcHost", issues);
   }
 
   const database = manifest.database;
@@ -289,7 +290,7 @@ export function validateMainnetShadowManifest(manifest, { artifactDigests } = {}
 
   const secretRefs = manifest.secretRefs;
   if (requireRecord(secretRefs, "secretRefs", issues)) {
-    requireEqual(secretRefs.namespace, "agentpay/production", "secretRefs.namespace", issues);
+    requireEqual(secretRefs.namespace, "agentpay-celo/production", "secretRefs.namespace", issues);
     requireEqual(secretRefs.executorPrivateKeyEnvRef, "EXECUTOR_PRIVATE_KEY", "secretRefs.executorPrivateKeyEnvRef", issues);
     requireEqual(secretRefs.setupDeployerPrivateKeyEnvRef, "SETUP_DEPLOYER_PRIVATE_KEY", "secretRefs.setupDeployerPrivateKeyEnvRef", issues);
     requireEqual(secretRefs.sessionHashKeyEnvRef, "AGENTPAY_SESSION_HASH_KEY", "secretRefs.sessionHashKeyEnvRef", issues);
@@ -349,25 +350,25 @@ export function validateMainnetShadowManifest(manifest, { artifactDigests } = {}
       requireEqual(contract.domain.chainId, MAINNET_CHAIN_ID, "contract.domain.chainId", issues);
       requireAddress(contract.domain.verifyingContract, "contract.domain.verifyingContract", issues, { nullable: true });
     }
-    requireArrayEqual(contract.allowedTokens, [MAINNET_USDT0_ADDRESS], "contract.allowedTokens", issues);
+    requireArrayEqual(contract.allowedTokens, [MAINNET_USDC_ADDRESS], "contract.allowedTokens", issues);
     requireArrayEqual(contract.allowedRouteTargets, [], "contract.allowedRouteTargets", issues);
   }
 
   const token = manifest.token;
   if (requireRecord(token, "token", issues)) {
-    requireEqual(token.symbol, "USDT0", "token.symbol", issues);
-    requireEqual(token.address?.toLowerCase(), MAINNET_USDT0_ADDRESS.toLowerCase(), "token.address", issues);
-    requireEqual(token.decimals, MAINNET_USDT0_DECIMALS, "token.decimals", issues);
-    requireEqual(token.codeHash?.toLowerCase(), MAINNET_USDT0_CODE_HASH.toLowerCase(), "token.codeHash", issues);
+    requireEqual(token.symbol, "USDC", "token.symbol", issues);
+    requireEqual(token.address?.toLowerCase(), MAINNET_USDC_ADDRESS.toLowerCase(), "token.address", issues);
+    requireEqual(token.decimals, MAINNET_USDC_DECIMALS, "token.decimals", issues);
+    requireEqual(token.codeHash?.toLowerCase(), MAINNET_USDC_CODE_HASH.toLowerCase(), "token.codeHash", issues);
   }
 
   const x402 = manifest.x402;
   if (requireRecord(x402, "x402", issues)) {
     requireEqual(x402.enabled, false, "x402.enabled", issues);
     requireEqual(x402.network, MAINNET_CAIP2, "x402.network", issues);
-    requireEqual(x402.asset, "USDT0", "x402.asset", issues);
-    requireEqual(x402.tokenAddress?.toLowerCase(), MAINNET_USDT0_ADDRESS.toLowerCase(), "x402.tokenAddress", issues);
-    requireEqual(x402.decimals, MAINNET_USDT0_DECIMALS, "x402.decimals", issues);
+    requireEqual(x402.asset, "USDC", "x402.asset", issues);
+    requireEqual(x402.tokenAddress?.toLowerCase(), MAINNET_USDC_ADDRESS.toLowerCase(), "x402.tokenAddress", issues);
+    requireEqual(x402.decimals, MAINNET_USDC_DECIMALS, "x402.decimals", issues);
     requireEqual(x402.price, "$0.01", "x402.price", issues);
     requireEqual(x402.priceAtomic, "10000", "x402.priceAtomic", issues);
     requireEqual(x402.syncSettle, true, "x402.syncSettle", issues);
@@ -386,12 +387,12 @@ export function validateMainnetShadowManifest(manifest, { artifactDigests } = {}
   const canary = manifest.canaryPolicy;
   if (requireRecord(canary, "canaryPolicy", issues)) {
     requireEqual(canary.maxAcceptedLifecycles, 1, "canaryPolicy.maxAcceptedLifecycles", issues);
-    requireEqual(canary.invoiceMaxUsdt0, "0.10", "canaryPolicy.invoiceMaxUsdt0", issues);
-    requireEqual(canary.accountFundingUsdt0, "0.10", "canaryPolicy.accountFundingUsdt0", issues);
-    requireEqual(canary.payerFeeWalletFundingMaxUsdt0, "0.02", "canaryPolicy.payerFeeWalletFundingMaxUsdt0", issues);
-    requireEqual(canary.aspFeeUsdt0, "0.01", "canaryPolicy.aspFeeUsdt0", issues);
+    requireEqual(canary.invoiceMaxUsdc, "0.10", "canaryPolicy.invoiceMaxUsdc", issues);
+    requireEqual(canary.accountFundingUsdc, "0.10", "canaryPolicy.accountFundingUsdc", issues);
+    requireEqual(canary.payerFeeWalletFundingMaxUsdc, "0.02", "canaryPolicy.payerFeeWalletFundingMaxUsdc", issues);
+    requireEqual(canary.aspFeeUsdc, "0.01", "canaryPolicy.aspFeeUsdc", issues);
     requireEqual(canary.maxNativeFee, "0", "canaryPolicy.maxNativeFee", issues);
-    requireEqual(canary.executorGasMaxOkb, "0.005", "canaryPolicy.executorGasMaxOkb", issues);
+    requireEqual(canary.executorGasMaxCelo, "0.005", "canaryPolicy.executorGasMaxCelo", issues);
     for (const key of [
       "allowlistedTenantId",
       "allowlistedOwnerAddress",
@@ -414,10 +415,10 @@ export function validateMainnetShadowManifest(manifest, { artifactDigests } = {}
       issues,
     );
     if (requireRecord(isolation.secretNamespaces, "isolation.secretNamespaces", issues)) {
-      requireEqual(isolation.secretNamespaces.staging, "agentpay/staging", "isolation.secretNamespaces.staging", issues);
+      requireEqual(isolation.secretNamespaces.staging, "agentpay-celo/staging", "isolation.secretNamespaces.staging", issues);
       requireEqual(
         isolation.secretNamespaces.production,
-        "agentpay/production",
+        "agentpay-celo/production",
         "isolation.secretNamespaces.production",
         issues,
       );
@@ -465,16 +466,16 @@ export function validateProductionEnvironmentIsolation(env, { manifest } = {}) {
   requireEqual(String(env.AGENTPAY_HOME_CHAIN_ID ?? ""), String(MAINNET_CHAIN_ID), "AGENTPAY_HOME_CHAIN_ID", issues);
   requireEqual(env.AGENTPAY_ACCOUNT_VERSION, "v2", "AGENTPAY_ACCOUNT_VERSION", issues);
 
-  if (!hasRuntimeValue(env, "XLAYER_MAINNET_RPC_URL")) {
-    addIssue(issues, "XLAYER_MAINNET_RPC_URL", "must be configured for production");
+  if (!hasRuntimeValue(env, "CELO_MAINNET_RPC_URL")) {
+    addIssue(issues, "CELO_MAINNET_RPC_URL", "must be configured for production");
   } else {
     try {
-      const rpcUrl = new URL(env.XLAYER_MAINNET_RPC_URL);
-      if (rpcUrl.protocol !== "https:" || rpcUrl.hostname !== "rpc.xlayer.tech") {
-        addIssue(issues, "XLAYER_MAINNET_RPC_URL", "must use the pinned mainnet RPC host over HTTPS");
+      const rpcUrl = new URL(env.CELO_MAINNET_RPC_URL);
+      if (rpcUrl.protocol !== "https:" || rpcUrl.hostname !== "forno.celo.org") {
+        addIssue(issues, "CELO_MAINNET_RPC_URL", "must use the pinned mainnet RPC host over HTTPS");
       }
     } catch {
-      addIssue(issues, "XLAYER_MAINNET_RPC_URL", "must be a valid HTTPS URL");
+      addIssue(issues, "CELO_MAINNET_RPC_URL", "must be a valid HTTPS URL");
     }
   }
 

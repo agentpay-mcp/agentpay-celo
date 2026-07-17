@@ -2,11 +2,16 @@ import { z } from "zod";
 
 import { getChainName } from "./chains.ts";
 import { preparePaymentInputSchema } from "./payment-intent.ts";
-import { stableTokenSymbolSchema, type StableTokenSymbol } from "./tokens.ts";
+import {
+  celoStableTokenSymbolSchema,
+  stableTokenSymbolSchema,
+  type CeloStableTokenSymbol,
+  type StableTokenSymbol,
+} from "./tokens.ts";
 
 export const parseInvoicePaymentInputSchema = z.object({
   invoice: z.string().trim().min(1),
-  sourceTokenSymbol: stableTokenSymbolSchema.default("USDT0"),
+  sourceTokenSymbol: celoStableTokenSymbolSchema.default("USDC"),
 });
 
 export type ParseInvoicePaymentInput = z.input<typeof parseInvoicePaymentInputSchema>;
@@ -19,7 +24,7 @@ export interface ParsedInvoicePayment {
   destinationTokenSymbol: StableTokenSymbol;
   amountOut: string;
   purpose: string;
-  sourceTokenSymbol: StableTokenSymbol;
+  sourceTokenSymbol: CeloStableTokenSymbol;
   paymentType: "INVOICE_PAYMENT";
 }
 
@@ -101,6 +106,10 @@ function parseDestinationChainId(value: string | undefined): number | undefined 
 
   const normalized = normalizeKey(value);
   const knownChains: Record<string, number> = {
+    celo: 42220,
+    celomainnet: 42220,
+    celosepolia: 11142220,
+    celotestnet: 11142220,
     xlayer: 196,
     xlayermainnet: 196,
     xlayertestnet: 1952,
@@ -144,5 +153,6 @@ function normalizeKey(value: string): string {
 }
 
 function normalizeTokenSymbol(value: string): string {
-  return value.trim().toUpperCase().replace("USD₮0", "USDT0");
+  const normalized = value.trim().toUpperCase().replace("USD₮0", "USDT0");
+  return normalized === "USDM" ? "USDm" : normalized;
 }

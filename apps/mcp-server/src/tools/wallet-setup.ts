@@ -3,7 +3,8 @@ import {
   getAgentWalletInputSchema,
   getChainName,
   prepareWalletCreationInputSchema,
-  resolveXLayerHomeChainId,
+  resolveCeloHomeChainId,
+  type CeloHomeChainId,
   type CheckWalletCreationInput,
   type GetAgentWalletInput,
   type PrepareWalletCreationInput,
@@ -23,7 +24,7 @@ export interface PrepareWalletCreationDependencies {
   setupWebUrl: string;
   clock: () => Date;
   createSetupIntentId: () => string;
-  homeChainId?: number;
+  homeChainId?: CeloHomeChainId;
   setupTtlSeconds?: number;
 }
 
@@ -34,7 +35,7 @@ export interface CheckWalletCreationDependencies {
 
 export interface GetAgentWalletDependencies {
   wallets: AgentWalletRepository;
-  homeChainId?: number;
+  homeChainId?: CeloHomeChainId;
 }
 
 export interface PrepareWalletCreationOutput {
@@ -77,8 +78,7 @@ export async function prepareWalletCreation(
   const setupIntentId = dependencies.createSetupIntentId();
   const setupTtlSeconds = dependencies.setupTtlSeconds ?? 900;
   const expiresAt = new Date(dependencies.clock().getTime() + setupTtlSeconds * 1000).toISOString();
-  const fallbackHomeChainId = dependencies.homeChainId === 1952 ? 1952 : 196;
-  const homeChainId = resolveXLayerHomeChainId(input, fallbackHomeChainId);
+  const homeChainId = resolveCeloHomeChainId(input, dependencies.homeChainId);
   const messageToSign = createSetupMessage({
     setupIntentId,
     ownerAddress: input.ownerAddress,
@@ -136,8 +136,7 @@ export async function getAgentWallet(
   dependencies: GetAgentWalletDependencies,
 ): Promise<GetAgentWalletOutput> {
   const input = getAgentWalletInputSchema.parse(rawInput);
-  const fallbackHomeChainId = dependencies.homeChainId === 1952 ? 1952 : 196;
-  const homeChainId = resolveXLayerHomeChainId(input, fallbackHomeChainId);
+  const homeChainId = resolveCeloHomeChainId(input, dependencies.homeChainId);
   const wallet = await dependencies.wallets.getActiveWallet({ homeChainId });
 
   if (!wallet) {
@@ -168,7 +167,7 @@ export const prepareWalletCreationTool = {
     properties: {
       ownerAddress: { type: "string" },
       network: { type: "string", enum: ["mainnet", "testnet"] },
-      homeChainId: { type: "number", enum: [196, 1952] },
+      homeChainId: { type: "number", enum: [42220, 11142220] },
     },
   },
 } as const;
@@ -194,7 +193,7 @@ export const getAgentWalletTool = {
     additionalProperties: false,
     properties: {
       network: { type: "string", enum: ["mainnet", "testnet"] },
-      homeChainId: { type: "number", enum: [196, 1952] },
+      homeChainId: { type: "number", enum: [42220, 11142220] },
     },
   },
 } as const;

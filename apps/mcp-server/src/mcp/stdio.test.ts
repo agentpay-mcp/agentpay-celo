@@ -48,11 +48,11 @@ describe("startAgentPayMcpServer", () => {
         startAgentPayMcpServer({
           env: {
             AGENTPAY_ENVIRONMENT: "production",
-            AGENTPAY_HOME_CHAIN_ID: "196",
+            AGENTPAY_HOME_CHAIN_ID: "42220",
             AGENTPAY_ACCOUNT_VERSION: "v2",
             SUPABASE_PRODUCTION_URL: "https://abcdefghijklmnopqrst.supabase.co",
             SUPABASE_PRODUCTION_SERVICE_ROLE_KEY: "production-service-role-key",
-            XLAYER_MAINNET_RPC_URL: "https://rpc.xlayer.tech",
+            CELO_MAINNET_RPC_URL: "https://forno.celo.org",
             EXECUTOR_PRIVATE_KEY: `0x${"1".repeat(64)}`,
             AGENTPAY_SESSION_HASH_KEY: "session-hash-key-012345678901234567890123",
             AGENTPAY_REVIEW_TOKEN_SECRET: "review-token-secret-012345678901234567890123",
@@ -73,7 +73,7 @@ describe("startAgentPayMcpServer", () => {
       env: {
         SUPABASE_URL: "https://agentpay.supabase.co",
         SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
-        XLAYER_RPC_URL: "https://rpc.xlayer.tech",
+        CELO_RPC_URL: "https://forno.celo-sepolia.celo-testnet.org",
         EXECUTOR_PRIVATE_KEY: `0x${"1".repeat(64)}`,
       },
       createRuntime(config) {
@@ -97,7 +97,7 @@ describe("startAgentPayMcpServer", () => {
       {
         supabaseUrl: "https://agentpay.supabase.co",
         serviceRoleKey: "service-role-key",
-        xlayerRpcUrl: "https://rpc.xlayer.tech",
+        celoRpcUrl: "https://forno.celo-sepolia.celo-testnet.org",
         executorPrivateKey: `0x${"1".repeat(64)}`,
       },
     ]);

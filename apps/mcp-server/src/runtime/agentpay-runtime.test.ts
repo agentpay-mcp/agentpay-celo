@@ -18,45 +18,45 @@ describe("parseAgentPayEnv", () => {
     const config = parseAgentPayEnv({
       SUPABASE_URL: " https://agentpay.supabase.co ",
       SUPABASE_SERVICE_ROLE_KEY: " service-role-key ",
-      XLAYER_RPC_URL: " https://rpc.xlayer.tech ",
-      XLAYER_MAINNET_RPC_URL: " https://mainnet.xlayer.tech ",
-      XLAYER_TESTNET_RPC_URL: " https://testnet.xlayer.tech ",
+      CELO_RPC_URL: " https://rpc.celo.tech ",
+      CELO_MAINNET_RPC_URL: " https://mainnet.celo.tech ",
+      CELO_SEPOLIA_RPC_URL: " https://testnet.celo.tech ",
       EXECUTOR_PRIVATE_KEY: ` ${validPrivateKey} `,
       LIFI_API_KEY: " lifi-key ",
       LIFI_BASE_URL: " https://li.quest ",
       SETUP_WEB_URL: " https://setup.agentpay.dev/setup ",
-      AGENTPAY_HOME_CHAIN_ID: " 1952 ",
+      AGENTPAY_HOME_CHAIN_ID: " 11142220 ",
       AGENTPAY_HTTP_MODE: " consumer ",
       AGENTPAY_ENVIRONMENT: " staging ",
       AGENTPAY_SESSION_HASH_KEY: " session-hash-secret ",
       AGENTPAY_REVIEW_TOKEN_SECRET: " review-token-secret-012345678901234567890123 ",
-      AGENTPAY_XLAYER_TESTNET_USDC_ADDRESS: " 0x1111111111111111111111111111111111111111 ",
-      AGENTPAY_XLAYER_TESTNET_USDT0_ADDRESS: " 0x2222222222222222222222222222222222222222 ",
+      AGENTPAY_CELO_SEPOLIA_USDC_ADDRESS: " 0x1111111111111111111111111111111111111111 ",
+      AGENTPAY_CELO_SEPOLIA_USDT_ADDRESS: " 0x2222222222222222222222222222222222222222 ",
     });
 
     assert.deepEqual(config, {
       supabaseUrl: "https://agentpay.supabase.co",
       serviceRoleKey: "service-role-key",
-      xlayerRpcUrl: "https://rpc.xlayer.tech",
-      xlayerRpcUrls: {
-        196: "https://mainnet.xlayer.tech",
-        1952: "https://testnet.xlayer.tech",
+      celoRpcUrl: "https://rpc.celo.tech",
+      celoRpcUrls: {
+        42220: "https://mainnet.celo.tech",
+        11142220: "https://testnet.celo.tech",
       },
       executorPrivateKey: validPrivateKey,
       lifiApiKey: "lifi-key",
       lifiBaseUrl: "https://li.quest",
       setupWebUrl: "https://setup.agentpay.dev/setup",
-      homeChainId: 1952,
+      homeChainId: 11142220,
       httpMode: "consumer",
       environment: "staging",
       sessionHashKey: "session-hash-secret",
       reviewTokenSecret: "review-token-secret-012345678901234567890123",
       stableTokenOverrides: {
-        1952: {
+        11142220: {
           USDC: {
             address: "0x1111111111111111111111111111111111111111",
           },
-          USDT0: {
+          USDT: {
             address: "0x2222222222222222222222222222222222222222",
           },
         },
@@ -72,22 +72,22 @@ describe("parseAgentPayEnv", () => {
         parseAgentPayEnv({
           SUPABASE_URL: "notaurl",
           SUPABASE_SERVICE_ROLE_KEY: sensitiveFixtureValue,
-          XLAYER_RPC_URL: "",
-          XLAYER_MAINNET_RPC_URL: "mainnet-rpc",
-          XLAYER_TESTNET_RPC_URL: "testnet-rpc",
+          CELO_RPC_URL: "",
+          CELO_MAINNET_RPC_URL: "mainnet-rpc",
+          CELO_SEPOLIA_RPC_URL: "testnet-rpc",
           EXECUTOR_PRIVATE_KEY: "0xabc123",
           AGENTPAY_HOME_CHAIN_ID: "98",
-          AGENTPAY_XLAYER_TESTNET_USDC_ADDRESS: "not-an-address",
+          AGENTPAY_CELO_SEPOLIA_USDC_ADDRESS: "not-an-address",
         }),
       (error) => {
         assert.ok(error instanceof Error);
-        assert.match(error.message, /XLAYER_RPC_URL/);
-        assert.match(error.message, /XLAYER_MAINNET_RPC_URL/);
-        assert.match(error.message, /XLAYER_TESTNET_RPC_URL/);
+        assert.match(error.message, /CELO_RPC_URL/);
+        assert.match(error.message, /CELO_MAINNET_RPC_URL/);
+        assert.match(error.message, /CELO_SEPOLIA_RPC_URL/);
         assert.match(error.message, /SUPABASE_URL/);
         assert.match(error.message, /EXECUTOR_PRIVATE_KEY/);
         assert.match(error.message, /AGENTPAY_HOME_CHAIN_ID/);
-        assert.match(error.message, /AGENTPAY_XLAYER_TESTNET_USDC_ADDRESS/);
+        assert.match(error.message, /AGENTPAY_CELO_SEPOLIA_USDC_ADDRESS/);
         assert.doesNotMatch(error.message, new RegExp(sensitiveFixtureValue));
         assert.doesNotMatch(error.message, /0xabc123/);
         return true;
@@ -99,7 +99,7 @@ describe("parseAgentPayEnv", () => {
     const baseEnv = {
       SUPABASE_URL: "https://agentpay.supabase.co",
       SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
-      XLAYER_RPC_URL: "https://rpc.xlayer.tech",
+      CELO_RPC_URL: "https://rpc.celo.tech",
       EXECUTOR_PRIVATE_KEY: validPrivateKey,
     };
 
@@ -116,11 +116,11 @@ describe("parseAgentPayEnv", () => {
   it("uses only explicit production Supabase and mainnet RPC aliases", () => {
     const config = parseAgentPayEnv({
       AGENTPAY_ENVIRONMENT: "production",
-      AGENTPAY_HOME_CHAIN_ID: "196",
+      AGENTPAY_HOME_CHAIN_ID: "42220",
       AGENTPAY_ACCOUNT_VERSION: "v2",
       SUPABASE_PRODUCTION_URL: "https://production-project.supabase.co",
       SUPABASE_PRODUCTION_SERVICE_ROLE_KEY: "production-service-key",
-      XLAYER_MAINNET_RPC_URL: "https://rpc.xlayer.tech/terigon",
+      CELO_MAINNET_RPC_URL: "https://rpc.celo.tech/terigon",
       EXECUTOR_PRIVATE_KEY: validPrivateKey,
       AGENTPAY_SESSION_HASH_KEY: "s".repeat(64),
       AGENTPAY_REVIEW_TOKEN_SECRET: "r".repeat(64),
@@ -129,18 +129,18 @@ describe("parseAgentPayEnv", () => {
 
     assert.equal(config.supabaseUrl, "https://production-project.supabase.co");
     assert.equal(config.serviceRoleKey, "production-service-key");
-    assert.equal(config.xlayerRpcUrl, "https://rpc.xlayer.tech/terigon");
-    assert.equal(config.homeChainId, 196);
+    assert.equal(config.celoRpcUrl, "https://rpc.celo.tech/terigon");
+    assert.equal(config.homeChainId, 42220);
     assert.equal(config.environment, "production");
 
     assert.throws(
       () => parseAgentPayEnv({
         AGENTPAY_ENVIRONMENT: "production",
-        AGENTPAY_HOME_CHAIN_ID: "196",
+        AGENTPAY_HOME_CHAIN_ID: "42220",
         AGENTPAY_ACCOUNT_VERSION: "v2",
         SUPABASE_PRODUCTION_URL: "https://production-project.supabase.co",
         SUPABASE_PRODUCTION_SERVICE_ROLE_KEY: "production-service-key",
-        XLAYER_MAINNET_RPC_URL: "https://rpc.xlayer.tech/terigon",
+        CELO_MAINNET_RPC_URL: "https://rpc.celo.tech/terigon",
         EXECUTOR_PRIVATE_KEY: validPrivateKey,
         AGENTPAY_SESSION_HASH_KEY: "s".repeat(64),
         AGENTPAY_REVIEW_TOKEN_SECRET: "r".repeat(64),
@@ -152,14 +152,14 @@ describe("parseAgentPayEnv", () => {
     assert.throws(
       () => parseAgentPayEnv({
         AGENTPAY_ENVIRONMENT: "production",
-        AGENTPAY_HOME_CHAIN_ID: "196",
+        AGENTPAY_HOME_CHAIN_ID: "42220",
         AGENTPAY_ACCOUNT_VERSION: "v2",
         SUPABASE_URL: "https://qwywcungxmhoctmehcze.supabase.co",
         SUPABASE_SERVICE_ROLE_KEY: "staging-service-key",
-        XLAYER_RPC_URL: "https://testrpc.xlayer.tech/terigon",
+        CELO_RPC_URL: "https://testrpc.celo.tech/terigon",
         EXECUTOR_PRIVATE_KEY: validPrivateKey,
       }),
-      /SUPABASE_PRODUCTION_URL|XLAYER_MAINNET_RPC_URL|production/i,
+      /SUPABASE_PRODUCTION_URL|CELO_MAINNET_RPC_URL|production/i,
     );
   });
 });
@@ -203,10 +203,10 @@ describe("createAgentPayRuntime", () => {
       ownerAddress: "0x2222222222222222222222222222222222222222",
       status: "COMPLETED",
       paymentType: "X402_PAYMENT",
-      sourceChainId: 196,
+      sourceChainId: 42220,
       destinationChainId: 8453,
-      sourceTokenAddress: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
-      sourceTokenSymbol: "USDT0",
+      sourceTokenAddress: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+      sourceTokenSymbol: "USDC",
       destinationTokenAddress: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
       destinationTokenSymbol: "USDC",
       recipientAddress: "0x1111111111111111111111111111111111111111",
@@ -220,7 +220,7 @@ describe("createAgentPayRuntime", () => {
       routeSummary: "Route to Base.",
       nonce: "43",
       deadline: "2026-07-02T14:45:00.000Z",
-      purpose: "x402 payment for Market API: Premium market data",
+      purpose: "x402 payment for Market API: Premium market data [x402-request:0x6883a5441c9fbe43f06d78857957414b515c003f7ba89a4bde6a9ef665874dbe]",
       approvalPhrase: "APPROVE pay_x402",
       sourceTxHash: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
       destinationTxHash: "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
@@ -248,7 +248,7 @@ describe("createAgentPayRuntime", () => {
               return {
                 ownerAddress: "0x2222222222222222222222222222222222222222",
                 accountAddress: "0x3333333333333333333333333333333333333333",
-                homeChainId: 196,
+                homeChainId: 42220,
                 executorAddress: "0x4444444444444444444444444444444444444444",
                 status: "ACTIVE",
               };
@@ -369,9 +369,9 @@ describe("createAgentPayRuntime", () => {
                   accepts: [
                     {
                       scheme: "exact",
-                      network: "eip155:196",
+                      network: "eip155:42220",
                       amount: "250000",
-                      asset: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+                      asset: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
                       payTo: "0x1111111111111111111111111111111111111111",
                       maxTimeoutSeconds: 60,
                     },
@@ -449,10 +449,10 @@ describe("createAgentPayRuntime", () => {
       {
         supabaseUrl: "https://agentpay.supabase.co",
         serviceRoleKey: "service-role-key",
-        xlayerRpcUrl: "https://rpc.xlayer.tech",
-        xlayerRpcUrls: {
-          196: "https://mainnet.xlayer.tech",
-          1952: "https://testnet.xlayer.tech",
+        celoRpcUrl: "https://rpc.celo.tech",
+        celoRpcUrls: {
+          42220: "https://mainnet.celo.tech",
+          11142220: "https://testnet.celo.tech",
         },
         executorPrivateKey: validPrivateKey,
         lifiApiKey: "lifi-key",
@@ -465,21 +465,23 @@ describe("createAgentPayRuntime", () => {
         createNonce: () => "42",
         createSetupIntentId: () => "setup_runtime",
         executorAddress: "0x4444444444444444444444444444444444444444",
-        x402Fetch: async (url, init) => {
-          calls.push([
-            "x402Fetch",
-            {
-              url: String(url),
-              method: init?.method,
-              headers: init?.headers,
-            },
-          ]);
-          return new Response("premium payload", {
-            status: 200,
-            headers: {
-              "x-payment-response": "settled",
-            },
-          });
+        x402HttpClient: {
+          async request(url, init) {
+            calls.push([
+              "x402Fetch",
+              {
+                url: String(url),
+                method: init.method,
+                headers: init.headers,
+              },
+            ]);
+            return new Response("premium payload", {
+              status: 200,
+              headers: {
+                "x-payment-response": "settled",
+              },
+            });
+          },
         },
         factories,
       },
@@ -487,7 +489,7 @@ describe("createAgentPayRuntime", () => {
 
     const setup = await runtime.prepareWalletCreation({});
     const wallet = await runtime.getAgentWallet({});
-    const balance = await runtime.getBalance({ tokenSymbols: ["USDT0"] });
+    const balance = await runtime.getBalance({ tokenSymbols: ["USDC"] });
     const invoice = await runtime.parseInvoicePayment({
       invoice: [
         "Invoice ID: inv_runtime",
@@ -502,7 +504,7 @@ describe("createAgentPayRuntime", () => {
       paymentRequired: JSON.stringify(x402PaymentRequired),
     });
     const x402Services = await runtime.searchX402Services({
-      query: "okx market data",
+      query: "celo payment services",
       limit: 3,
     });
     const x402ServiceRequest = await runtime.prepareX402ServiceRequest({
@@ -520,7 +522,7 @@ describe("createAgentPayRuntime", () => {
       destinationChainId: 8453,
       destinationTokenSymbol: "USDC",
       amountOut: "10",
-      sourceTokenSymbol: "USDT0",
+      sourceTokenSymbol: "USDC",
     });
     const allowance = await runtime.prepareRouteTargetAllowance({
       routeTarget: "0x7777777777777777777777777777777777777777",
@@ -535,7 +537,7 @@ describe("createAgentPayRuntime", () => {
       destinationTokenSymbol: "USDC",
       amountOut: "10",
       purpose: "design bounty",
-      sourceTokenSymbol: "USDT0",
+      sourceTokenSymbol: "USDC",
     });
 
     const executed = await runtime.executePayment({
@@ -560,18 +562,18 @@ describe("createAgentPayRuntime", () => {
       status: "ACTIVE",
       accountAddress: "0x3333333333333333333333333333333333333333",
       ownerAddress: "0x2222222222222222222222222222222222222222",
-      chainId: 196,
-      chain: "X Layer",
+      chainId: 42220,
+      chain: "Celo",
       balances: [
         {
-          tokenSymbol: "USDT0",
-          tokenAddress: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+          tokenSymbol: "USDC",
+          tokenAddress: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
           amount: "12.5",
           decimals: 6,
         },
       ],
       nativeBalance: {
-        tokenSymbol: "OKB",
+        tokenSymbol: "CELO",
         tokenAddress: "native",
         amount: "0.03",
         decimals: 18,
@@ -639,10 +641,10 @@ describe("createAgentPayRuntime", () => {
       [
         "ethers",
         {
-          rpcUrl: "https://rpc.xlayer.tech",
+          rpcUrl: "https://rpc.celo.tech",
           rpcUrls: {
-            196: "https://mainnet.xlayer.tech",
-            1952: "https://testnet.xlayer.tech",
+            42220: "https://mainnet.celo.tech",
+            11142220: "https://testnet.celo.tech",
           },
           executorPrivateKey: validPrivateKey,
         },

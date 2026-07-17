@@ -111,7 +111,7 @@ export async function prepareX402ServiceRequestForAgent(
     paymentRequired: built.paymentRequired!,
     missingParameters: [],
     instructionToAgent:
-      "Call parse_x402_payment_required with paymentRequired, review details with the user, run the Review & Sign owner-authorization flow, then call retry_x402_request with this request after track_payment returns COMPLETED.",
+      "Call parse_x402_payment_required with both paymentRequired and this exact request so its method, body, and safe headers are bound to the owner-signed purpose. Review details with the user, run the Review & Sign owner-authorization flow, then call retry_x402_request with the same request after track_payment returns COMPLETED.",
   };
 }
 

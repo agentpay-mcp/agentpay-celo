@@ -1,16 +1,20 @@
 import { z } from "zod";
 
-export const STABLE_TOKEN_SYMBOLS = ["USDT0", "USDC", "USDT"] as const;
-export const DEFAULT_STABLE_TOKEN_SYMBOLS = ["USDT0", "USDC"] as const satisfies readonly StableTokenSymbol[];
+export const STABLE_TOKEN_SYMBOLS = ["USDT0", "USDC", "USDT", "USDm"] as const;
+export const CELO_STABLE_TOKEN_SYMBOLS = ["USDC", "USDT", "USDm"] as const;
+export const DEFAULT_STABLE_TOKEN_SYMBOLS = CELO_STABLE_TOKEN_SYMBOLS;
 
 export const stableTokenSymbolSchema = z.enum(STABLE_TOKEN_SYMBOLS);
+export const celoStableTokenSymbolSchema = z.enum(CELO_STABLE_TOKEN_SYMBOLS);
 
 export type StableTokenSymbol = z.infer<typeof stableTokenSymbolSchema>;
+export type CeloStableTokenSymbol = z.infer<typeof celoStableTokenSymbolSchema>;
 
 export const STABLE_TOKEN_DECIMALS: Record<StableTokenSymbol, number> = {
   USDT0: 6,
   USDC: 6,
   USDT: 6,
+  USDm: 18,
 };
 
 export interface StableTokenMetadata {
@@ -70,6 +74,40 @@ export const STABLE_TOKENS_BY_CHAIN: Record<number, Partial<Record<StableTokenSy
       symbol: "USDT",
       address: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
       decimals: 6,
+    },
+  },
+  42220: {
+    USDC: {
+      symbol: "USDC",
+      address: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+      decimals: 6,
+    },
+    USDT: {
+      symbol: "USDT",
+      address: "0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e",
+      decimals: 6,
+    },
+    USDm: {
+      symbol: "USDm",
+      address: "0x765DE816845861e75A25fCA122bb6898B8B1282a",
+      decimals: 18,
+    },
+  },
+  11142220: {
+    USDC: {
+      symbol: "USDC",
+      address: "0x01C5C0122039549AD1493B8220cABEdD739BC44E",
+      decimals: 6,
+    },
+    USDT: {
+      symbol: "USDT",
+      address: "0xd077A400968890Eacc75cdc901F0356c943e4fDb",
+      decimals: 6,
+    },
+    USDm: {
+      symbol: "USDm",
+      address: "0xdE9e4C3ce781b4bA68120d6261cbad65ce0aB00b",
+      decimals: 18,
     },
   },
 };
