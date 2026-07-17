@@ -50,7 +50,7 @@ describe("parseInvoicePayment", () => {
       destinationTokenSymbol: "USDT",
       amountOut: "25",
       purpose: "content license",
-      sourceTokenSymbol: "USDT0",
+      sourceTokenSymbol: "USDC",
       paymentType: "INVOICE_PAYMENT",
     });
   });
@@ -60,13 +60,30 @@ describe("parseInvoicePayment", () => {
       invoice: [
         "Invoice ID: inv_789",
         "To: 0x1111111111111111111111111111111111111111",
-        "Chain ID: 196",
+        "Chain ID: 42220",
         "Currency: USDC",
         "Amount Due: 3.25",
       ].join("\n"),
     });
 
     assert.equal(parsed.purpose, "Invoice inv_789");
+  });
+
+  it("parses Celo aliases and preserves the USDm symbol casing", () => {
+    const parsed = parseInvoicePayment({
+      invoice: [
+        "Invoice ID: inv_celo",
+        "To: 0x1111111111111111111111111111111111111111",
+        "Chain: Celo Mainnet",
+        "Currency: USDm",
+        "Amount: 4.25",
+      ].join("\n"),
+    });
+
+    assert.equal(parsed.destinationChainId, 42220);
+    assert.equal(parsed.destinationChain, "Celo");
+    assert.equal(parsed.destinationTokenSymbol, "USDm");
+    assert.equal(parsed.sourceTokenSymbol, "USDC");
   });
 
   it("rejects invoices missing required payment fields", () => {

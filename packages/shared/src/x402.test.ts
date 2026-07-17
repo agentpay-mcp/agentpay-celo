@@ -80,8 +80,8 @@ describe("parseX402PaymentRequired", () => {
         destinationChain: "Base",
         destinationTokenSymbol: "USDC",
         amountOut: "0.01",
-        purpose: "x402 payment for Market API: Premium market data",
-        sourceTokenSymbol: "USDT0",
+        purpose: "x402 payment for Market API: Premium market data [x402-request:0x6883a5441c9fbe43f06d78857957414b515c003f7ba89a4bde6a9ef665874dbe]",
+        sourceTokenSymbol: "USDC",
         paymentType: "X402_PAYMENT",
       },
       standardX402SignatureRequired: true,
@@ -104,9 +104,9 @@ describe("parseX402PaymentRequired", () => {
           },
           {
             scheme: "exact",
-            network: "eip155:196",
+            network: "eip155:42220",
             amount: "2500000",
-            asset: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+            asset: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
             payTo: "0x1111111111111111111111111111111111111111",
             maxTimeoutSeconds: 60,
           },
@@ -114,8 +114,8 @@ describe("parseX402PaymentRequired", () => {
       }),
     });
 
-    assert.equal(parsed.selectedRequirement.chainId, 196);
-    assert.equal(parsed.selectedRequirement.tokenSymbol, "USDT0");
+    assert.equal(parsed.selectedRequirement.chainId, 42220);
+    assert.equal(parsed.selectedRequirement.tokenSymbol, "USDC");
     assert.equal(parsed.selectedRequirement.amount, "2.5");
     assert.equal(parsed.paymentInput.sourceTokenSymbol, "USDC");
     assert.equal(parsed.paymentInput.paymentType, "X402_PAYMENT");
@@ -140,6 +140,23 @@ describe("parseX402PaymentRequired", () => {
           }),
         }),
       /No AgentPay-supported x402 payment requirement/,
+    );
+  });
+
+  it("rejects duplicate retry headers after case normalization", () => {
+    assert.throws(
+      () =>
+        parseX402PaymentRequired({
+          paymentRequired: basePaymentRequired,
+          request: {
+            method: "GET",
+            headers: {
+              Accept: "application/json",
+              accept: "text/plain",
+            },
+          },
+        }),
+      /duplicate x402 retry header/i,
     );
   });
 });
@@ -172,7 +189,7 @@ describe("AgentPay x402 payment proof", () => {
         routeSummary: "Route to Base.",
         nonce: "42",
         deadline: "2026-07-03T12:15:00.000Z",
-        purpose: "x402 payment for Market API: Premium market data",
+        purpose: parsed.paymentInput.purpose,
         approvalPhrase: "APPROVE pay_x402",
         sourceTxHash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         destinationTxHash: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -240,7 +257,7 @@ describe("AgentPay x402 payment proof", () => {
         routeSummary: "Route to Base.",
         nonce: "42",
         deadline: "2026-07-03T12:15:00.000Z",
-        purpose: "x402 payment for Market API: Premium market data",
+        purpose: parsed.paymentInput.purpose,
         approvalPhrase: "APPROVE pay_7d5d747be160e280504c099d984bcfe0",
         sourceTxHash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         destinationTxHash: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
@@ -287,7 +304,7 @@ describe("AgentPay x402 payment proof", () => {
       routeSummary: "Route to Base.",
       nonce: "42",
       deadline: "2026-07-03T12:15:00.000Z",
-      purpose: "x402 payment for Market API: Premium market data",
+      purpose: parsed.paymentInput.purpose,
       approvalPhrase: "APPROVE pay_x402",
       sourceTxHash: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       destinationTxHash: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",

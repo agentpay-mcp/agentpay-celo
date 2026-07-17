@@ -1,4 +1,4 @@
-import { MAINNET_CHAIN_ID, MAINNET_USDT0_ADDRESS } from "./production-readiness.ts";
+import { MAINNET_CHAIN_ID, MAINNET_USDC_ADDRESS } from "./production-readiness.ts";
 import {
   DIRECT_PAYMENT_ROUTE_CALLDATA,
   DIRECT_PAYMENT_ROUTE_TARGET,
@@ -90,10 +90,10 @@ export function assertCanaryRequestShapeAllowed(
     throw new CanaryPolicyError("CANARY_ALLOWLIST", "x402 payer is outside the canary allowlist.");
   }
   if (intent.sourceChainId !== MAINNET_CHAIN_ID || intent.destinationChainId !== MAINNET_CHAIN_ID || intent.routeProvider !== "DIRECT") {
-    throw new CanaryPolicyError("CANARY_ROUTE", "Canary permits only direct chain-196 execution.");
+    throw new CanaryPolicyError("CANARY_ROUTE", "Canary permits only direct Celo mainnet execution.");
   }
-  if (intent.sourceTokenAddress.toLowerCase() !== MAINNET_USDT0_ADDRESS.toLowerCase() || intent.destinationTokenAddress.toLowerCase() !== MAINNET_USDT0_ADDRESS.toLowerCase()) {
-    throw new CanaryPolicyError("CANARY_ASSET", "Canary permits only mainnet USDT0.");
+  if (intent.sourceTokenAddress.toLowerCase() !== MAINNET_USDC_ADDRESS.toLowerCase() || intent.destinationTokenAddress.toLowerCase() !== MAINNET_USDC_ADDRESS.toLowerCase()) {
+    throw new CanaryPolicyError("CANARY_ASSET", "Canary permits only Celo mainnet USDC.");
   }
   const amountAtomic = decimalToAtomic6(intent.amountOut);
   if (amountAtomic > caps.maxInvoiceAtomic) {

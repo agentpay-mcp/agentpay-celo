@@ -1,10 +1,6 @@
 import { Interface, JsonRpcProvider, TypedDataEncoder, keccak256, toUtf8Bytes } from "ethers";
 
-const MAINNET_CHAIN_ID = 196;
-const MAINNET_USDT0_ADDRESS = "0x779Ded0c9e1022225f8E0630b35a9b54bE713736";
-export const MAINNET_USDC_ADDRESS = "0x74b7F16337b8972027F6196A17a631aC6dE26d22";
-const MAINNET_USDT0_CODE_HASH =
-  "0x4d9be648c5bf39973670d9f8b481d5d0b971e6a2db2deccc6b98cde21c5dd83e";
+import { MAINNET_CHAIN_ID, MAINNET_USDC_ADDRESS } from "../runtime/production-readiness.ts";
 export const MAINNET_ACCOUNT_CREATION_BYTECODE_HASH =
   "0x41fb5a4c59d1af753553e5dcf9e9ed345506ecaa8040298d17dc9c629fbd5b49";
 
@@ -42,8 +38,8 @@ export interface MainnetLogScanOptions {
 }
 
 /**
- * X Layer limits eth_getLogs requests to a 100-block range. Keep this read-only
- * scan bounded and retry transient provider throttling without ever widening the
+ * Keep this read-only Celo scan conservatively bounded and retry transient
+ * provider throttling without ever widening the
  * requested range or treating a partial scan as valid.
  */
 export async function fetchLogsInChunks(
@@ -115,7 +111,6 @@ export interface MainnetAccountVerificationReader {
     executor: string;
     paused: boolean;
     domainSeparator: string;
-    allowedUsdt0: boolean;
     allowedUsdc: boolean;
   }>;
   getTokenState(tokenAddress: string): Promise<{ code: string; decimals: number }>;
@@ -230,30 +225,29 @@ export async function verifyMainnetAccount(
     if (expected.domainSeparator) {
       check("manifest domain separator", account.domainSeparator.toLowerCase() === expected.domainSeparator.toLowerCase(), "Account domain separator does not match the manifest.");
     }
-    check("USDT0 allowlist", account.allowedUsdt0, "Mainnet USDT0 is not allowlisted on the AgentPay account.");
-    check("USDC allowlist", account.allowedUsdc === false, "USDC must not be allowlisted on the mainnet golden-path account.");
+    check("USDC allowlist", account.allowedUsdc, "Celo mainnet USDC is not allowlisted on the AgentPay account.");
   } catch {
     check("account state", false, "AgentPay account state could not be read.");
   }
 
   try {
-    const tokenAddress = expected.tokenAddress ?? MAINNET_USDT0_ADDRESS;
+    const tokenAddress = expected.tokenAddress ?? MAINNET_USDC_ADDRESS;
     const token = await reader.getTokenState(tokenAddress);
     const tokenCodeHash = token.code === "0x" ? undefined : keccak256(token.code).toLowerCase();
     observed.tokenCodeHash = tokenCodeHash;
     observed.tokenDecimals = token.decimals;
-    check("token code", Boolean(tokenCodeHash) && tokenCodeHash === expected.tokenCodeHash.toLowerCase(), "Mainnet USDT0 code hash does not match the manifest.");
-    check("token decimals", token.decimals === expected.tokenDecimals, "Mainnet USDT0 decimals do not match the manifest.");
+    check("token code", Boolean(tokenCodeHash) && tokenCodeHash === expected.tokenCodeHash.toLowerCase(), "Celo mainnet USDC code hash does not match the manifest.");
+    check("token decimals", token.decimals === expected.tokenDecimals, "Celo mainnet USDC decimals do not match the manifest.");
   } catch {
-    check("token state", false, "Mainnet USDT0 code or decimals could not be read.");
+    check("token state", false, "Celo mainnet USDC code or decimals could not be read.");
   }
 
   if (deploymentBlock !== undefined) {
     try {
       const events = await reader.getAllowlistEvents(expected.accountAddress, deploymentBlock);
       for (const event of events.tokenEvents) {
-        if (event.allowed && event.token.toLowerCase() !== MAINNET_USDT0_ADDRESS.toLowerCase()) {
-          errors.push(`Token allowlist event enables non-USDT0 token ${event.token}.`);
+        if (event.allowed && event.token.toLowerCase() !== MAINNET_USDC_ADDRESS.toLowerCase()) {
+          errors.push(`Token allowlist event enables non-USDC token ${event.token}.`);
         }
       }
       for (const event of events.routeTargetEvents) {
@@ -262,7 +256,7 @@ export async function verifyMainnetAccount(
         }
       }
       checks["allowlist event history"] = !events.tokenEvents.some(
-        (event) => event.allowed && event.token.toLowerCase() !== MAINNET_USDT0_ADDRESS.toLowerCase(),
+        (event) => event.allowed && event.token.toLowerCase() !== MAINNET_USDC_ADDRESS.toLowerCase(),
       ) && !events.routeTargetEvents.some((event) => event.allowed);
       if (!checks["allowlist event history"]) {
         checks["allowlist event history"] = false;
@@ -310,7 +304,6 @@ export function createEthersMainnetAccountVerificationReader(rpcUrl: string): Ma
         executor: await call<string>(accountAddress, "executor", [], []),
         paused: await call<boolean>(accountAddress, "paused", [], []),
         domainSeparator: await call<string>(accountAddress, "domainSeparator", [], []),
-        allowedUsdt0: await call<boolean>(accountAddress, "allowedTokens", [MAINNET_USDT0_ADDRESS], []),
         allowedUsdc: await call<boolean>(accountAddress, "allowedTokens", [MAINNET_USDC_ADDRESS], []),
       };
     },

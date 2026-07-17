@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { PaymentPayload, PaymentRequirements } from "@okxweb3/x402-core/types";
+import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
 
 import {
   canonicalJson,

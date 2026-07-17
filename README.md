@@ -1,164 +1,105 @@
 # AgentPay
 
-Owner-authorized stablecoin payments for AI agents.
+AgentPay is a plugin-first, MCP-first payment runtime for owner-authorized stablecoin payments on Celo. An AI agent can prepare the transaction, but the smart-account owner must sign the exact EIP-712 authorization before the executor can submit it.
 
-AgentPay is a plugin-first, MCP-first payment runtime that lets an AI agent prepare X Layer stablecoin payments while the owner keeps cryptographic authorization. It supports owner-signed direct same-chain USDT0/USDC transfers, owner-signed LI.FI swap and bridge routes, invoice parsing, x402 Bazaar service discovery, x402 payment parsing plus AgentPay receipt-proof retry, legacy/local guarded same-chain contract calls, and audit-friendly payment tracking.
+The Celo hackathon scope includes:
+
+- send payments in USDC, USDT, or USDm;
+- parse and pay invoices;
+- discover and purchase x402 services;
+- prepare batch payout workflows;
+- quote remittance and swap-and-pay routes;
+- make agent-to-agent payments with the same owner approval and audit trail.
+
+The submission name and product brand are both **AgentPay**. The main website remains [agentpay.site](https://agentpay.site); the Celo implementation lives in this standalone repository and does not modify the existing X Layer deployment.
 
 ## Quick Start
 
-Install AgentPay into a Codex, Claude, Cursor, Hermes, or generic MCP runtime:
+Install AgentPay in a project:
 
 ```bash
 npx @agentpay-ai/agentpay install
 ```
 
-The installer detects the target runtime when possible, accepts `--runtime codex|claude|cursor|generic|hermes`, installs runtime MCP config, and copies `skills/agentpay/SKILL.md`. By default the MCP config points to the authenticated consumer endpoint `https://wallet.agentpay.site/mcp`, so normal users do not need Supabase, RPC, executor, deployer, or bytecode config. Claude, Cursor, and Hermes installs also upsert `agentpay` into their native MCP config files so those runtimes can discover AgentPay tools directly. The separate paid public execution ASP is hosted at `https://mcp.agentpay.site/mcp` and is only used after Review & Sign.
+The installer detects the target runtime and connects normal chat usage to the authenticated consumer MCP endpoint at `https://wallet.agentpay.site/mcp`. The separate paid public execution endpoint is `https://mcp.agentpay.site/mcp` and is used only after Review & Sign. Normal users do not need Supabase, RPC, executor, deployer, or bytecode config. Return to the agent chat and ask:
 
-Reload or reconnect the agent runtime if needed. After that, return to chat and ask naturally:
-
-```txt
-Create an AgentPay wallet for me on X Layer testnet.
+```text
+Create an AgentPay wallet for me on Celo Sepolia.
 ```
 
-AgentPay supports X Layer mainnet and testnet. If the user does not name one, the agent should ask for mainnet or testnet before creating a wallet, checking balance, preparing admin actions, or preparing payments. Agent tools accept `network: "mainnet" | "testnet"` so users can switch networks per request without changing the install command.
+For an operator-managed deployment, use:
 
-Cross-chain routes are selected during quote or payment preparation, not during wallet setup. Create an X Layer mainnet or X Layer testnet AgentPay wallet first, then decide whether a specific payment stays on that network or uses a cross-chain route.
+```bash
+npx @agentpay-ai/agentpay install --self-hosted
+```
+
+Self-hosting generates local config and the pinned AgentPay smart-account bytecode.
 
 ## Chat Flow
 
-Wallet setup is driven from chat:
+AgentPay payment and balance tools support Celo mainnet or testnet (Celo Sepolia) through `network: "mainnet" | "testnet"`, and users can switch networks per request. Self-service chat wallet creation is currently available on Celo Sepolia. Mainnet uses an operator-managed account activation path guarded by the production readiness manifest and USDC-only canary. If the network is ambiguous, the agent asks before reading wallet state or preparing a payment.
 
-1. The user asks the agent to create an AgentPay wallet.
-2. The agent confirms the target X Layer network when it is ambiguous.
-3. The agent calls `prepare_wallet_creation` with the selected network and sends the setup signing link.
-4. The user signs in the browser wallet. This proves ownership only; it does not approve a payment.
-5. The agent calls `check_wallet_creation`.
-6. The agent returns the AgentPay smart account address.
-7. The user funds that smart account with supported USDT0/USDC on the same network.
+The normal self-service Celo Sepolia wallet flow is:
 
-Payments also stay in chat, with the owner signing the immutable payment details:
+1. The agent calls `prepare_wallet_creation` and gives the owner the Review & Sign URL.
+2. The owner signs the setup message with a Celo-compatible wallet.
+3. The agent calls `check_wallet_creation` and reports the AgentPay smart account address.
+4. The owner funds the account with supported Celo USDC, USDT, or USDm plus enough CELO for the relevant operational model.
 
-1. The user asks to pay a wallet, invoice, x402 prompt, paid API/service without a URL, route, or supported contract call.
-2. The agent confirms or carries forward the selected X Layer network, checks balance, parses inputs, quotes routes when useful, and calls `prepare_payment` or `prepare_contract_call`.
-3. The agent shows recipient, amount, token, chain, route, max spend, minimum output, exact native value, deadline, purpose, and the canonical EIP-712 authorization when the session is trusted.
-4. The owner opens the returned **Review & Sign** URL and signs the server-derived EIP-712 authorization in the wallet. The signature is the only payment authorization.
-5. The agent calls `get_payment_signature` to retrieve the tenant-scoped handoff, then hands the signed authorization to the public paid ASP's `execute_payment` tool, which verifies it and executes once before `track_payment` reports status.
+The normal payment flow is:
 
-Chat phrases such as `yes`, `ok`, or `APPROVE pay_123` are not payment authorization on the public/V2 surface. Exact approval phrases remain only as a local migration compatibility path.
+1. The agent confirms recipient, amount, token, network, destination, and purpose.
+2. It calls `get_agent_wallet` and `get_balance`; insufficient balance stops the flow before approval.
+3. It parses invoices or x402 requirements when relevant, and uses `quote_payment_route` for direct or LI.FI remittance routes.
+4. It calls `prepare_payment`, shows max spend, minimum output, exact native value, fee cap, deadline, target, and calldata hash.
+5. The Owner signs the exact EIP-712 authorization. The Executor can submit only that signed authorization.
+6. The agent calls `execute_payment`, then `track_payment`, and uses `list_payment_events` for the receipt and audit history.
 
-## Safety Model
+Vague confirmations such as “yes” never authorize execution. Exact approval text and an owner signature are separate safeguards; nonce replay protection, deadlines, token and target allowlists, spend caps, and audit events remain enforced.
 
-AgentPay separates ownership from execution.
+## x402 Service Purchases
 
-- Owner: the user's wallet that signs setup and submits admin transactions. Only the owner can pause, unpause, rotate the executor, allowlist tokens or route targets, cancel nonces, and withdraw funds.
-- Executor: the relayer wallet that submits prepared payment transactions. It can execute only through AgentPayAccountV2's guarded methods and only after the owner signature verifies.
-- Smart account guards: token allowlists, route-target allowlists, nonce checks, deadlines, max token spend, max native fee, calldata hash checks, balance checks, pause control, and approval reset after guarded calls.
-- Offchain guards: Supabase stores setup intents, tenant-bound payment intents, typed-data limits, status transitions, and `payment_events` audit history. Legacy approval phrases are retained only for migration records.
-- x402 support can search Bazaar with `search_x402_services` when the user does not provide a URL, prepare the selected service with `prepare_x402_service_request`, parse v2 `PAYMENT-REQUIRED`, execute an owner-signed AgentPay payment, and retry the protected resource with `X-PAYMENT` / `PAYMENT-SIGNATURE` headers containing an AgentPay receipt proof. The retry reads the V2 `PAYMENT-RESPONSE` header, keeps legacy `X-PAYMENT-RESPONSE` fallback, and appends `payment-identifier` idempotency data when the server advertises it. Strict standard x402 exact endpoints must support that AgentPay receipt proof bridge or use their native signer/facilitator path.
+If the user wants a paid service without a URL, call `search_x402_services`, choose a Bazaar result, and call `prepare_x402_service_request`. Pass both its x402 v2 `PAYMENT-REQUIRED` response and exact request to `parse_x402_payment_required`; the URL, method, body, and safe headers are bound into the owner-signed purpose. Preserve `paymentType: "X402_PAYMENT"`, then use the same Review & Sign flow. If no request is supplied, the secure fallback is GET with no body.
 
-`doctor`, `setup-web`, `mcp`, and `serve-http` are self-hosted/operator commands, not the main user chat flow. Use `npx @agentpay-ai/agentpay install --self-hosted` when you intentionally want local operator config and bytecode, `npx @agentpay-ai/agentpay doctor` for self-hosted diagnostics, `npx @agentpay-ai/agentpay setup-web` only as a self-hosted fallback, and `npx @agentpay-ai/agentpay serve-http` when deploying a public MCP endpoint behind HTTPS for A2MCP listing.
+After `track_payment` returns `COMPLETED`, call `retry_x402_request`. AgentPay attaches its receipt proof, reads the v2 `PAYMENT-RESPONSE` header, and carries `payment-identifier` idempotency data when the service advertises it. This receipt bridge works only with services that support the AgentPay proof flow.
 
-## Public A2MCP Endpoint
+Self-hosted operators expose the public MCP endpoint with `agentpay serve-http`. The Celo x402 seller gate uses `AGENTPAY_A2MCP_PAYMENT_ENABLED`, canonical Celo USDC, `eip155:42220` or `eip155:11142220`, and `AGENTPAY_CELO_X402_API_KEY` for the hosted Celo facilitator. `/healthz` remains free.
 
-For OKX.AI A2MCP registration, deploy AgentPay behind a public HTTPS domain and run the Streamable HTTP MCP transport:
+## Components
+
+- `apps/mcp-server/` — MCP tools, OAuth/SIWE boundary, Celo RPC adapters, x402, LI.FI, Supabase repositories, and production readiness gates.
+- `apps/setup-web/` — setup and Review & Sign web flow.
+- `packages/shared/` — Celo chain/token metadata, schemas, typed authorization, invoice, and x402 helpers.
+- `packages/cli/` — the `@agentpay-ai/agentpay` installer and runtime templates.
+- `packages/skill/` — source for the installed `skills/agentpay/SKILL.md` instructions.
+- `contracts/` — non-upgradeable owner-signed smart accounts and Foundry tests.
+- `supabase/migrations/` — tenant, payment, audit, OAuth, canary, and Celo boundary migrations.
+
+## Self-Hosted Configuration
+
+Core staging/local values are `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CELO_RPC_URL`, and `EXECUTOR_PRIVATE_KEY`. Network switching uses `CELO_MAINNET_RPC_URL` and `CELO_SEPOLIA_RPC_URL`. Setup also needs `SETUP_DEPLOYER_PRIVATE_KEY` and the V2 account bytecode.
+
+Celo mainnet production is isolated and readiness-gated. Use `AGENTPAY_ENVIRONMENT=production`, `AGENTPAY_HOME_CHAIN_ID=42220`, `AGENTPAY_ACCOUNT_VERSION=v2`, `SUPABASE_PRODUCTION_URL`, `SUPABASE_PRODUCTION_SERVICE_ROLE_KEY`, `CELO_MAINNET_RPC_URL=https://forno.celo.org`, and the tracked Celo mainnet manifest. Generic or Sepolia aliases are rejected by the production surface.
+
+The bounded first canary is canonical Celo USDC only, one lifecycle, no route target, and no silent expansion to USDT or USDm. Broader token and route support is enabled only after the canary gates pass.
+
+Contract commands:
 
 ```bash
-npx @agentpay-ai/agentpay serve-http --host 0.0.0.0 --port 3001
+npm run contracts:deploy:celo
+npm run contracts:deploy:celo:sepolia
 ```
 
-Expose `/mcp` through your HTTPS reverse proxy or platform route, and use `/healthz` for uptime checks. The Node server listens over HTTP internally; TLS should terminate at the deployment platform, load balancer, or reverse proxy.
+These commands broadcast transactions and therefore require explicit operator approval and funded keys.
 
-For OKX.AI listing, protect `/mcp` with the **OKX Agent Payments Protocol** seller gate. Set `AGENTPAY_A2MCP_PAYMENT_ENABLED=true`, `AGENTPAY_A2MCP_PAYMENT_PAY_TO`, `AGENTPAY_A2MCP_PAYMENT_PRICE`, and OKX facilitator credentials (`OKX_APP_API_KEY`, `OKX_APP_SECRET_KEY`, `OKX_APP_PASSPHRASE`) or `AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL`. Unpaid MCP calls then return HTTP `402` with `PAYMENT-REQUIRED`; paid calls are verified, settled, and returned with `PAYMENT-RESPONSE`. `/healthz` remains free.
-
-## Repository Layout
-
-- `apps/mcp-server/` - AgentPay MCP tools, runtime wiring, Supabase, Ethers, and LI.FI adapters.
-- `apps/setup-web/` - setup/signing web server for wallet ownership proof and account deployment.
-- `packages/cli/` - published `@agentpay-ai/agentpay` installer and runtime templates.
-- `packages/skill/` - AgentPay `SKILL.md` and OpenAI/Codex metadata.
-- `packages/shared/` - schemas, chain/token metadata, approval helpers, and intent types.
-- `contracts/` - Foundry smart account, deploy scripts, and Solidity tests.
-- `supabase/migrations/` - tables, indexes, RLS, setup intents, payment intents, wallets, and audit events.
-
-## Development Commands
-
-Use workspace-specific tests while iterating, then run the full checks before handoff.
+## Verification
 
 ```bash
 npm test
-npm run test:e2e
 npm run typecheck
 npm run build
-npm run demo:local
 npm run release:smoke
 npm audit --audit-level=high
 ```
 
-Useful targeted commands:
-
-```bash
-npm --workspace @agentpay-ai/mcp-server test
-npm --workspace @agentpay-ai/setup-web test
-npm run test:e2e
-npm --workspace @agentpay-ai/agentpay test
-cd contracts && forge test
-cd contracts && forge fmt --check
-```
-
-`npm run demo:local` runs an in-memory wallet setup and migration-compatible local payment flow with no Supabase, RPC credentials, or private keys.
-
-`npm run release:smoke` packs `@agentpay-ai/skill`, `@agentpay-ai/shared`, `@agentpay-ai/mcp-server`, `@agentpay-ai/setup-web`, and `@agentpay-ai/agentpay` into local tarballs, installs them into a temporary project, verifies the hosted MCP config, then runs `agentpay install --self-hosted` plus `agentpay doctor` with dummy non-secret config. Run it before publishing npm packages.
-
-## Self-Hosted Configuration
-
-Hosted user installs do not require local config. The self-hosted config and server environment use these core values:
-
-- `SUPABASE_URL`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `XLAYER_RPC_URL` as the fallback RPC
-- `XLAYER_MAINNET_RPC_URL` and `XLAYER_TESTNET_RPC_URL` for per-request network switching
-- `EXECUTOR_PRIVATE_KEY`
-- `SETUP_DEPLOYER_PRIVATE_KEY`
-- `AGENTPAY_ACCOUNT_BYTECODE_PATH` or `AGENTPAY_ACCOUNT_BYTECODE`
-- `AGENTPAY_ACCOUNT_VERSION=v2` and `AGENTPAY_ACCOUNT_BYTECODE_HASH` (mandatory for X Layer mainnet deployment)
-
-Optional values include `SETUP_WEB_URL`, `LIFI_API_KEY`, `AGENTPAY_OWNER_ADDRESS`, `AGENTPAY_EXECUTOR_ADDRESS`, `AGENTPAY_HOME_CHAIN_ID`, X Layer token overrides, `AGENTPAY_INITIAL_ROUTE_TARGETS`, and `SETUP_WEB_PORT`.
-
-X Layer testnet defaults to the OKX faucet stablecoins: USDT0 `0x9e29b3AaDa05Bf2D2c827Af80Bd28Dc0b9b4FB0c` and USDC `0xcB8BF24c6cE16Ad21D707c9505421a17f2bec79D`. Use `AGENTPAY_XLAYER_TESTNET_USDT0_ADDRESS` and `AGENTPAY_XLAYER_TESTNET_USDC_ADDRESS` only when you intentionally want custom test tokens.
-
-Use `X402_BAZAAR_FACILITATOR_URL` to override the default x402 Bazaar facilitator.
-
-Use `AGENTPAY_A2MCP_PAYMENT_*` and `OKX_APP_*` only for the public A2MCP seller endpoint. Keep these values server-side; they are not needed for local stdio MCP installs.
-
-Production is a separate, readiness-gated surface: set `AGENTPAY_ENVIRONMENT=production`, `AGENTPAY_HOME_CHAIN_ID=196`, `AGENTPAY_ACCOUNT_VERSION=v2`, `SUPABASE_PRODUCTION_URL`, `SUPABASE_PRODUCTION_SERVICE_ROLE_KEY`, and `XLAYER_MAINNET_RPC_URL`. The hosted surface uses the activated mainnet manifest and an operator-seeded singleton identity; it is currently `DEPLOYED`/`OFF`, so liveness is up but `/readyz` and public execution remain blocked until the account, contract, and canary gates are approved. `DIRECT_URL_PRODUCTION` is migration-admin-only. Production stdio and setup-web deployment remain disabled until their deployment gate is approved.
-Mainnet x402 payment cannot be enabled on a non-production or testnet public HTTP surface; the server rejects that mixed boundary at startup.
-
-Keep private keys and Supabase service-role keys server-side. Never paste secrets into chat.
-
-## Smart Account Deployment
-
-The setup web flow deploys the non-upgradeable owner-signed `AgentPayAccountV2`. Mainnet deployment is currently disabled at the setup boundary; the dedicated Foundry mainnet surface allows only X Layer USDT0 and no route targets. Testnet setup defaults to the OKX faucet USDT0 and USDC. The deployer rejects stale V1 or hybrid bytecode by checking the V2 selector fingerprint; X Layer mainnet additionally requires the exact creation-bytecode hash and explicit mainnet RPC mapping.
-
-For the approved mainnet Foundry surface, set `XLAYER_MAINNET_RPC_URL`, `SETUP_DEPLOYER_PRIVATE_KEY`, `AGENTPAY_OWNER_ADDRESS`, and `AGENTPAY_EXECUTOR_ADDRESS`, then run:
-
-```bash
-npm run contracts:deploy:xlayer
-```
-
-For testnet-only deployment, use `XLAYER_TESTNET_RPC_URL` and:
-
-```bash
-npm run contracts:deploy:xlayer:testnet
-```
-
-Use `npm run contracts:bytecode` when developing contracts and refreshing the packaged bytecode asset in `packages/cli/assets/AgentPayAccount.bin`.
-
-## Published Packages
-
-- `@agentpay-ai/agentpay` - CLI installer and `agentpay` binary.
-- `@agentpay-ai/skill` - agent skill pack.
-- `@agentpay-ai/shared` - shared schemas and helpers.
-- `@agentpay-ai/mcp-server` - MCP server runtime and tools.
-- `@agentpay-ai/setup-web` - setup and signing web server.
-
-External launch steps still require explicit operator approval for Supabase setup, X Layer deployment, npm publishing, and demo capture.
+The repository keeps the existing chat-first installer contract: normal users install, return to chat, create a Celo Sepolia wallet, fund it, and pay. Mainnet account activation, external Supabase provisioning, DNS changes, contract deployment, npm publishing, and GitHub push are separate operator actions.

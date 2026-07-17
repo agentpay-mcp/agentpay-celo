@@ -4,33 +4,64 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 
 import { getChainName } from "./chains.ts";
 import { evmAddressSchema, preparePaymentInputSchema, type PaymentIntentRecord } from "./payment-intent.ts";
-import { getStableTokenMetadata, STABLE_TOKEN_SYMBOLS, stableTokenSymbolSchema } from "./tokens.ts";
-import type { StableTokenSymbol } from "./tokens.ts";
+import { celoStableTokenSymbolSchema, getStableTokenMetadata, STABLE_TOKEN_SYMBOLS } from "./tokens.ts";
+import type { CeloStableTokenSymbol, StableTokenSymbol } from "./tokens.ts";
 
 const positiveIntegerStringSchema = z.string().regex(/^[1-9]\d*$/, "Expected a positive integer string");
 const PAYMENT_IDENTIFIER = "payment-identifier";
 const paymentIdentifierSchema = z.string().regex(/^[A-Za-z0-9_-]{16,128}$/);
+const retryX402HttpMethodSchema = z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).default("GET");
+export const X402_RETRY_SAFE_HEADER_NAMES = ["accept", "content-type"] as const;
+
+const x402RetryHeadersSchema = z
+  .record(z.string(), z.string())
+  .superRefine((headers, context) => {
+    const canonicalNames = new Set<string>();
+
+    for (const name of Object.keys(headers)) {
+      const canonicalName = name.toLowerCase();
+
+      if (!X402_RETRY_SAFE_HEADER_NAMES.includes(canonicalName as typeof X402_RETRY_SAFE_HEADER_NAMES[number])) {
+        continue;
+      }
+      if (canonicalNames.has(canonicalName)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Duplicate x402 retry header after case normalization: ${canonicalName}`,
+          path: [name],
+        });
+      }
+
+      canonicalNames.add(canonicalName);
+    }
+  })
+  .transform((headers) => Object.fromEntries(
+    Object.entries(headers)
+      .filter(([name]) => X402_RETRY_SAFE_HEADER_NAMES.includes(
+        name.toLowerCase() as typeof X402_RETRY_SAFE_HEADER_NAMES[number],
+      ))
+      .map(([name, value]) => [name.toLowerCase(), value]),
+  ));
+
+const x402RetryRequestSchema = z.object({
+  url: z.string().url().optional(),
+  method: retryX402HttpMethodSchema,
+  headers: x402RetryHeadersSchema.default({}),
+  body: z.string().optional(),
+});
 
 export const parseX402PaymentRequiredInputSchema = z.object({
   paymentRequired: z.union([z.string().trim().min(1), z.record(z.string(), z.unknown())]),
-  sourceTokenSymbol: stableTokenSymbolSchema.default("USDT0"),
+  sourceTokenSymbol: celoStableTokenSymbolSchema.default("USDC"),
+  request: x402RetryRequestSchema.default({ method: "GET", headers: {} }),
 });
 
 export type ParseX402PaymentRequiredInput = z.input<typeof parseX402PaymentRequiredInputSchema>;
 
-const retryX402HttpMethodSchema = z.enum(["GET", "POST", "PUT", "PATCH", "DELETE"]).default("GET");
-
 export const retryX402RequestInputSchema = z.object({
   paymentRequired: parseX402PaymentRequiredInputSchema.shape.paymentRequired,
   paymentIntentId: z.string().trim().min(1),
-  request: z
-    .object({
-      url: z.string().url().optional(),
-      method: retryX402HttpMethodSchema,
-      headers: z.record(z.string(), z.string()).default({}),
-      body: z.string().optional(),
-    })
-    .default({ method: "GET", headers: {} }),
+  request: x402RetryRequestSchema.default({ method: "GET", headers: {} }),
 });
 
 export type RetryX402RequestInput = z.input<typeof retryX402RequestInputSchema>;
@@ -94,7 +125,7 @@ export interface ParsedX402PaymentRequired {
     destinationTokenSymbol: StableTokenSymbol;
     amountOut: string;
     purpose: string;
-    sourceTokenSymbol: StableTokenSymbol;
+    sourceTokenSymbol: CeloStableTokenSymbol;
     paymentType: "X402_PAYMENT";
   };
   extensions?: {
@@ -147,7 +178,15 @@ export function parseX402PaymentRequired(rawInput: ParseX402PaymentRequiredInput
     throw new Error("No AgentPay-supported x402 payment requirement was found.");
   }
 
-  const purpose = createX402Purpose(paymentRequired.resource);
+  const requestUrl = input.request.url ?? paymentRequired.resource.url;
+
+  if (requestUrl !== paymentRequired.resource.url) {
+    throw new Error("x402 request URL must match the resource URL from the PAYMENT-REQUIRED response.");
+  }
+
+  const requirementHash = createX402RequirementBindingHash(paymentRequired.resource.url, selected);
+  const requestBindingHash = createX402RequestBindingHash(requirementHash, input.request);
+  const purpose = createX402Purpose(paymentRequired.resource, requestBindingHash);
   const paymentInput = preparePaymentInputSchema.parse({
     recipientAddress: selected.payTo,
     destinationChainId: selected.chainId,
@@ -249,10 +288,7 @@ export function createAgentPayX402PaymentProof(request: {
 }
 
 export function createX402RequirementHash(parsed: ParsedX402PaymentRequired): string {
-  return `0x${bytesToHex(keccak_256(new TextEncoder().encode(stableStringify({
-    resourceUrl: parsed.resource.url,
-    selectedRequirement: parsed.selectedRequirement,
-  }))))}`;
+  return createX402RequirementBindingHash(parsed.resource.url, parsed.selectedRequirement);
 }
 
 function decodePaymentRequired(paymentRequired: string | Record<string, unknown>): unknown {
@@ -323,6 +359,10 @@ function validateCompletedX402Intent(parsed: ParsedX402PaymentRequired, paymentI
 
   if (!matchesRequirement) {
     throw new Error(`Payment intent ${paymentIntent.id} does not match the x402 requirement.`);
+  }
+
+  if (paymentIntent.purpose !== parsed.paymentInput.purpose) {
+    throw new Error(`Payment intent ${paymentIntent.id} is not bound to the original x402 request.`);
   }
 }
 
@@ -429,10 +469,37 @@ function atomicToDecimal(amount: bigint, decimals: number): string {
   return fractional ? `${whole}.${fractional}` : whole;
 }
 
-function createX402Purpose(resource: z.infer<typeof x402ResourceInfoSchema>): string {
-  const details = [resource.serviceName, resource.description].filter(Boolean).join(": ") || resource.url;
+function createX402RequirementBindingHash(
+  resourceUrl: string,
+  selectedRequirement: ParsedX402PaymentRequired["selectedRequirement"],
+): string {
+  return `0x${bytesToHex(keccak_256(new TextEncoder().encode(stableStringify({
+    resourceUrl,
+    selectedRequirement,
+  }))))}`;
+}
 
-  return `x402 payment for ${details}`.slice(0, 280);
+function createX402RequestBindingHash(
+  requirementHash: string,
+  request: z.output<typeof x402RetryRequestSchema>,
+): string {
+  return `0x${bytesToHex(keccak_256(new TextEncoder().encode(stableStringify({
+    requirementHash,
+    method: request.method,
+    bodyHash: `0x${bytesToHex(keccak_256(new TextEncoder().encode(request.body ?? "")))}`,
+    headers: request.headers,
+  }))))}`;
+}
+
+function createX402Purpose(
+  resource: z.infer<typeof x402ResourceInfoSchema>,
+  requestBindingHash: string,
+): string {
+  const details = [resource.serviceName, resource.description].filter(Boolean).join(": ") || resource.url;
+  const bindingSuffix = ` [x402-request:${requestBindingHash}]`;
+  const prefix = `x402 payment for ${details}`;
+
+  return `${prefix.slice(0, 280 - bindingSuffix.length).trimEnd()}${bindingSuffix}`;
 }
 
 function stableStringify(value: unknown): string {

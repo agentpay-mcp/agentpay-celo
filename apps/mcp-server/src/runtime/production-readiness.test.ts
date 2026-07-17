@@ -5,6 +5,7 @@ import { describe, it } from "node:test";
 import type { PaymentIntentRecord } from "@agentpay-ai/shared";
 
 import {
+  MAINNET_USDC_ADDRESS,
   MAINNET_MIGRATION_HEAD,
   assertProductionExecutionAllowed,
   computeManifestSha256,
@@ -14,15 +15,15 @@ import {
 } from "./production-readiness.ts";
 
 const baseManifest = JSON.parse(
-  await readFile(new URL("../../../../ops/manifests/xlayer-mainnet.shadow.json", import.meta.url), "utf8"),
+  await readFile(new URL("../../../../test/fixtures/celo-mainnet.shadow.json", import.meta.url), "utf8"),
 ) as Record<string, any>;
 
 function productionEnv(): Record<string, string> {
   return {
     AGENTPAY_ENVIRONMENT: "production",
-    AGENTPAY_HOME_CHAIN_ID: "196",
+    AGENTPAY_HOME_CHAIN_ID: "42220",
     AGENTPAY_ACCOUNT_VERSION: "v2",
-    XLAYER_MAINNET_RPC_URL: "https://rpc.xlayer.tech/terigon",
+    CELO_MAINNET_RPC_URL: "https://forno.celo.org",
     SUPABASE_PRODUCTION_URL: "https://abcdefghijklmnopqrst.supabase.co",
     SUPABASE_PRODUCTION_SERVICE_ROLE_KEY: "service-role-key",
     DIRECT_URL_PRODUCTION: "postgresql://production.example.invalid/postgres",
@@ -63,8 +64,8 @@ function identityFor(manifest: Record<string, any>): RuntimeEnvironmentIdentity 
   return {
     id: 1,
     environment: "production",
-    chainId: 196,
-    caip2: "eip155:196",
+    chainId: 42220,
+    caip2: "eip155:42220",
     supabaseProjectRef: "abcdefghijklmnopqrst",
     migrationHead: manifest.database.migrationHead,
     releaseCommit: manifest.release.commit,
@@ -99,8 +100,8 @@ const exactPaymentConfig = {
   enabled: true,
   payTo: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
   price: "$0.01",
-  network: "eip155:196" as const,
-  asset: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+  network: "eip155:42220" as const,
+  asset: MAINNET_USDC_ADDRESS,
   assetDecimals: 6,
   syncSettle: true,
   facilitatorUrl: "https://facilitator.example.com",
@@ -108,7 +109,7 @@ const exactPaymentConfig = {
 
 describe("production readiness gate", () => {
   it("pins production readiness to the atomic payment audit migration", () => {
-    assert.equal(MAINNET_MIGRATION_HEAD, "20260715153000_payment_intent_atomic_audit");
+    assert.equal(MAINNET_MIGRATION_HEAD, "20260717120000_celo_home_chain_boundary");
     assert.equal(baseManifest.database.migrationHead, MAINNET_MIGRATION_HEAD);
     assert.equal(baseManifest.release.migrationHead, MAINNET_MIGRATION_HEAD);
   });
@@ -118,12 +119,12 @@ describe("production readiness gate", () => {
     assert.equal(valid.valid, true, valid.errors.join("; "));
 
     const invalid = productionEnv();
-    invalid.XLAYER_RPC_URL = "https://testrpc.xlayer.tech/terigon";
-    invalid.XLAYER_TESTNET_RPC_URL = "https://testrpc.xlayer.tech/terigon";
+    invalid.CELO_RPC_URL = "https://forno.celo-sepolia.celo-testnet.org";
+    invalid.CELO_SEPOLIA_RPC_URL = "https://forno.celo-sepolia.celo-testnet.org";
     invalid.SUPABASE_URL = "https://qwywcungxmhoctmehcze.supabase.co";
     invalid.AGENTPAY_A2MCP_PAYMENT_ENABLED = "true";
     assert.equal(validateProductionEnvironment(invalid).valid, false);
-    assert.match(validateProductionEnvironment(invalid).errors.join("; "), /XLAYER_RPC_URL|SUPABASE_URL|testnet/i);
+    assert.match(validateProductionEnvironment(invalid).errors.join("; "), /CELO_RPC_URL|SUPABASE_URL|testnet/i);
 
   });
 
@@ -238,9 +239,9 @@ describe("production readiness gate", () => {
 
     const routeIntent = {
       id: "pay_route",
-      sourceChainId: 196,
+      sourceChainId: 42220,
       destinationChainId: 8453,
-      sourceTokenSymbol: "USDT0",
+      sourceTokenSymbol: "USDC",
       destinationTokenSymbol: "USDC",
       sourceTokenAddress: manifest.token.address,
       destinationTokenAddress: "0x1111111111111111111111111111111111111111",
@@ -252,16 +253,19 @@ describe("production readiness gate", () => {
     );
   });
 
-  it("rejects an insecure custom OKX base URL", async () => {
+  it("rejects the hosted Celo facilitator when its API key is missing", async () => {
     const result = await evaluateProductionReadiness({
       env: productionEnv(),
       manifest: readyManifest(),
       identity: identityFor(readyManifest()),
       accountVerification: { valid: true, errors: [], checks: {} },
-      paymentConfig: { ...exactPaymentConfig, okxBaseUrl: "http://127.0.0.1:8080" },
+      paymentConfig: {
+        ...exactPaymentConfig,
+        facilitatorUrl: "https://api.x402.celo.org",
+      },
     });
 
     assert.equal(result.ready, false);
-    assert.match(result.errors.join("; "), /OKX base URL/i);
+    assert.match(result.errors.join("; "), /CELO_X402_API_KEY/i);
   });
 });

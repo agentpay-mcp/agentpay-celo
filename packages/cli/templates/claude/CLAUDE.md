@@ -1,6 +1,6 @@
 # AgentPay Instructions
 
-Use AgentPay for owner-authorized X Layer and cross-chain stablecoin payments through the AgentPay MCP server. Guarded same-chain contract-call execution remains local/migration-only until a dedicated V2 typed authorization exists.
+Use AgentPay for owner-authorized Celo stablecoin payments, invoices, x402 purchases, batch payouts, remittance routes, and agent-to-agent payments through the AgentPay MCP server. Guarded same-chain contract-call execution remains local/migration-only until a dedicated V2 typed authorization exists.
 
 If AgentPay tools are unavailable and local command execution is available, ask for explicit approval before running `npx @agentpay-ai/agentpay install`. The default install connects to the authenticated consumer AgentPay MCP at `https://wallet.agentpay.site/mcp`, so users do not need Supabase, RPC, executor, deployer, or bytecode config. The separate paid public execution ASP is `https://mcp.agentpay.site/mcp` and is used only after Review & Sign. Ask them to reload or reconnect the runtime if needed, then return to the agent chat. Use `npx @agentpay-ai/agentpay doctor` only for self-hosted/operator diagnostics. Use `npx @agentpay-ai/agentpay setup-web` only for self-hosted/operator fallback when the setup/signing page cannot be served through the hosted agent flow. If command execution is unavailable, explain that AgentPay cannot be installed or checked from this session.
 
@@ -8,11 +8,11 @@ Use AgentPay MCP tools only. Never bypass AgentPay with raw RPC calls, manual wa
 
 Wallet onboarding happens in chat after install: use `prepare_wallet_creation`, give the setup signing link, wait for the user to sign, then use `check_wallet_creation`. The setup signature proves ownership only; the setup signature is not payment approval and must never be treated as approval to spend.
 
-AgentPay supports X Layer mainnet and testnet. If the user does not clearly name one, ask whether they want mainnet or testnet before wallet, balance, route-target, admin, contract-call, quote, or payment preparation tools. Pass the selected value as `network: "mainnet" | "testnet"` whenever available. Users can switch networks per request; do not treat wallet, balance, allowlist, or payment state from one network as valid on the other.
+AgentPay payment and balance tools support Celo mainnet and Celo Sepolia. Self-service chat wallet creation is currently available on Celo Sepolia; mainnet uses an operator-managed, readiness-gated account path. If the user does not clearly name one, ask whether they want mainnet or testnet before wallet, balance, route-target, admin, contract-call, quote, or payment preparation tools. Pass the selected value as `network: "mainnet" | "testnet"` whenever available. Users can switch networks per request; do not treat wallet, balance, allowlist, or payment state from one network as valid on the other.
 
-Cross-chain routes are payment-time choices, not wallet-creation choices. Create the wallet on X Layer mainnet or X Layer testnet first, then decide during quote or payment preparation whether the payment stays on that network or uses a cross-chain route.
+Cross-chain routes are payment-time choices, not wallet-creation choices. Create a Celo Sepolia wallet through chat, or use an already activated operator-managed Celo mainnet account, then decide during quote or payment preparation whether the payment stays on Celo or uses a remittance route.
 
-Balance workflow: when the user asks to check AgentPay balance, confirm mainnet or testnet if missing, call `get_agent_wallet`, then call `get_balance` with the same network. Report the AgentPay smart account address, network, USDT0, USDC, and native OKB balances. Never use raw wallet balances, exchange balances, or generic RPC balance as AgentPay balance.
+Balance workflow: when the user asks to check AgentPay balance, confirm mainnet or testnet if missing, call `get_agent_wallet`, then call `get_balance` with the same network. Report the AgentPay smart account address, network, USDC, USDT, USDm, and native CELO balances. Never use raw wallet balances, exchange balances, or generic RPC balance as AgentPay balance.
 
 Payment workflow: call `quote_payment_route` when previewing direct paths, cross-chain routes, source token, fee, native fee, ETA, or max spend is useful. Then call `prepare_payment`, show all returned details, open the returned `reviewUrl`, and ask the owner to use Review & Sign for the EIP-712 signature. Poll `get_payment_signature`, then hand the signed `paymentIntentId` and signature to the public paid ASP's `execute_payment`; the consumer surface never executes directly. Then call `track_payment` plus `list_payment_events` for status or audit detail. The exact approval phrase is migration-only.
 
@@ -21,6 +21,8 @@ For invoice payments, call `parse_invoice_payment`, show the parsed fields, and 
 If the user wants a paid x402/API service but does not provide a URL, call `search_x402_services`, show Bazaar candidates, ask the user to choose one, collect required parameters, then call `prepare_x402_service_request`.
 
 For x402 v2 `PAYMENT-REQUIRED` responses, including Bazaar-prepared responses, call `parse_x402_payment_required`, show the parsed resource and selected payment requirement, preserve `paymentType: "X402_PAYMENT"`, complete the normal Review & Sign owner-signature flow, then call `retry_x402_request` after `track_payment` returns `COMPLETED`. This attaches AgentPay receipt proof as `X-PAYMENT` and `PAYMENT-SIGNATURE`, reads V2 `PAYMENT-RESPONSE`, and includes `payment-identifier` idempotency data when advertised; do not claim universal x402 facilitator compatibility unless the merchant supports this AgentPay proof bridge.
+
+Pass the exact x402 request into both parse and retry. Its URL, method, body, and safe headers are bound into the owner-signed purpose; omission is allowed only for the GET-without-body fallback.
 
 For owner controls such as pause, unpause, executor rotation, nonce cancellation, token allowlist changes, or withdrawals, call `prepare_account_admin_transaction` and ask the owner wallet to submit the returned transaction. This is not payment approval.
 

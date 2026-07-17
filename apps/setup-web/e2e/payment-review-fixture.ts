@@ -100,9 +100,9 @@ export async function createPaymentReviewE2eFixture() {
     const prepared = await preparePayment(
       {
         recipientAddress,
-        destinationChainId: 1952,
-        destinationTokenSymbol: "USDT0",
-        sourceTokenSymbol: "USDT0",
+        destinationChainId: 11142220,
+        destinationTokenSymbol: "USDC",
+        sourceTokenSymbol: "USDC",
         amountOut: "1",
         purpose: "I-002.5 browser integration proof",
         paymentType: "INVOICE_PAYMENT",
@@ -115,7 +115,7 @@ export async function createPaymentReviewE2eFixture() {
               tenantId,
               ownerAddress: owner.address,
               accountAddress,
-              homeChainId: 1952,
+              homeChainId: 11142220,
               executorAddress,
               status: "ACTIVE",
             };
@@ -123,7 +123,7 @@ export async function createPaymentReviewE2eFixture() {
         },
         routes: {
           async quotePaymentRoute() {
-            throw new Error("The direct X Layer testnet path must not call a route provider.");
+            throw new Error("The direct Celo testnet path must not call a route provider.");
           },
         },
         balances: {
@@ -137,7 +137,7 @@ export async function createPaymentReviewE2eFixture() {
         createId: () => "pay_review_e2e",
         createNonce: () => "25",
         createReviewToken: () => rawReviewToken,
-        homeChainId: 1952,
+        homeChainId: 11142220,
         tenantId,
         setupWebUrl: server.url,
         reviewTokenSecret: reviewSecret,

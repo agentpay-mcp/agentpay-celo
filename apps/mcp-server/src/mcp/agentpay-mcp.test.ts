@@ -170,7 +170,7 @@ describe("registerAgentPayMcpTools", () => {
           },
           missingParameters: [],
           instructionToAgent:
-            "Call parse_x402_payment_required with paymentRequired, then run the Review & Sign owner-authorization flow before retry_x402_request.",
+            "Call parse_x402_payment_required with paymentRequired and the exact request so its method and body are bound, then run the Review & Sign owner-authorization flow before retry_x402_request.",
         };
       },
     });
@@ -215,7 +215,7 @@ describe("registerAgentPayMcpTools", () => {
           chain: "X Layer",
           balances: [
             {
-              tokenSymbol: "USDT0",
+              tokenSymbol: "USDC",
               tokenAddress: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
               amount: "12.5",
               decimals: 18,
@@ -237,9 +237,9 @@ describe("registerAgentPayMcpTools", () => {
     assert.ok(registered);
     assert.match(String(registered.metadata.description), /Read AgentPay wallet token balances/);
 
-    const result = await registered.handler({ tokenSymbols: ["USDT0"] });
+    const result = await registered.handler({ tokenSymbols: ["USDC"] });
 
-    assert.deepEqual(balanceInputs, [{ tokenSymbols: ["USDT0"] }]);
+    assert.deepEqual(balanceInputs, [{ tokenSymbols: ["USDC"] }]);
     assert.deepEqual(result, {
       content: [
         {
@@ -255,7 +255,7 @@ describe("registerAgentPayMcpTools", () => {
         chain: "X Layer",
         balances: [
           {
-            tokenSymbol: "USDT0",
+            tokenSymbol: "USDC",
             tokenAddress: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
             amount: "12.5",
             decimals: 18,
@@ -287,7 +287,7 @@ describe("registerAgentPayMcpTools", () => {
             destinationTokenSymbol: "USDC",
             amountOut: "10",
             purpose: "design bounty",
-            sourceTokenSymbol: "USDT0",
+            sourceTokenSymbol: "USDC",
             paymentType: "INVOICE_PAYMENT",
           },
           instructionToAgent:
@@ -314,7 +314,7 @@ describe("registerAgentPayMcpTools", () => {
     });
 
     assert.equal(invoiceInputs.length, 1);
-    assert.equal((invoiceInputs[0] as { sourceTokenSymbol: string }).sourceTokenSymbol, "USDT0");
+    assert.equal((invoiceInputs[0] as { sourceTokenSymbol: string }).sourceTokenSymbol, "USDC");
     assert.deepEqual((result as { structuredContent: unknown }).structuredContent, {
       status: "PARSED",
       invoiceId: "inv_runtime",
@@ -325,7 +325,7 @@ describe("registerAgentPayMcpTools", () => {
         destinationTokenSymbol: "USDC",
         amountOut: "10",
         purpose: "design bounty",
-        sourceTokenSymbol: "USDT0",
+        sourceTokenSymbol: "USDC",
         paymentType: "INVOICE_PAYMENT",
       },
       instructionToAgent:
@@ -365,13 +365,13 @@ describe("registerAgentPayMcpTools", () => {
             destinationChain: "Base",
             destinationTokenSymbol: "USDC",
             amountOut: "0.01",
-            purpose: "x402 payment for Market API: Premium market data",
-            sourceTokenSymbol: "USDT0",
+            purpose: "x402 payment for Market API: Premium market data [x402-request:0x6883a5441c9fbe43f06d78857957414b515c003f7ba89a4bde6a9ef665874dbe]",
+            sourceTokenSymbol: "USDC",
             paymentType: "X402_PAYMENT",
           },
           standardX402SignatureRequired: true,
           instructionToAgent:
-            "Review the x402 requirement with the user. Prepare payment with paymentInput, preserve paymentType: X402_PAYMENT, send the owner to Review & Sign for the EIP-712 authorization, execute with the verified signature, track until COMPLETED, then call retry_x402_request with the original PAYMENT-REQUIRED response and paymentIntentId.",
+            "Review the x402 requirement and bound request with the user. Prepare payment with paymentInput, preserve paymentType: X402_PAYMENT, send the owner to Review & Sign for the EIP-712 authorization, execute with the verified signature, track until COMPLETED, then call retry_x402_request with the original PAYMENT-REQUIRED response, exact same request, and paymentIntentId.",
         };
       },
     });
@@ -402,7 +402,7 @@ describe("registerAgentPayMcpTools", () => {
     });
 
     assert.equal(x402Inputs.length, 1);
-    assert.equal((x402Inputs[0] as { sourceTokenSymbol: string }).sourceTokenSymbol, "USDT0");
+    assert.equal((x402Inputs[0] as { sourceTokenSymbol: string }).sourceTokenSymbol, "USDC");
     assert.deepEqual((result as { structuredContent: unknown }).structuredContent, {
       status: "PARSED",
       x402Version: 2,
@@ -429,13 +429,13 @@ describe("registerAgentPayMcpTools", () => {
         destinationChain: "Base",
         destinationTokenSymbol: "USDC",
         amountOut: "0.01",
-        purpose: "x402 payment for Market API: Premium market data",
-        sourceTokenSymbol: "USDT0",
+        purpose: "x402 payment for Market API: Premium market data [x402-request:0x6883a5441c9fbe43f06d78857957414b515c003f7ba89a4bde6a9ef665874dbe]",
+        sourceTokenSymbol: "USDC",
         paymentType: "X402_PAYMENT",
       },
       standardX402SignatureRequired: true,
       instructionToAgent:
-        "Review the x402 requirement with the user. Prepare payment with paymentInput, preserve paymentType: X402_PAYMENT, send the owner to Review & Sign for the EIP-712 authorization, execute with the verified signature, track until COMPLETED, then call retry_x402_request with the original PAYMENT-REQUIRED response and paymentIntentId.",
+        "Review the x402 requirement and bound request with the user. Prepare payment with paymentInput, preserve paymentType: X402_PAYMENT, send the owner to Review & Sign for the EIP-712 authorization, execute with the verified signature, track until COMPLETED, then call retry_x402_request with the original PAYMENT-REQUIRED response, exact same request, and paymentIntentId.",
     });
   });
 
@@ -451,7 +451,6 @@ describe("registerAgentPayMcpTools", () => {
           requestUrl: "https://api.example.com/premium-data",
           method: "GET",
           httpStatus: 200,
-          paymentHeader: "eyJzY2hlbWUiOiJhZ2VudHBheS1yZWNlaXB0In0",
           paymentResponse: "settled",
           bodyText: "{\"ok\":true}",
           instructionToAgent: "x402 retry succeeded. Return the protected resource response to the user.",
@@ -492,7 +491,6 @@ describe("registerAgentPayMcpTools", () => {
       requestUrl: "https://api.example.com/premium-data",
       method: "GET",
       httpStatus: 200,
-      paymentHeader: "eyJzY2hlbWUiOiJhZ2VudHBheS1yZWNlaXB0In0",
       paymentResponse: "settled",
       bodyText: "{\"ok\":true}",
       instructionToAgent: "x402 retry succeeded. Return the protected resource response to the user.",
@@ -513,7 +511,7 @@ describe("registerAgentPayMcpTools", () => {
             pay: "10 USDC",
             recipientAddress: "0x1111111111111111111111111111111111111111",
             destinationChain: "Base",
-            sourceSpend: "10.2 USDT0",
+            sourceSpend: "10.2 USDC",
             maxNativeFee: "2500000000000000",
             maxNativeFeeDisplay: "0.0025 OKB",
             routeProvider: "LI.FI",
@@ -553,7 +551,7 @@ describe("registerAgentPayMcpTools", () => {
         destinationTokenSymbol: "USDC",
         amountOut: "10",
         purpose: "design bounty",
-        sourceTokenSymbol: "USDT0",
+        sourceTokenSymbol: "USDC",
         paymentType: "WALLET_PAYMENT",
       },
     ]);
@@ -572,7 +570,7 @@ describe("registerAgentPayMcpTools", () => {
           pay: "10 USDC",
           recipientAddress: "0x1111111111111111111111111111111111111111",
           destinationChain: "Base",
-          sourceSpend: "10.2 USDT0",
+          sourceSpend: "10.2 USDC",
           maxNativeFee: "2500000000000000",
           maxNativeFeeDisplay: "0.0025 OKB",
           routeProvider: "LI.FI",
@@ -604,7 +602,7 @@ describe("registerAgentPayMcpTools", () => {
             targetAddress: "0x8888888888888888888888888888888888888888",
             chainId: 196,
             chain: "X Layer",
-            sourceTokenSymbol: "USDT0",
+            sourceTokenSymbol: "USDC",
             maxTokenSpend: "7.5",
             maxNativeFee: "0",
             callDataHash: "0x40eed0325a12c6c6af8db2ea05450bfe21d6343b6fe955bff65045b67d9d5fe6",
@@ -635,7 +633,7 @@ describe("registerAgentPayMcpTools", () => {
       {
         targetAddress: "0x8888888888888888888888888888888888888888",
         callData: "0xaabbccdd",
-        sourceTokenSymbol: "USDT0",
+        sourceTokenSymbol: "USDC",
         maxTokenSpend: "7.5",
         maxNativeFee: "0",
         purpose: "mint access pass",
@@ -649,7 +647,7 @@ describe("registerAgentPayMcpTools", () => {
         targetAddress: "0x8888888888888888888888888888888888888888",
         chainId: 196,
         chain: "X Layer",
-        sourceTokenSymbol: "USDT0",
+        sourceTokenSymbol: "USDC",
         maxTokenSpend: "7.5",
         maxNativeFee: "0",
         callDataHash: "0x40eed0325a12c6c6af8db2ea05450bfe21d6343b6fe955bff65045b67d9d5fe6",
@@ -675,7 +673,7 @@ describe("registerAgentPayMcpTools", () => {
           sourceChain: "X Layer",
           destinationChainId: 8453,
           destinationChain: "Base",
-          sourceTokenSymbol: "USDT0",
+          sourceTokenSymbol: "USDC",
           sourceTokenAddress: "0x5555555555555555555555555555555555555555",
           destinationTokenSymbol: "USDC",
           destinationTokenAddress: "0x6666666666666666666666666666666666666666",
@@ -688,7 +686,7 @@ describe("registerAgentPayMcpTools", () => {
           requiresRouteTargetAllowlist: true,
           estimatedFee: "0.12",
           estimatedEtaSeconds: 120,
-          routeSummary: "Spend 10.2 USDT0 for an estimated 10.17 USDC.",
+          routeSummary: "Spend 10.2 USDC for an estimated 10.17 USDC.",
         };
       },
     });
@@ -712,7 +710,7 @@ describe("registerAgentPayMcpTools", () => {
         destinationChainId: 8453,
         destinationTokenSymbol: "USDC",
         amountOut: "10",
-        sourceTokenSymbol: "USDT0",
+        sourceTokenSymbol: "USDC",
       },
     ]);
     assert.deepEqual((result as { structuredContent: unknown }).structuredContent, {
@@ -722,7 +720,7 @@ describe("registerAgentPayMcpTools", () => {
       sourceChain: "X Layer",
       destinationChainId: 8453,
       destinationChain: "Base",
-      sourceTokenSymbol: "USDT0",
+      sourceTokenSymbol: "USDC",
       sourceTokenAddress: "0x5555555555555555555555555555555555555555",
       destinationTokenSymbol: "USDC",
       destinationTokenAddress: "0x6666666666666666666666666666666666666666",
@@ -735,7 +733,7 @@ describe("registerAgentPayMcpTools", () => {
       requiresRouteTargetAllowlist: true,
       estimatedFee: "0.12",
       estimatedEtaSeconds: 120,
-      routeSummary: "Spend 10.2 USDT0 for an estimated 10.17 USDC.",
+      routeSummary: "Spend 10.2 USDC for an estimated 10.17 USDC.",
     });
   });
 

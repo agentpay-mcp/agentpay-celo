@@ -11,7 +11,7 @@ describe("prepareContractCall", () => {
       {
         targetAddress: "0x8888888888888888888888888888888888888888",
         callData: "0xaabbccdd",
-        sourceTokenSymbol: "USDT0",
+        sourceTokenSymbol: "USDC",
         maxTokenSpend: "7.5",
         maxNativeFee: "250000000000000",
         purpose: "mint access pass",
@@ -25,7 +25,7 @@ describe("prepareContractCall", () => {
           getActiveWallet: async () => ({
             ownerAddress: "0x2222222222222222222222222222222222222222",
             accountAddress: "0x3333333333333333333333333333333333333333",
-            homeChainId: 196,
+            homeChainId: 42220,
             executorAddress: "0x4444444444444444444444444444444444444444",
             status: "ACTIVE",
           }),
@@ -39,9 +39,9 @@ describe("prepareContractCall", () => {
           hasSufficientTokenBalance: async (request) => {
             assert.deepEqual(request, {
               accountAddress: "0x3333333333333333333333333333333333333333",
-              chainId: 196,
-              tokenAddress: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
-              tokenSymbol: "USDT0",
+              chainId: 42220,
+              tokenAddress: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+              tokenSymbol: "USDC",
               requiredAmount: "7.5",
             });
             return true;
@@ -55,9 +55,9 @@ describe("prepareContractCall", () => {
     assert.equal(result.approvalPhrase, "APPROVE pay_contract");
     assert.deepEqual(result.summary, {
       targetAddress: "0x8888888888888888888888888888888888888888",
-      chainId: 196,
-      chain: "X Layer",
-      sourceTokenSymbol: "USDT0",
+      chainId: 42220,
+      chain: "Celo",
+      sourceTokenSymbol: "USDC",
       maxTokenSpend: "7.5",
       maxNativeFee: "250000000000000",
       callDataHash: "0x40eed0325a12c6c6af8db2ea05450bfe21d6343b6fe955bff65045b67d9d5fe6",
@@ -73,12 +73,12 @@ describe("prepareContractCall", () => {
         ownerAddress: "0x2222222222222222222222222222222222222222",
         status: "AWAITING_APPROVAL",
         paymentType: "CONTRACT_CALL",
-        sourceChainId: 196,
-        destinationChainId: 196,
-        sourceTokenAddress: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
-        sourceTokenSymbol: "USDT0",
-        destinationTokenAddress: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
-        destinationTokenSymbol: "USDT0",
+        sourceChainId: 42220,
+        destinationChainId: 42220,
+        sourceTokenAddress: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+        sourceTokenSymbol: "USDC",
+        destinationTokenAddress: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+        destinationTokenSymbol: "USDC",
         recipientAddress: "0x8888888888888888888888888888888888888888",
         amountOut: "7.5",
         maxAmountIn: "7.5",
@@ -87,7 +87,7 @@ describe("prepareContractCall", () => {
         routeTarget: "0x8888888888888888888888888888888888888888",
         routeCalldata: "0xaabbccdd",
         routeCalldataHash: "0x40eed0325a12c6c6af8db2ea05450bfe21d6343b6fe955bff65045b67d9d5fe6",
-        routeSummary: "Contract call to 0x8888888888888888888888888888888888888888 on X Layer.",
+        routeSummary: "Contract call to 0x8888888888888888888888888888888888888888 on Celo.",
         estimatedFee: "0",
         estimatedEtaSeconds: 0,
         nonce: "44",
@@ -105,7 +105,7 @@ describe("prepareContractCall", () => {
           {
             targetAddress: "0x8888888888888888888888888888888888888888",
             callData: "0x",
-            sourceTokenSymbol: "USDT0",
+            sourceTokenSymbol: "USDC",
             maxTokenSpend: "7.5",
             purpose: "empty call",
           },
@@ -143,7 +143,7 @@ describe("prepareContractCall", () => {
           {
             targetAddress: "0x8888888888888888888888888888888888888888",
             callData: "0xaabbccdd",
-            sourceTokenSymbol: "USDT0",
+            sourceTokenSymbol: "USDC",
             maxTokenSpend: "7.5",
             purpose: "mint access pass",
           },
@@ -159,7 +159,7 @@ describe("prepareContractCall", () => {
               getActiveWallet: async () => ({
                 ownerAddress: "0x2222222222222222222222222222222222222222",
                 accountAddress: "0x3333333333333333333333333333333333333333",
-                homeChainId: 196,
+                homeChainId: 42220,
                 executorAddress: "0x4444444444444444444444444444444444444444",
                 status: "ACTIVE",
               }),
@@ -174,7 +174,7 @@ describe("prepareContractCall", () => {
             },
           },
         ),
-      /Insufficient AgentPay USDT0 balance/,
+      /Insufficient AgentPay USDC balance/,
     );
 
     assert.deepEqual(saved, []);

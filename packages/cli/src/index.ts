@@ -22,17 +22,17 @@ import {
 
 const runtimeNames = ["codex", "claude", "cursor", "generic", "hermes"] as const;
 const DEFAULT_HOSTED_MCP_URL = "https://wallet.agentpay.site/mcp";
-const requiredConfigKeys = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "XLAYER_RPC_URL", "EXECUTOR_PRIVATE_KEY"] as const;
+const requiredConfigKeys = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "CELO_RPC_URL", "EXECUTOR_PRIVATE_KEY"] as const;
 const setupRequiredConfigKeys = [
   "SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
-  "XLAYER_RPC_URL",
+  "CELO_RPC_URL",
   "SETUP_DEPLOYER_PRIVATE_KEY",
 ] as const;
 const optionalConfigKeys = [
   "BASE_RPC_URL",
-  "XLAYER_MAINNET_RPC_URL",
-  "XLAYER_TESTNET_RPC_URL",
+  "CELO_MAINNET_RPC_URL",
+  "CELO_SEPOLIA_RPC_URL",
   "SETUP_WEB_URL",
   "LIFI_API_KEY",
   "LIFI_BASE_URL",
@@ -46,10 +46,12 @@ const optionalConfigKeys = [
   "AGENTPAY_SESSION_HASH_KEY",
   "AGENTPAY_REVIEW_TOKEN_SECRET",
   "AGENTPAY_ACCOUNT_ADDRESS",
-  "AGENTPAY_XLAYER_USDT0_ADDRESS",
-  "AGENTPAY_XLAYER_USDC_ADDRESS",
-  "AGENTPAY_XLAYER_TESTNET_USDT0_ADDRESS",
-  "AGENTPAY_XLAYER_TESTNET_USDC_ADDRESS",
+  "AGENTPAY_CELO_USDC_ADDRESS",
+  "AGENTPAY_CELO_USDT_ADDRESS",
+  "AGENTPAY_CELO_USDM_ADDRESS",
+  "AGENTPAY_CELO_SEPOLIA_USDC_ADDRESS",
+  "AGENTPAY_CELO_SEPOLIA_USDT_ADDRESS",
+  "AGENTPAY_CELO_SEPOLIA_USDM_ADDRESS",
   "AGENTPAY_ACCOUNT_BYTECODE_PATH",
   "AGENTPAY_ACCOUNT_BYTECODE",
   "AGENTPAY_ACCOUNT_VERSION",
@@ -67,10 +69,7 @@ const optionalConfigKeys = [
   "AGENTPAY_A2MCP_PAYMENT_SYNC_SETTLE",
   "AGENTPAY_A2MCP_PAYMENT_ASSET_TRANSFER_METHOD",
   "AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL",
-  "OKX_APP_API_KEY",
-  "OKX_APP_SECRET_KEY",
-  "OKX_APP_PASSPHRASE",
-  "OKX_APP_BASE_URL",
+  "AGENTPAY_CELO_X402_API_KEY",
 ] as const;
 const privateKeyPattern = /^0x[a-fA-F0-9]{64}$/;
 const hexDataPattern = /^0x(?:[a-fA-F0-9]{2})+$/;
@@ -406,12 +405,12 @@ function validateMcpConfig(env: Record<string, string | undefined>): AgentPayDoc
   const missing = requiredConfigKeys.filter((name) => !env[name]);
   const invalid = [
     env.SUPABASE_URL && !isHttpUrl(env.SUPABASE_URL) ? "SUPABASE_URL" : undefined,
-    env.XLAYER_RPC_URL && !isHttpUrl(env.XLAYER_RPC_URL) ? "XLAYER_RPC_URL" : undefined,
-    env.XLAYER_MAINNET_RPC_URL && !isHttpUrl(env.XLAYER_MAINNET_RPC_URL)
-      ? "XLAYER_MAINNET_RPC_URL"
+    env.CELO_RPC_URL && !isHttpUrl(env.CELO_RPC_URL) ? "CELO_RPC_URL" : undefined,
+    env.CELO_MAINNET_RPC_URL && !isHttpUrl(env.CELO_MAINNET_RPC_URL)
+      ? "CELO_MAINNET_RPC_URL"
       : undefined,
-    env.XLAYER_TESTNET_RPC_URL && !isHttpUrl(env.XLAYER_TESTNET_RPC_URL)
-      ? "XLAYER_TESTNET_RPC_URL"
+    env.CELO_SEPOLIA_RPC_URL && !isHttpUrl(env.CELO_SEPOLIA_RPC_URL)
+      ? "CELO_SEPOLIA_RPC_URL"
       : undefined,
     env.EXECUTOR_PRIVATE_KEY && !privateKeyPattern.test(env.EXECUTOR_PRIVATE_KEY)
       ? "EXECUTOR_PRIVATE_KEY"
@@ -438,12 +437,12 @@ async function validateSetupConfig(env: Record<string, string | undefined>): Pro
   ].filter((name): name is string => Boolean(name));
   const invalid = [
     env.SUPABASE_URL && !isHttpUrl(env.SUPABASE_URL) ? "SUPABASE_URL" : undefined,
-    env.XLAYER_RPC_URL && !isHttpUrl(env.XLAYER_RPC_URL) ? "XLAYER_RPC_URL" : undefined,
-    env.XLAYER_MAINNET_RPC_URL && !isHttpUrl(env.XLAYER_MAINNET_RPC_URL)
-      ? "XLAYER_MAINNET_RPC_URL"
+    env.CELO_RPC_URL && !isHttpUrl(env.CELO_RPC_URL) ? "CELO_RPC_URL" : undefined,
+    env.CELO_MAINNET_RPC_URL && !isHttpUrl(env.CELO_MAINNET_RPC_URL)
+      ? "CELO_MAINNET_RPC_URL"
       : undefined,
-    env.XLAYER_TESTNET_RPC_URL && !isHttpUrl(env.XLAYER_TESTNET_RPC_URL)
-      ? "XLAYER_TESTNET_RPC_URL"
+    env.CELO_SEPOLIA_RPC_URL && !isHttpUrl(env.CELO_SEPOLIA_RPC_URL)
+      ? "CELO_SEPOLIA_RPC_URL"
       : undefined,
     env.SETUP_DEPLOYER_PRIVATE_KEY && !privateKeyPattern.test(env.SETUP_DEPLOYER_PRIVATE_KEY)
       ? "SETUP_DEPLOYER_PRIVATE_KEY"
@@ -461,7 +460,7 @@ async function validateSetupConfig(env: Record<string, string | undefined>): Pro
       ? "AGENTPAY_REVIEW_TOKEN_SECRET"
       : undefined,
     env.AGENTPAY_ENVIRONMENT === "production" ? "production setup deployment surface" : undefined,
-    env.AGENTPAY_HOME_CHAIN_ID === "196" ? "mainnet setup deployment surface" : undefined,
+    env.AGENTPAY_HOME_CHAIN_ID === "42220" ? "mainnet setup deployment surface" : undefined,
     env.AGENTPAY_ACCOUNT_BYTECODE_PATH && !(await canReadFile(env.AGENTPAY_ACCOUNT_BYTECODE_PATH))
       ? "AGENTPAY_ACCOUNT_BYTECODE_PATH"
       : undefined,
@@ -558,15 +557,17 @@ function isPort(value: string): boolean {
 
 function isSetupHomeChainId(value: string): boolean {
   const parsed = Number(value);
-  return Number.isInteger(parsed) && [196, 1952].includes(parsed);
+  return Number.isInteger(parsed) && [42220, 11142220].includes(parsed);
 }
 
 function validateStableTokenOverrideAddresses(env: Record<string, string | undefined>): string[] {
   return [
-    "AGENTPAY_XLAYER_USDT0_ADDRESS",
-    "AGENTPAY_XLAYER_USDC_ADDRESS",
-    "AGENTPAY_XLAYER_TESTNET_USDT0_ADDRESS",
-    "AGENTPAY_XLAYER_TESTNET_USDC_ADDRESS",
+    "AGENTPAY_CELO_USDC_ADDRESS",
+    "AGENTPAY_CELO_USDT_ADDRESS",
+    "AGENTPAY_CELO_USDM_ADDRESS",
+    "AGENTPAY_CELO_SEPOLIA_USDC_ADDRESS",
+    "AGENTPAY_CELO_SEPOLIA_USDT_ADDRESS",
+    "AGENTPAY_CELO_SEPOLIA_USDM_ADDRESS",
   ].filter((name) => env[name] && !addressPattern.test(env[name]));
 }
 

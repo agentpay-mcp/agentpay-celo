@@ -6,7 +6,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { prepareAuthorizationCodeRequest, startAuthorization } from "@modelcontextprotocol/sdk/client/auth.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { Wallet } from "ethers";
-import type { PaymentPayload, PaymentRequirements } from "@okxweb3/x402-core/types";
+import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
 import { describe, it } from "node:test";
 
 import { createSessionContext, type SessionContext } from "@agentpay-ai/shared";
@@ -27,7 +27,7 @@ import type { CanaryLedgerStore } from "../runtime/paid-execution-canary-ledger.
 import { createInMemoryInvoiceExecutionOutboxStore } from "../services/paid-execution-outbox.ts";
 import { createInMemoryPaidExecutionLifecycleStore } from "../services/paid-execution-lifecycle.ts";
 import type { PaymentIntentRecord } from "@agentpay-ai/shared";
-import type { AgentPayMcpPaymentProcessor } from "./okx-agent-payment.ts";
+import type { AgentPayMcpPaymentProcessor } from "./celo-agent-payment.ts";
 import {
   resolveProductionReadiness,
   shouldVerifyMainnetAccountAtStartup,
@@ -42,11 +42,11 @@ describe("startAgentPayHttpServer", () => {
         startAgentPayHttpServer({
           env: {
             ...mcpEnv(),
-            AGENTPAY_HOME_CHAIN_ID: "1952",
+            AGENTPAY_HOME_CHAIN_ID: "11142220",
             AGENTPAY_A2MCP_PAYMENT_ENABLED: "true",
             AGENTPAY_A2MCP_PAYMENT_PAY_TO: "0x0000000000000000000000000000000000000002",
             AGENTPAY_A2MCP_PAYMENT_PRICE: "$0.01",
-            AGENTPAY_A2MCP_PAYMENT_NETWORK: "eip155:196",
+            AGENTPAY_A2MCP_PAYMENT_NETWORK: "eip155:42220",
             AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL: "https://facilitator.example.com",
           },
           hostname: "127.0.0.1",
@@ -184,8 +184,8 @@ describe("startAgentPayHttpServer", () => {
               setupUrl: "https://setup.example.com/setup?setup_intent_id=setup_http",
               messageToSign: "AgentPay setup intent setup_http",
               expiresAt: "2026-07-08T00:15:00.000Z",
-              homeChainId: 1952,
-              homeChain: "X Layer testnet",
+              homeChainId: 11142220,
+              homeChain: "Celo Sepolia",
             };
           },
         });
@@ -227,7 +227,7 @@ describe("startAgentPayHttpServer", () => {
     }
   });
 
-  it("rejects non-execute public methods before issuing an OKX payment challenge", async () => {
+  it("rejects non-execute public methods before issuing a Celo x402 challenge", async () => {
     let mcpServerWasCreated = false;
     const paymentProcessor = createPaymentProcessor({
       async processHTTPRequest(context) {
@@ -251,7 +251,7 @@ describe("startAgentPayHttpServer", () => {
                   accepts: [
                     {
                       scheme: "exact",
-                      network: "eip155:196",
+                      network: "eip155:42220",
                       asset: "0x0000000000000000000000000000000000000001",
                       amount: "10000",
                       payTo: "0x0000000000000000000000000000000000000002",
@@ -478,7 +478,7 @@ describe("startAgentPayHttpServer", () => {
           success: true,
           status: "success",
           transaction: `0x${"88".repeat(32)}`,
-          network: "eip155:196",
+          network: "eip155:42220",
           headers: {},
           requirements: createCanaryPaymentRequirements(),
         };
@@ -679,7 +679,7 @@ describe("startAgentPayHttpServer", () => {
           success: true,
           status: "success",
           transaction: `0x${"55".repeat(32)}`,
-          network: "eip155:196",
+          network: "eip155:42220",
           headers: {
             "PAYMENT-RESPONSE": Buffer.from(JSON.stringify({ success: true, transaction: `0x${"55".repeat(32)}` })).toString(
               "base64",
@@ -773,7 +773,7 @@ describe("startAgentPayHttpServer", () => {
           success: true,
           status: "success",
           transaction: `0x${"56".repeat(32)}`,
-          network: "eip155:196",
+          network: "eip155:42220",
           headers: {},
           requirements: createPaymentRequirements(),
         };
@@ -848,7 +848,7 @@ describe("startAgentPayHttpServer", () => {
           success: true,
           status: "success",
           transaction: `0x${"33".repeat(32)}`,
-          network: "eip155:196",
+          network: "eip155:42220",
           headers: { "PAYMENT-RESPONSE": "receipt" },
           requirements: createPaymentRequirements(),
         };
@@ -927,7 +927,7 @@ describe("startAgentPayHttpServer", () => {
           status: "failed",
           errorReason: "FACILITATOR_REJECTED",
           transaction: `0x${"66".repeat(32)}`,
-          network: "eip155:196",
+          network: "eip155:42220",
           headers: {},
           response: {
             status: 402,
@@ -1148,9 +1148,9 @@ describe("startAgentPayHttpServer", () => {
   it("skips the historical account scan only when the effective production mode is OFF", async () => {
     const directory = await mkdtemp(join(tmpdir(), "agentpay-off-readiness-test-"));
     const manifestPath = join(directory, "activated.json");
-    const manifest = JSON.parse(
-      await readFile(new URL("../../../../ops/manifests/xlayer-mainnet.activated.json", import.meta.url), "utf8"),
-    ) as Record<string, any>;
+    const manifest = makeDeployedProductionManifest(JSON.parse(
+      await readFile(new URL("../../../../test/fixtures/celo-mainnet.shadow.json", import.meta.url), "utf8"),
+    ) as Record<string, any>);
     await writeFile(manifestPath, JSON.stringify(manifest));
 
     const resolve = async (
@@ -1207,7 +1207,7 @@ describe("startAgentPayHttpServer", () => {
     const directory = await mkdtemp(join(tmpdir(), "agentpay-manifest-test-"));
     const manifestPath = join(directory, "shadow.json");
     const manifest = JSON.parse(
-      await readFile(new URL("../../../../ops/manifests/xlayer-mainnet.shadow.json", import.meta.url), "utf8"),
+      await readFile(new URL("../../../../test/fixtures/celo-mainnet.shadow.json", import.meta.url), "utf8"),
     ) as Record<string, unknown>;
     manifest.executionMode = "PUBLIC";
     await writeFile(
@@ -1511,7 +1511,7 @@ describe("startAgentPayHttpServer", () => {
       const challengeResponse = await fetch(localize("https://wallet.agentpay.site/oauth/siwe/challenge"), {
         method: "POST",
         headers: { "content-type": "application/json", cookie: browserCookie },
-        body: JSON.stringify({ authorizationId, ownerAddress: owner.address, chainId: 1952 }),
+        body: JSON.stringify({ authorizationId, ownerAddress: owner.address, chainId: 11142220 }),
       });
       assert.equal(challengeResponse.status, 200);
       const challenge = await challengeResponse.json() as { challengeId: string; message: string };
@@ -1564,7 +1564,7 @@ describe("startAgentPayHttpServer", () => {
       tenantId: "tenant_a",
       ownerAddress: "0x1111111111111111111111111111111111111111",
       accountAddress: "0x2222222222222222222222222222222222222222",
-      homeChainId: 1952,
+      homeChainId: 11142220,
       audience: "https://wallet.agentpay.site/mcp",
       environment: "staging",
       scopes: ["wallet:read"],
@@ -1616,7 +1616,7 @@ describe("startAgentPayHttpServer", () => {
       tenantId: "tenant_a",
       ownerAddress: "0x1111111111111111111111111111111111111111",
       accountAddress: "0x2222222222222222222222222222222222222222",
-      homeChainId: 1952,
+      homeChainId: 11142220,
       audience: "https://wallet.agentpay.site/mcp",
       environment: "staging",
       scopes: ["payment:read"],
@@ -1682,7 +1682,7 @@ function mcpEnv(): Record<string, string> {
   return {
     SUPABASE_URL: "https://agentpay.supabase.co",
     SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
-    XLAYER_RPC_URL: "https://rpc.xlayer.tech",
+    CELO_RPC_URL: "https://forno.celo-sepolia.celo-testnet.org",
     EXECUTOR_PRIVATE_KEY: `0x${"1".repeat(64)}`,
   };
 }
@@ -1690,12 +1690,12 @@ function mcpEnv(): Record<string, string> {
 function productionMcpEnv(): Record<string, string> {
   return {
     AGENTPAY_ENVIRONMENT: "production",
-    AGENTPAY_HOME_CHAIN_ID: "196",
+    AGENTPAY_HOME_CHAIN_ID: "42220",
     AGENTPAY_ACCOUNT_VERSION: "v2",
     SUPABASE_PRODUCTION_URL: "https://abcdefghijklmnopqrst.supabase.co",
     SUPABASE_PRODUCTION_SERVICE_ROLE_KEY: "service-role-key",
     DIRECT_URL_PRODUCTION: "postgresql://production.example.invalid/postgres",
-    XLAYER_MAINNET_RPC_URL: "https://rpc.xlayer.tech/terigon",
+    CELO_MAINNET_RPC_URL: "https://forno.celo.org",
     EXECUTOR_PRIVATE_KEY: `0x${"1".repeat(64)}`,
     SETUP_DEPLOYER_PRIVATE_KEY: `0x${"2".repeat(64)}`,
     AGENTPAY_SESSION_HASH_KEY: "s".repeat(64),
@@ -1711,8 +1711,8 @@ function productionIdentityFor(
   return {
     id: 1,
     environment: "production",
-    chainId: 196,
-    caip2: "eip155:196",
+    chainId: 42220,
+    caip2: "eip155:42220",
     supabaseProjectRef: manifest.database.projectRef,
     migrationHead: manifest.database.migrationHead,
     releaseCommit: manifest.release.commit,
@@ -1741,6 +1741,36 @@ function productionIdentityFor(
     executionMode,
     status: manifest.status,
   };
+}
+
+function makeDeployedProductionManifest(baseManifest: Record<string, any>): Record<string, any> {
+  const manifest = structuredClone(baseManifest);
+  const accountAddress = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+  manifest.kind = "agentpay-mainnet-activated-manifest";
+  manifest.status = "DEPLOYED";
+  manifest.executionMode = "OFF";
+  manifest.database.projectRef = "abcdefghijklmnopqrst";
+  manifest.release.commit = "a".repeat(40);
+  manifest.release.runtimeBytecodeKeccak256 = `0x${"1".repeat(64)}`;
+  manifest.release.abiSha256 = "2".repeat(64);
+  manifest.contract.address = accountAddress;
+  manifest.contract.deploymentTxHash = `0x${"3".repeat(64)}`;
+  manifest.contract.runtimeBytecodeHash = manifest.release.runtimeBytecodeKeccak256;
+  manifest.contract.ownerAddress = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+  manifest.contract.executorAddress = "0xcccccccccccccccccccccccccccccccccccccccc";
+  manifest.contract.deployerAddress = "0xdddddddddddddddddddddddddddddddddddddddd";
+  manifest.contract.paused = false;
+  manifest.contract.domain.verifyingContract = accountAddress;
+  manifest.domains.publicOrigin = "https://mcp.agentpay.site";
+  manifest.x402.enabled = false;
+  manifest.activation = {
+    sourceManifest: "celo-mainnet.shadow.json",
+    accountDeployment: "DEPLOYED",
+    executionEnabled: false,
+  };
+
+  return manifest;
 }
 
 function createRuntime(overrides: Partial<AgentPayRuntime> = {}): AgentPayRuntime {
@@ -1957,7 +1987,7 @@ function createPaymentProcessor(overrides: Partial<AgentPayMcpPaymentProcessor>)
       return {
         success: true,
         transaction: `0x${"77".repeat(32)}`,
-        network: "eip155:196",
+        network: "eip155:42220",
         headers: {},
         requirements: createPaymentRequirements(),
       };
@@ -1969,7 +1999,7 @@ function createPaymentProcessor(overrides: Partial<AgentPayMcpPaymentProcessor>)
 function createPaymentRequirements(): PaymentRequirements {
   return {
     scheme: "exact",
-    network: "eip155:196",
+    network: "eip155:42220",
     asset: "0x0000000000000000000000000000000000000001",
     amount: "1",
     payTo: "0x0000000000000000000000000000000000000002",
@@ -2009,8 +2039,8 @@ function createPermit2PaymentPayload(payer: string): PaymentPayload {
 function createCanaryPaymentRequirements(): PaymentRequirements {
   return {
     scheme: "exact",
-    network: "eip155:196",
-    asset: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
+    network: "eip155:42220",
+    asset: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
     amount: "10000",
     payTo: "0x0000000000000000000000000000000000000002",
     maxTimeoutSeconds: 300,
@@ -2040,12 +2070,12 @@ function canaryIntent(): PaymentIntentRecord {
     ownerAddress: policy.allowlist.ownerAddress,
     status: "AWAITING_APPROVAL",
     paymentType: "WALLET_PAYMENT",
-    sourceChainId: 196,
-    destinationChainId: 196,
-    sourceTokenAddress: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
-    sourceTokenSymbol: "USDT0",
-    destinationTokenAddress: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
-    destinationTokenSymbol: "USDT0",
+    sourceChainId: 42220,
+    destinationChainId: 42220,
+    sourceTokenAddress: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+    sourceTokenSymbol: "USDC",
+    destinationTokenAddress: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+    destinationTokenSymbol: "USDC",
     recipientAddress: policy.allowlist.recipientAddress,
     amountOut: "0.10",
     maxAmountIn: "0.10",
@@ -2096,12 +2126,12 @@ function reservationIntent(): PaymentIntentRecord {
     ownerAddress: "0x4444444444444444444444444444444444444444",
     status: "AWAITING_APPROVAL",
     paymentType: "WALLET_PAYMENT",
-    sourceChainId: 196,
-    destinationChainId: 196,
+    sourceChainId: 42220,
+    destinationChainId: 42220,
     sourceTokenAddress: "0x5555555555555555555555555555555555555555",
-    sourceTokenSymbol: "USDT0",
+    sourceTokenSymbol: "USDC",
     destinationTokenAddress: "0x5555555555555555555555555555555555555555",
-    destinationTokenSymbol: "USDT0",
+    destinationTokenSymbol: "USDC",
     recipientAddress: "0x6666666666666666666666666666666666666666",
     amountOut: "1",
     maxAmountIn: "1",

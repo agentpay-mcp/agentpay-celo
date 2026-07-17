@@ -37,9 +37,9 @@ describe("publishable AgentPay package manifests", () => {
   it("keeps mainnet and testnet deployment commands explicit", async () => {
     const rootManifest = await readPackageJson(".");
 
-    assert.match(rootManifest.scripts?.["contracts:deploy:xlayer"] ?? "", /XLAYER_MAINNET_RPC_URL/);
-    assert.match(rootManifest.scripts?.["contracts:deploy:xlayer:testnet"] ?? "", /XLAYER_TESTNET_RPC_URL/);
-    assert.equal(rootManifest.scripts?.["contracts:deploy:xlayer:legacy"], undefined);
+    assert.match(rootManifest.scripts?.["contracts:deploy:celo"] ?? "", /CELO_MAINNET_RPC_URL/);
+    assert.match(rootManifest.scripts?.["contracts:deploy:celo:sepolia"] ?? "", /CELO_SEPOLIA_RPC_URL/);
+    assert.equal(rootManifest.scripts?.["contracts:deploy:xlayer"], undefined);
   });
 
   it("keeps the npx install dependency chain publishable", async () => {
@@ -99,8 +99,8 @@ describe("publishable AgentPay package manifests", () => {
         zod: rootManifest.dependencies.zod,
       },
       "@agentpay-ai/mcp-server": {
-        "@okxweb3/x402-core": rootManifest.dependencies["@okxweb3/x402-core"],
-        "@okxweb3/x402-evm": rootManifest.dependencies["@okxweb3/x402-evm"],
+        "@x402/core": rootManifest.dependencies["@x402/core"],
+        "@x402/evm": rootManifest.dependencies["@x402/evm"],
         "@supabase/supabase-js": rootManifest.dependencies["@supabase/supabase-js"],
         ethers: rootManifest.dependencies.ethers,
       },
@@ -179,10 +179,10 @@ describe("publishable AgentPay package manifests", () => {
     const manifest = await readPackageJson("apps/mcp-server");
 
     assert.ok(manifest.files.includes("src/mcp/http.ts"));
-    assert.ok(manifest.files.includes("src/mcp/okx-agent-payment.ts"));
+    assert.ok(manifest.files.includes("src/mcp/celo-agent-payment.ts"));
     assert.ok(manifest.files.includes("src/runtime/paid-execution-canary-ledger.ts"));
     await access("apps/mcp-server/src/mcp/http.ts");
-    await access("apps/mcp-server/src/mcp/okx-agent-payment.ts");
+    await access("apps/mcp-server/src/mcp/celo-agent-payment.ts");
     await access("apps/mcp-server/src/runtime/paid-execution-canary-ledger.ts");
   });
 });

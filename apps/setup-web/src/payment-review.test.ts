@@ -29,12 +29,12 @@ const intent: PaymentIntentRecord = {
   ownerAddress: owner.address,
   status: "AWAITING_APPROVAL",
   paymentType: "WALLET_PAYMENT",
-  sourceChainId: 196,
-  destinationChainId: 196,
-  sourceTokenAddress: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
-  sourceTokenSymbol: "USDT0",
-  destinationTokenAddress: "0x779Ded0c9e1022225f8E0630b35a9b54bE713736",
-  destinationTokenSymbol: "USDT0",
+  sourceChainId: 42220,
+  destinationChainId: 42220,
+  sourceTokenAddress: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+  sourceTokenSymbol: "USDC",
+  destinationTokenAddress: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+  destinationTokenSymbol: "USDC",
   recipientAddress: "0x1111111111111111111111111111111111111111",
   amountOut: "1",
   maxAmountIn: "1",
@@ -43,7 +43,7 @@ const intent: PaymentIntentRecord = {
   routeTarget: "0x0000000000000000000000000000000000000000",
   routeCalldata: "0x",
   routeCalldataHash: "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",
-  routeSummary: "Direct 1 USDT0 transfer on X Layer.",
+  routeSummary: "Direct 1 USDC transfer on Celo.",
   nonce: "7",
   deadline: "2026-07-13T00:00:00.000Z",
   purpose: "Review flow test",
@@ -111,7 +111,7 @@ describe("Review & Sign page", () => {
     assert.match(html, /eth_signTypedData_v4/);
     assert.match(html, /walletAuthorization/);
     assert.match(html, /const providerCandidates = \(\) =>/);
-    assert.match(html, /window\.okxwallet/);
+    assert.doesNotMatch(html, /window\.okxwallet/);
     assert.match(html, /candidate\.provider\.request/);
     assert.match(html, /eip6963:announceProvider/);
     assert.match(html, /eip6963:requestProvider/);
@@ -167,7 +167,7 @@ describe("Review & Sign handoff API", () => {
       { name: "verifyingContract", type: "address" },
     ]);
     assert.equal(body.walletAuthorization.primaryType, body.authorization.primaryType);
-    assert.equal(body.walletAuthorization.domain.chainId, "0xc4");
+    assert.equal(body.walletAuthorization.domain.chainId, "0xa4ec");
     assert.equal(
       TypedDataEncoder.hash(
         body.walletAuthorization.domain,
@@ -198,7 +198,7 @@ describe("Review & Sign handoff API", () => {
       routeTarget: "0x7777777777777777777777777777777777777777",
       routeCalldata: "0x1234",
       routeCalldataHash: "0x56570de287d73cd1cb6092bb8fdee6173974955fdef345ae579ee9f475ea7432",
-      routeSummary: "Route 1 USDT0 from X Layer to 1 USDC on Base.",
+      routeSummary: "Route 1 USDC from Celo to 1 USDC on Base.",
       approvalPhrase: "APPROVE pay_review_route_123",
     };
     const fixture = createFixture({}, routeIntent);

@@ -4,15 +4,19 @@ import { describe, it } from "node:test";
 import { getBalanceInputSchema } from "./balance.ts";
 
 describe("getBalanceInputSchema", () => {
-  it("defaults to X Layer USDt0 and USDC balances", () => {
+  it("defaults to Celo USDC, USDT, and USDm balances", () => {
     assert.deepEqual(getBalanceInputSchema.parse({}), {
-      tokenSymbols: ["USDT0", "USDC"],
+      tokenSymbols: ["USDC", "USDT", "USDm"],
     });
   });
 
   it("accepts an explicit stablecoin subset", () => {
-    assert.deepEqual(getBalanceInputSchema.parse({ tokenSymbols: ["USDT0"] }), {
-      tokenSymbols: ["USDT0"],
+    assert.deepEqual(getBalanceInputSchema.parse({ tokenSymbols: ["USDC"] }), {
+      tokenSymbols: ["USDC"],
     });
+  });
+
+  it("rejects tokens that are unavailable on Celo", () => {
+    assert.throws(() => getBalanceInputSchema.parse({ tokenSymbols: ["USDT0"] }));
   });
 });

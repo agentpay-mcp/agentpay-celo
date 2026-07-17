@@ -8,7 +8,7 @@ import {
   type SetupIntentRecord,
 } from "@agentpay-ai/shared";
 
-const MAINNET_USDT0_ADDRESS = "0x779Ded0c9e1022225f8E0630b35a9b54bE713736";
+const MAINNET_USDC_ADDRESS = "0xcebA9300f2b948710d2653dD7B07f33A8B32118C";
 
 export interface AgentWalletRecord {
   tenantId?: string;
@@ -73,7 +73,7 @@ export interface CompleteWalletSetupOutput {
   completedAt: string;
 }
 
-export const DEFAULT_SETUP_HOME_CHAIN_ID = 1952;
+export const DEFAULT_SETUP_HOME_CHAIN_ID = 11142220;
 
 export async function completeWalletSetup(
   rawInput: CompleteWalletSetupInput,
@@ -187,22 +187,28 @@ function sameAddress(left: string, right: string): boolean {
 }
 
 function defaultAllowedTokenAddresses(homeChainId: number): string[] {
-  const symbols = homeChainId === 196 ? (["USDT0"] as const) : DEFAULT_STABLE_TOKEN_SYMBOLS;
-  return symbols.map((symbol) => getStableTokenAddress(homeChainId, symbol));
+  if (homeChainId === 42220) {
+    return [MAINNET_USDC_ADDRESS];
+  }
+  return DEFAULT_STABLE_TOKEN_SYMBOLS.map((symbol) => getStableTokenAddress(homeChainId, symbol));
 }
 
 function assertDeploymentAllowlist(homeChainId: number, tokenAddresses: string[], routeTargets: string[]): void {
-  if (homeChainId !== 196 && homeChainId !== 1952) {
-    throw new Error(`Unsupported AgentPay setup chain ${homeChainId}; only X Layer mainnet (196) and testnet (1952) are allowed.`);
+  if (homeChainId !== 42220 && homeChainId !== 11142220) {
+    throw new Error(`Unsupported AgentPay setup chain ${homeChainId}; only Celo mainnet (42220) and Celo Sepolia (11142220) are allowed.`);
   }
-  if (homeChainId !== 196) {
+  if (homeChainId !== 42220) {
     return;
   }
-  if (tokenAddresses.length !== 1 || tokenAddresses[0]?.toLowerCase() !== MAINNET_USDT0_ADDRESS.toLowerCase()) {
-    throw new Error("X Layer mainnet setup requires the canonical USDT0 token allowlist only.");
+  const normalized = new Set(tokenAddresses.map((address) => address.toLowerCase()));
+  if (
+    normalized.size !== 1 ||
+    !normalized.has(MAINNET_USDC_ADDRESS.toLowerCase())
+  ) {
+    throw new Error("Celo mainnet setup requires the canonical Celo USDC-only canary allowlist.");
   }
   if (routeTargets.length !== 0) {
-    throw new Error("X Layer mainnet setup requires an empty route-target allowlist.");
+    throw new Error("Celo mainnet setup requires an empty route-target allowlist.");
   }
 }
 

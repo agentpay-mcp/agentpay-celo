@@ -26,7 +26,7 @@ import {
 const challengeRequestSchema = z.object({
   ownerAddress: z.string(),
   accountAddress: z.string(),
-  chainId: z.union([z.literal(196), z.literal(1952)]),
+  chainId: z.union([z.literal(42220), z.literal(11142220)]),
   scopes: z.array(sessionScopeSchema).min(1).max(DEFAULT_SESSION_SCOPES.length).optional(),
 });
 

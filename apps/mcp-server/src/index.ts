@@ -8,7 +8,7 @@ export {
   type AgentPayHttpServer,
   type StartAgentPayHttpServerOptions,
 } from "./mcp/http.ts";
-export * from "./mcp/okx-agent-payment.ts";
+export * from "./mcp/celo-agent-payment.ts";
 export * from "./mcp/stdio.ts";
 export * from "./runtime/agentpay-runtime.ts";
 export * from "./runtime/production-readiness.ts";

@@ -33,7 +33,7 @@ describe("prepareWalletCreation", () => {
     assert.equal(created[0].status, "PENDING");
     assert.equal(created[0].executorAddress, "0x4444444444444444444444444444444444444444");
     assert.equal(created[0].expiresAt, "2026-07-03T04:15:00.000Z");
-    assert.equal(created[0].homeChainId, 196);
+    assert.equal(created[0].homeChainId, 42220);
     assert.equal(
       created[0].messageToSign,
       [
@@ -41,7 +41,7 @@ describe("prepareWalletCreation", () => {
         "Setup ID: setup_123",
         "Owner: connected signing wallet",
         "Executor: 0x4444444444444444444444444444444444444444",
-        "Chain: X Layer",
+        "Chain: Celo",
         "Expires: 2026-07-03T04:15:00.000Z",
         "This signature proves wallet ownership only. It does not approve a payment or token transfer.",
       ].join("\n"),
@@ -52,8 +52,8 @@ describe("prepareWalletCreation", () => {
       setupUrl: "https://setup.agentpay.dev/setup?setup_intent_id=setup_123",
       messageToSign: created[0].messageToSign,
       expiresAt: "2026-07-03T04:15:00.000Z",
-      homeChainId: 196,
-      homeChain: "X Layer",
+      homeChainId: 42220,
+      homeChain: "Celo",
     });
   });
 
@@ -81,10 +81,10 @@ describe("prepareWalletCreation", () => {
 
     assert.equal(created[0].ownerAddress, "0x2222222222222222222222222222222222222222");
     assert.match(created[0].messageToSign, /Owner: 0x2222222222222222222222222222222222222222/);
-    assert.match(created[0].messageToSign, /Chain: X Layer/);
+    assert.match(created[0].messageToSign, /Chain: Celo/);
   });
 
-  it("uses the requested X Layer testnet in the setup signing message", async () => {
+  it("uses the requested Celo Sepolia network in the setup signing message", async () => {
     const created: SetupIntentRecord[] = [];
 
     await prepareWalletCreation(
@@ -106,8 +106,8 @@ describe("prepareWalletCreation", () => {
       },
     );
 
-    assert.match(created[0].messageToSign, /Chain: X Layer Testnet/);
-    assert.equal(created[0].homeChainId, 1952);
+    assert.match(created[0].messageToSign, /Chain: Celo Sepolia/);
+    assert.equal(created[0].homeChainId, 11142220);
   });
 });
 
@@ -127,7 +127,7 @@ describe("checkWalletCreation", () => {
               expiresAt: "2026-07-03T04:15:00.000Z",
               accountAddress: "0x3333333333333333333333333333333333333333",
               completedAt: "2026-07-03T04:02:00.000Z",
-              homeChainId: 1952,
+              homeChainId: 11142220,
             };
           },
         },
@@ -142,8 +142,8 @@ describe("checkWalletCreation", () => {
       accountAddress: "0x3333333333333333333333333333333333333333",
       completedAt: "2026-07-03T04:02:00.000Z",
       expiresAt: "2026-07-03T04:15:00.000Z",
-      homeChainId: 1952,
-      homeChain: "X Layer Testnet",
+      homeChainId: 11142220,
+      homeChain: "Celo Sepolia",
     });
   });
 
@@ -182,7 +182,7 @@ describe("getAgentWallet", () => {
             return {
               ownerAddress: "0x2222222222222222222222222222222222222222",
               accountAddress: "0x3333333333333333333333333333333333333333",
-              homeChainId: 1952,
+              homeChainId: 11142220,
               executorAddress: "0x4444444444444444444444444444444444444444",
               status: "ACTIVE",
             };
@@ -191,14 +191,14 @@ describe("getAgentWallet", () => {
       },
     );
 
-    assert.deepEqual(requests, [{ homeChainId: 1952 }]);
+    assert.deepEqual(requests, [{ homeChainId: 11142220 }]);
     assert.deepEqual(output, {
       status: "ACTIVE",
       wallet: {
         ownerAddress: "0x2222222222222222222222222222222222222222",
         accountAddress: "0x3333333333333333333333333333333333333333",
-        homeChainId: 1952,
-        homeChain: "X Layer Testnet",
+        homeChainId: 11142220,
+        homeChain: "Celo Sepolia",
         executorAddress: "0x4444444444444444444444444444444444444444",
       },
     });

@@ -3,13 +3,14 @@ import { describe, it } from "node:test";
 import { keccak256, TypedDataEncoder } from "ethers";
 
 import {
-  MAINNET_USDC_ADDRESS,
   MAINNET_ACCOUNT_CREATION_BYTECODE_HASH,
   fetchLogsInChunks,
   verifyMainnetAccount,
   type MainnetAccountVerificationReader,
 } from "./mainnet-account-verifier.ts";
-import { MAINNET_USDT0_ADDRESS } from "../runtime/production-readiness.ts";
+import { MAINNET_USDC_ADDRESS } from "../runtime/production-readiness.ts";
+
+const MAINNET_USDT_ADDRESS = "0x48065fbbe25f71c9282ddf5e1cd6d6a887483d5e";
 
 const accountAddress = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const ownerAddress = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
@@ -18,13 +19,13 @@ const creationHash = MAINNET_ACCOUNT_CREATION_BYTECODE_HASH;
 const domainSeparator = TypedDataEncoder.hashDomain({
   name: "AgentPay",
   version: "1",
-  chainId: 196,
+  chainId: 42220,
   verifyingContract: accountAddress,
 });
 
 function reader(overrides: Partial<MainnetAccountVerificationReader> = {}): MainnetAccountVerificationReader {
   return {
-    getChainId: async () => 196,
+    getChainId: async () => 42220,
     getCode: async () => "0x6001600055",
     getTransactionReceipt: async () => ({ status: 1, blockNumber: 100, contractAddress: accountAddress }),
     getTransactionData: async () => "0x6001600055",
@@ -33,8 +34,7 @@ function reader(overrides: Partial<MainnetAccountVerificationReader> = {}): Main
       executor: executorAddress,
       paused: false,
       domainSeparator,
-      allowedUsdt0: true,
-      allowedUsdc: false,
+      allowedUsdc: true,
     }),
     getTokenState: async () => ({ code: "0x6002", decimals: 6 }),
     getAllowlistEvents: async () => ({ tokenEvents: [], routeTargetEvents: [] }),
@@ -53,7 +53,7 @@ function expected(overrides: Record<string, unknown> = {}) {
     ownerAddress,
     executorAddress,
     domainSeparator,
-    tokenAddress: MAINNET_USDT0_ADDRESS,
+    tokenAddress: MAINNET_USDC_ADDRESS,
     tokenCodeHash: keccak256(tokenCode),
     tokenDecimals: 6,
     ...overrides,
@@ -124,38 +124,37 @@ describe("mainnet AgentPayAccountV2 verifier", () => {
 
   it("rejects chain, receipt, owner/executor, pause, domain, and token drift", async () => {
     const result = await verifyMainnetAccount(reader({
-      getChainId: async () => 1952,
+      getChainId: async () => 11142220,
       getTransactionReceipt: async () => ({ status: 0, blockNumber: 100, contractAddress: accountAddress }),
       getAccountState: async () => ({
         owner: executorAddress,
         executor: executorAddress,
         paused: true,
         domainSeparator: `0x${"99".repeat(32)}`,
-        allowedUsdt0: false,
-        allowedUsdc: true,
+        allowedUsdc: false,
       }),
       getTokenState: async () => ({ code: "0x6003", decimals: 18 }),
     }), expected());
 
     assert.equal(result.valid, false);
-    for (const text of ["chain id", "deployment receipt", "owner and executor", "paused", "domain separator", "USDT0", "USDC", "decimals", "USDT0 code hash"]) {
+    for (const text of ["chain id", "deployment receipt", "owner and executor", "paused", "domain separator", "USDC", "decimals", "USDC code hash"]) {
       assert.match(result.errors.join("; "), new RegExp(text, "i"));
     }
   });
 
-  it("rejects a route target or non-USDT0 token left enabled by deployment events", async () => {
+  it("rejects a route target or non-USDC token left enabled by deployment events", async () => {
     const result = await verifyMainnetAccount(reader({
       getAllowlistEvents: async () => ({
         tokenEvents: [
           { token: MAINNET_USDC_ADDRESS, allowed: true },
-          { token: MAINNET_USDT0_ADDRESS, allowed: true },
+          { token: MAINNET_USDT_ADDRESS, allowed: true },
         ],
         routeTargetEvents: [{ target: "0xdddddddddddddddddddddddddddddddddddddddd", allowed: true }],
       }),
     }), expected());
 
     assert.equal(result.valid, false);
-    assert.match(result.errors.join("; "), /non-USDT0|74b7/i);
+    assert.match(result.errors.join("; "), /non-USDC|48065/i);
     assert.match(result.errors.join("; "), /route target/i);
   });
 

@@ -51,7 +51,7 @@ test("completes prepare -> browser sign -> scoped signature handoff without a tr
   await expect(page).toHaveURL(new URL("/review", fixture.server.url).toString());
   await expect(page.locator("#notice")).toContainText("Everything matches");
   await expect(page.locator("#summary")).toContainText(fixture.recipientAddress);
-  await expect(page.locator("#summary")).toContainText("0 OKB");
+  await expect(page.locator("#summary")).toContainText("0 CELO");
   await expect(page.locator("#typed-data")).toContainText(fixture.prepared.authorization!.message.intentIdHash);
   expect((await fixture.pollSignature()).status).toBe("AWAITING_SIGNATURE");
 
@@ -121,7 +121,7 @@ test("blocks the wrong chain and resumes only after chainChanged matches the sou
   });
 
   await page.goto(fixture.prepared.reviewUrl!);
-  await expect(page.locator("#notice")).toContainText("Switch to the source X Layer network");
+  await expect(page.locator("#notice")).toContainText("Switch to the source Celo network");
   expect(await walletMethods(page)).not.toContain("eth_signTypedData_v4");
 
   await setWalletChain(page, fixture.expectedChainHex);

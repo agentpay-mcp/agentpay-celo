@@ -3,7 +3,8 @@ import {
   getChainName,
   getNativeCurrency,
   getStableTokenMetadata,
-  resolveXLayerHomeChainId,
+  resolveCeloHomeChainId,
+  type CeloHomeChainId,
   type GetBalanceInput,
   type StableTokenSymbol,
 } from "@agentpay-ai/shared";
@@ -41,7 +42,7 @@ export interface GetBalanceDependencies {
   wallets: AgentWalletRepository;
   tokenBalances: TokenBalanceReader;
   nativeBalances: NativeBalanceReader;
-  homeChainId?: number;
+  homeChainId?: CeloHomeChainId;
 }
 
 export interface GetBalanceOutput {
@@ -66,8 +67,7 @@ export interface GetBalanceOutput {
 
 export async function getBalance(rawInput: GetBalanceInput, dependencies: GetBalanceDependencies): Promise<GetBalanceOutput> {
   const input = getBalanceInputSchema.parse(rawInput);
-  const fallbackHomeChainId = dependencies.homeChainId === 1952 ? 1952 : 196;
-  const homeChainId = resolveXLayerHomeChainId(input, fallbackHomeChainId);
+  const homeChainId = resolveCeloHomeChainId(input, dependencies.homeChainId);
   const wallet = await dependencies.wallets.getActiveWallet({ homeChainId });
 
   if (!wallet) {
@@ -135,10 +135,10 @@ export const getBalanceTool = {
       tokenSymbols: {
         type: "array",
         minItems: 1,
-        items: { type: "string", enum: ["USDT0", "USDC", "USDT"] },
+        items: { type: "string", enum: ["USDC", "USDT", "USDm"] },
       },
       network: { type: "string", enum: ["mainnet", "testnet"] },
-      homeChainId: { type: "number", enum: [196, 1952] },
+      homeChainId: { type: "number", enum: [42220, 11142220] },
     },
   },
 } as const;

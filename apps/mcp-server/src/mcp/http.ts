@@ -10,8 +10,8 @@ import type {
   HTTPRequestContext,
   HTTPResponseInstructions,
   HTTPTransportContext,
-} from "@okxweb3/x402-core/http";
-import type { PaymentPayload, PaymentRequirements } from "@okxweb3/x402-core/types";
+} from "@x402/core/http";
+import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
 import { AgentPayAuthError, type SessionContext } from "@agentpay-ai/shared";
 import { AGENTPAY_CONSUMER_URI } from "../auth/siwe.ts";
 import { authenticateServiceSession } from "../auth/session.ts";
@@ -24,7 +24,7 @@ import {
   loadProductionManifest,
   MAINNET_CAIP2,
   MAINNET_CHAIN_ID,
-  MAINNET_USDT0_ADDRESS,
+  MAINNET_USDC_ADDRESS,
   type ExecutionMode,
   type ProductionReadinessResult,
   type RuntimeEnvironmentIdentity,
@@ -44,10 +44,10 @@ import {
 } from "../runtime/agentpay-runtime.ts";
 import { authenticateConsumerRequest, type ConsumerSessionAuthenticator } from "./consumer-auth.ts";
 import {
-  createOkxAgentPaymentProcessorFromEnv,
+  createCeloAgentPaymentProcessorFromEnv,
   parseAgentPayMcpPaymentEnv,
   type AgentPayMcpPaymentProcessor,
-} from "./okx-agent-payment.ts";
+} from "./celo-agent-payment.ts";
 import {
   createInMemoryPaidExecutionLifecycleStore,
   createPaidExecutionLifecycleClaimInput,
@@ -79,7 +79,7 @@ import {
 } from "../services/payment-authorization.ts";
 import { createAgentPayMcpServer, type ConnectableAgentPayMcpServer } from "./stdio.ts";
 
-export type { AgentPayMcpPaymentProcessor } from "./okx-agent-payment.ts";
+export type { AgentPayMcpPaymentProcessor } from "./celo-agent-payment.ts";
 
 const defaultHostname = "0.0.0.0";
 const defaultPort = 3001;
@@ -149,7 +149,7 @@ export async function startAgentPayHttpServer(options: StartAgentPayHttpServerOp
     paymentNetwork === MAINNET_CAIP2 &&
     (config.environment !== "production" || config.homeChainId !== MAINNET_CHAIN_ID)
   ) {
-    throw new Error("Mainnet paid public execution requires AGENTPAY_ENVIRONMENT=production and chain 196.");
+    throw new Error("Celo mainnet paid public execution requires AGENTPAY_ENVIRONMENT=production and chain 42220.");
   }
   let readiness = createNonProductionReadiness();
   let refreshReadiness: ((current: ProductionReadinessResult) => Promise<ProductionReadinessResult>) | undefined;
@@ -305,8 +305,8 @@ export async function startAgentPayHttpServer(options: StartAgentPayHttpServerOp
   if (mode === "public" && (config.environment !== "production" || readiness.publicPaymentAllowed)) {
     try {
       paymentProcessor = config.environment === "production"
-        ? await createOkxAgentPaymentProcessorFromEnv(options.env ?? process.env, { mcpPath })
-        : options.paymentProcessor ?? await createOkxAgentPaymentProcessorFromEnv(options.env ?? process.env, { mcpPath });
+        ? await createCeloAgentPaymentProcessorFromEnv(options.env ?? process.env, { mcpPath })
+        : options.paymentProcessor ?? await createCeloAgentPaymentProcessorFromEnv(options.env ?? process.env, { mcpPath });
       if (config.environment === "production" && !paymentProcessor) {
         readiness = withReadinessError(readiness, "payment processor: exact production x402 processor was not created");
       }
@@ -2055,12 +2055,12 @@ function hasPaymentProofHeader(request: IncomingMessage): boolean {
 function assertCanaryPaymentRequirements(requirements: PaymentRequirements): void {
   if (
     requirements.network !== MAINNET_CAIP2 ||
-    requirements.asset.toLowerCase() !== MAINNET_USDT0_ADDRESS.toLowerCase() ||
+    requirements.asset.toLowerCase() !== MAINNET_USDC_ADDRESS.toLowerCase() ||
     requirements.amount !== "10000"
   ) {
     throw new CanaryPolicyError(
       "CANARY_PAYMENT_TERMS",
-      "Canary x402 terms must be exactly 0.01 mainnet USDT0 on eip155:196.",
+      "Canary x402 terms must be exactly 0.01 USDC on Celo mainnet.",
     );
   }
 }
@@ -2139,7 +2139,7 @@ export async function resolveProductionReadiness(
         tokenDecimals: manifest.token.decimals,
       };
       accountVerification = await (dependencies.verifyAccount ?? ((input) => {
-        const reader = createEthersMainnetAccountVerificationReader(config.xlayerRpcUrl);
+        const reader = createEthersMainnetAccountVerificationReader(config.celoRpcUrl);
         return verifyMainnetAccount(reader, input);
       }))(expected);
     } catch {
@@ -2209,7 +2209,7 @@ async function loadManifestCanaryPolicy(path: string | undefined): Promise<Canar
     ) {
       return undefined;
     }
-    const invoiceMaxUsdt0 = typeof policy.invoiceMaxUsdt0 === "string" ? policy.invoiceMaxUsdt0 : "0.10";
+    const invoiceMaxUsdc = typeof policy.invoiceMaxUsdc === "string" ? policy.invoiceMaxUsdc : "0.10";
     const maxNativeFee = typeof policy.maxNativeFee === "string" ? policy.maxNativeFee : "0";
     return {
       allowlist: {
@@ -2222,7 +2222,7 @@ async function loadManifestCanaryPolicy(path: string | undefined): Promise<Canar
       caps: {
         ...DEFAULT_CANARY_CAPS,
         maxAcceptedLifecycles: typeof policy.maxAcceptedLifecycles === "number" ? policy.maxAcceptedLifecycles : 1,
-        maxInvoiceAtomic: decimalToAtomic6(invoiceMaxUsdt0),
+        maxInvoiceAtomic: decimalToAtomic6(invoiceMaxUsdc),
         maxNativeFee: BigInt(maxNativeFee),
       },
     };

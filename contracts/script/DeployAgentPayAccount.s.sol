@@ -13,12 +13,11 @@ interface Vm {
 
 contract DeployAgentPayAccount {
     address internal constant VM_ADDRESS = address(uint160(uint256(keccak256("hevm cheat code"))));
-    uint256 public constant XLAYER_CHAIN_ID = 196;
-    uint256 public constant XLAYER_TESTNET_CHAIN_ID = 1952;
-    address public constant XLAYER_USDT0 = 0x779Ded0c9e1022225f8E0630b35a9b54bE713736;
-    address public constant XLAYER_USDC = 0x74b7F16337b8972027F6196A17a631aC6dE26d22;
-    address public constant XLAYER_TESTNET_USDT0 = 0x9e29b3AaDa05Bf2D2c827Af80Bd28Dc0b9b4FB0c;
-    address public constant XLAYER_TESTNET_USDC = 0xcB8BF24c6cE16Ad21D707c9505421a17f2bec79D;
+    uint256 public constant CELO_CHAIN_ID = 42220;
+    uint256 public constant CELO_SEPOLIA_CHAIN_ID = 11142220;
+    address public constant CELO_SEPOLIA_USDC = 0x01C5C0122039549AD1493B8220cABEdD739BC44E;
+    address public constant CELO_SEPOLIA_USDT = 0xd077A400968890Eacc75cdc901F0356c943e4fDb;
+    address public constant CELO_SEPOLIA_USDM = 0xdE9e4C3ce781b4bA68120d6261cbad65ce0aB00b;
 
     Vm internal constant vm = Vm(VM_ADDRESS);
 
@@ -27,7 +26,7 @@ contract DeployAgentPayAccount {
     error LegacyMainnetDeploymentDisabled();
 
     function run() external returns (AgentPayAccount account) {
-        if (block.chainid == XLAYER_CHAIN_ID) revert LegacyMainnetDeploymentDisabled();
+        if (block.chainid == CELO_CHAIN_ID) revert LegacyMainnetDeploymentDisabled();
 
         uint256 deployerPrivateKey = vm.envUint("SETUP_DEPLOYER_PRIVATE_KEY");
         address owner = vm.envAddress("AGENTPAY_OWNER_ADDRESS");
@@ -43,31 +42,31 @@ contract DeployAgentPayAccount {
         public
         returns (AgentPayAccount account)
     {
-        account = deployForChain(owner, executor, initialRouteTargets, XLAYER_CHAIN_ID);
+        account = deployForChain(owner, executor, initialRouteTargets, CELO_CHAIN_ID);
     }
 
     function deployForChain(address owner, address executor, address[] memory initialRouteTargets, uint256 chainId)
         public
         returns (AgentPayAccount account)
     {
+        if (chainId == CELO_CHAIN_ID) revert LegacyMainnetDeploymentDisabled();
+
         account = new AgentPayAccount(owner, executor, defaultAllowedTokensForChain(chainId), initialRouteTargets);
         emit AgentPayAccountDeployed(address(account), owner, executor);
     }
 
     function defaultAllowedTokens() public returns (address[] memory tokens) {
-        return defaultAllowedTokensForChain(XLAYER_CHAIN_ID);
+        return defaultAllowedTokensForChain(CELO_CHAIN_ID);
     }
 
     function defaultAllowedTokensForChain(uint256 chainId) public returns (address[] memory tokens) {
-        tokens = new address[](2);
-        if (chainId == XLAYER_CHAIN_ID) {
-            tokens[0] = XLAYER_USDT0;
-            tokens[1] = XLAYER_USDC;
-            return tokens;
-        }
-        if (chainId == XLAYER_TESTNET_CHAIN_ID) {
-            tokens[0] = vm.envOr("AGENTPAY_XLAYER_TESTNET_USDT0_ADDRESS", XLAYER_TESTNET_USDT0);
-            tokens[1] = vm.envOr("AGENTPAY_XLAYER_TESTNET_USDC_ADDRESS", XLAYER_TESTNET_USDC);
+        if (chainId == CELO_CHAIN_ID) revert LegacyMainnetDeploymentDisabled();
+
+        if (chainId == CELO_SEPOLIA_CHAIN_ID) {
+            tokens = new address[](3);
+            tokens[0] = vm.envOr("AGENTPAY_CELO_SEPOLIA_USDC_ADDRESS", CELO_SEPOLIA_USDC);
+            tokens[1] = vm.envOr("AGENTPAY_CELO_SEPOLIA_USDT_ADDRESS", CELO_SEPOLIA_USDT);
+            tokens[2] = vm.envOr("AGENTPAY_CELO_SEPOLIA_USDM_ADDRESS", CELO_SEPOLIA_USDM);
             return tokens;
         }
         revert UnsupportedDeployChain(chainId);

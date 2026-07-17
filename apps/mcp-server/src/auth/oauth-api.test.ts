@@ -358,7 +358,7 @@ describe("consumer OAuth authorization API", () => {
       new Request("https://wallet.agentpay.site/oauth/siwe/challenge", {
         method: "POST",
         headers: { "content-type": "application/json", cookie },
-        body: JSON.stringify({ authorizationId: "authorization_123", ownerAddress: owner.address, chainId: 1952 }),
+        body: JSON.stringify({ authorizationId: "authorization_123", ownerAddress: owner.address, chainId: 11142220 }),
       }),
     );
     assert.equal(challengeResponse.status, 200);
@@ -481,7 +481,7 @@ describe("consumer OAuth authorization API", () => {
       new Request("https://wallet.agentpay.site/oauth/siwe/challenge", {
         method: "POST",
         headers: { "content-type": "application/json", cookie },
-        body: JSON.stringify({ authorizationId: "authorization_123", ownerAddress: owner.address, chainId: 1952 }),
+        body: JSON.stringify({ authorizationId: "authorization_123", ownerAddress: owner.address, chainId: 11142220 }),
       }),
     );
     const challengeBody = (await challengeResponse.json()) as { challengeId: string; message: string };
@@ -524,7 +524,7 @@ describe("consumer OAuth authorization API", () => {
       new Request("https://wallet.agentpay.site/oauth/siwe/challenge", {
         method: "POST",
         headers: { "content-type": "application/json", cookie },
-        body: JSON.stringify({ authorizationId: "authorization_123", ownerAddress: owner.address, chainId: 1952 }),
+        body: JSON.stringify({ authorizationId: "authorization_123", ownerAddress: owner.address, chainId: 11142220 }),
       }),
     );
     const challenge = (await challengeResponse.json()) as { challengeId: string; message: string };

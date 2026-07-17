@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import type { PaymentPayload, PaymentRequirements } from "@okxweb3/x402-core/types";
+import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
 import { executePaymentInputSchema, type ExecutePaymentInput } from "@agentpay-ai/shared";
 
 const PAYMENT_IDENTIFIER = "payment-identifier";

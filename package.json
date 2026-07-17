@@ -12,8 +12,8 @@
     "build": "npm run build --workspaces --if-present",
     "contracts:build": "cd contracts && forge build",
     "contracts:bytecode": "npm run contracts:build && node scripts/export-agentpay-bytecode.mjs",
-    "contracts:deploy:xlayer": "cd contracts && forge script script/DeployAgentPayAccountV2.s.sol:DeployAgentPayAccountV2 --rpc-url \"$XLAYER_MAINNET_RPC_URL\" --broadcast",
-    "contracts:deploy:xlayer:testnet": "cd contracts && forge script script/DeployAgentPayAccountV2.s.sol:DeployAgentPayAccountV2 --rpc-url \"$XLAYER_TESTNET_RPC_URL\" --broadcast",
+    "contracts:deploy:celo": "cd contracts && forge script script/DeployAgentPayAccountV2.s.sol:DeployAgentPayAccountV2 --rpc-url \"$CELO_MAINNET_RPC_URL\" --broadcast",
+    "contracts:deploy:celo:sepolia": "cd contracts && forge script script/DeployAgentPayAccountV2.s.sol:DeployAgentPayAccountV2 --rpc-url \"$CELO_SEPOLIA_RPC_URL\" --broadcast",
     "demo:local": "tsx scripts/demo-agentpay-flow.ts",
     "lint": "npm run lint --workspaces --if-present",
     "manifest:mainnet:shadow": "node scripts/generate-mainnet-shadow-manifest.mjs",
@@ -30,8 +30,8 @@
   },
   "dependencies": {
     "@noble/hashes": "^2.2.0",
-    "@okxweb3/x402-core": "^0.1.0",
-    "@okxweb3/x402-evm": "^0.2.1",
+    "@x402/core": "^2.18.0",
+    "@x402/evm": "^2.18.0",
     "@supabase/supabase-js": "^2.110.0",
     "ethers": "^6.17.0",
     "zod": "^4.4.3"

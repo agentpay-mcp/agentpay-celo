@@ -4,7 +4,8 @@ import {
   createRouteCalldataHash,
   getChainName,
   getStableTokenMetadata,
-  resolveXLayerHomeChainId,
+  resolveCeloHomeChainId,
+  type CeloHomeChainId,
   type PaymentIntentRecord,
   type PrepareContractCallInput,
   prepareContractCallInputSchema,
@@ -22,7 +23,7 @@ export interface PrepareContractCallDependencies {
   clock: () => Date;
   createId: () => string;
   createNonce: () => string;
-  homeChainId?: number;
+  homeChainId?: CeloHomeChainId;
   approvalTtlSeconds?: number;
 }
 
@@ -50,8 +51,7 @@ export async function prepareContractCall(
   dependencies: PrepareContractCallDependencies,
 ): Promise<PrepareContractCallOutput> {
   const input = prepareContractCallInputSchema.parse(rawInput);
-  const fallbackHomeChainId = dependencies.homeChainId === 1952 ? 1952 : 196;
-  const homeChainId = resolveXLayerHomeChainId(input, fallbackHomeChainId);
+  const homeChainId = resolveCeloHomeChainId(input, dependencies.homeChainId);
   const wallet = await dependencies.wallets.getActiveWallet({ homeChainId });
 
   if (!wallet || wallet.status !== "ACTIVE") {
@@ -135,12 +135,12 @@ export const prepareContractCallTool = {
     properties: {
       targetAddress: { type: "string" },
       callData: { type: "string" },
-      sourceTokenSymbol: { type: "string", enum: ["USDT0", "USDC", "USDT"] },
+      sourceTokenSymbol: { type: "string", enum: ["USDC", "USDT", "USDm"] },
       maxTokenSpend: { type: "string" },
       maxNativeFee: { type: "string" },
       purpose: { type: "string" },
       network: { type: "string", enum: ["mainnet", "testnet"] },
-      homeChainId: { type: "number", enum: [196, 1952] },
+      homeChainId: { type: "number", enum: [42220, 11142220] },
     },
   },
 } as const;

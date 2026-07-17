@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 
 import {
@@ -18,7 +17,7 @@ const shadowManifest = buildMainnetShadowManifest({
   generatedAt: "2026-07-13T00:00:00.000Z",
 });
 
-describe("X Layer mainnet activation manifest", () => {
+describe("Celo mainnet activation manifest", () => {
   it("promotes the frozen shadow surface to DEPLOYED/OFF without provisioning an account", () => {
     const manifest = buildMainnetActivatedManifest({ shadowManifest });
     const result = validateMainnetActivationManifest(manifest, { artifactDigests });
@@ -46,8 +45,8 @@ describe("X Layer mainnet activation manifest", () => {
     assert.match(result.errors.join("; "), /x402.enabled/);
   });
 
-  it("preserves the artifact pins from the canonical shadow manifest", async () => {
-    const source = JSON.parse(await readFile(new URL("../ops/manifests/xlayer-mainnet.shadow.json", import.meta.url), "utf8"));
+  it("preserves the artifact pins from the canonical shadow manifest", () => {
+    const source = structuredClone(shadowManifest);
     const manifest = buildMainnetActivatedManifest({ shadowManifest: source });
     assert.equal(manifest.release.packageLockSha256, source.release.packageLockSha256);
     assert.equal(manifest.release.creationBytecodeKeccak256, source.release.creationBytecodeKeccak256);

@@ -66,7 +66,7 @@ function createChallenge(overrides: Partial<Parameters<typeof createSiweChalleng
     uri: "https://wallet.agentpay.site/mcp",
     ownerAddress,
     accountAddress,
-    chainId: 1952,
+    chainId: 11142220,
     nonce: "nonce_1234567890",
     issuedAt: "2026-07-12T00:00:00.000Z",
     expiresAt: "2026-07-12T00:05:00.000Z",
