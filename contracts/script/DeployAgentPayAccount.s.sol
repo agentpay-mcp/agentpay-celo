@@ -15,9 +15,6 @@ contract DeployAgentPayAccount {
     address internal constant VM_ADDRESS = address(uint160(uint256(keccak256("hevm cheat code"))));
     uint256 public constant CELO_CHAIN_ID = 42220;
     uint256 public constant CELO_SEPOLIA_CHAIN_ID = 11142220;
-    address public constant CELO_USDC = 0xcebA9300f2b948710d2653dD7B07f33A8B32118C;
-    address public constant CELO_USDT = 0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e;
-    address public constant CELO_USDM = 0x765DE816845861e75A25fCA122bb6898B8B1282a;
     address public constant CELO_SEPOLIA_USDC = 0x01C5C0122039549AD1493B8220cABEdD739BC44E;
     address public constant CELO_SEPOLIA_USDT = 0xd077A400968890Eacc75cdc901F0356c943e4fDb;
     address public constant CELO_SEPOLIA_USDM = 0xdE9e4C3ce781b4bA68120d6261cbad65ce0aB00b;
@@ -52,6 +49,8 @@ contract DeployAgentPayAccount {
         public
         returns (AgentPayAccount account)
     {
+        if (chainId == CELO_CHAIN_ID) revert LegacyMainnetDeploymentDisabled();
+
         account = new AgentPayAccount(owner, executor, defaultAllowedTokensForChain(chainId), initialRouteTargets);
         emit AgentPayAccountDeployed(address(account), owner, executor);
     }
@@ -61,14 +60,10 @@ contract DeployAgentPayAccount {
     }
 
     function defaultAllowedTokensForChain(uint256 chainId) public returns (address[] memory tokens) {
-        tokens = new address[](3);
-        if (chainId == CELO_CHAIN_ID) {
-            tokens[0] = CELO_USDC;
-            tokens[1] = CELO_USDT;
-            tokens[2] = CELO_USDM;
-            return tokens;
-        }
+        if (chainId == CELO_CHAIN_ID) revert LegacyMainnetDeploymentDisabled();
+
         if (chainId == CELO_SEPOLIA_CHAIN_ID) {
+            tokens = new address[](3);
             tokens[0] = vm.envOr("AGENTPAY_CELO_SEPOLIA_USDC_ADDRESS", CELO_SEPOLIA_USDC);
             tokens[1] = vm.envOr("AGENTPAY_CELO_SEPOLIA_USDT_ADDRESS", CELO_SEPOLIA_USDT);
             tokens[2] = vm.envOr("AGENTPAY_CELO_SEPOLIA_USDM_ADDRESS", CELO_SEPOLIA_USDM);
