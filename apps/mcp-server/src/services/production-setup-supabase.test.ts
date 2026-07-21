@@ -115,6 +115,32 @@ describe("scoped production setup Supabase adapters", () => {
     assert.equal(headers?.get("authorization"), `Bearer ${scopedToken}`);
   });
 
+  it("reloads and revalidates a rotated scoped token for every Supabase request", async () => {
+    let activeToken = token("agentpay_setup_web", future);
+    let clientOptions: ScopedProductionSetupClientOptions | undefined;
+    createProductionSetupWebStoreFromConfig({
+      ...baseConfig,
+      token: activeToken,
+      tokenProvider: async () => activeToken,
+      rateLimit,
+      clientFactory: (_url, _apiKey, options) => {
+        clientOptions = options;
+        return clientReturning({}).client;
+      },
+    });
+
+    assert.equal(await clientOptions?.accessToken(), activeToken);
+    activeToken = token("agentpay_setup_web", future + 60);
+    assert.equal(await clientOptions?.accessToken(), activeToken);
+
+    activeToken = token("agentpay_setup_worker", future);
+    await assert.rejects(
+      clientOptions!.accessToken(),
+      (error: unknown) =>
+        error instanceof ProductionSetupStoreError && error.code === "SETUP_SCOPED_TOKEN_INVALID",
+    );
+  });
+
   it("rejects secret, service-role, and missing project API keys", () => {
     const clientFactory = () => clientReturning({}).client;
     for (const supabaseApiKey of [undefined, "sb_secret_forbidden", token("service_role", future)]) {

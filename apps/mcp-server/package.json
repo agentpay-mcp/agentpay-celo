@@ -28,6 +28,8 @@
     "src/services/paid-execution-outbox.ts",
     "src/services/paid-execution-challenge.ts",
     "src/services/invoice-execution-reconciler.ts",
+    "src/services/production-setup.ts",
+    "src/services/production-setup-supabase.ts",
     "src/services/chain-executor.ts",
     "src/services/lifi.ts",
     "src/services/mainnet-account-verifier.ts",

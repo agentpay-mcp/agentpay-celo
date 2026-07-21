@@ -33,6 +33,7 @@ export interface ScopedProductionSetupConfig {
   supabaseUrl: string;
   supabaseApiKey: string;
   token: string;
+  tokenProvider?: () => Promise<string>;
   nowUnix?: number;
   minimumRemainingSeconds?: number;
   maximumRemainingSeconds?: number;
@@ -315,7 +316,15 @@ function createScopedClient(
   }
   const options = {
     auth: { autoRefreshToken: false as const, persistSession: false as const },
-    accessToken: async () => config.token,
+    accessToken: async () => {
+      try {
+        const token = config.tokenProvider ? (await config.tokenProvider()).trim() : config.token;
+        assertScopedToken({ ...config, token }, requiredRole);
+        return token;
+      } catch {
+        throw invalidTokenConfiguration();
+      }
+    },
   };
   const factory = config.clientFactory ?? ((supabaseUrl, apiKey, clientOptions) =>
     createClient(supabaseUrl, apiKey, clientOptions) as unknown as ScopedProductionSetupClient);

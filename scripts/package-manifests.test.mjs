@@ -108,6 +108,7 @@ describe("publishable AgentPay package manifests", () => {
       },
       "@agentpay-ai/setup-web-celo": {
         ethers: rootManifest.dependencies.ethers,
+        zod: rootManifest.dependencies.zod,
       },
       "@agentpay-ai/agentpay-celo": {
         "@agentpay-ai/skill-celo": skillManifest.version,
@@ -183,8 +184,30 @@ describe("publishable AgentPay package manifests", () => {
     assert.ok(manifest.files.includes("src/mcp/http.ts"));
     assert.ok(manifest.files.includes("src/mcp/celo-agent-payment.ts"));
     assert.ok(manifest.files.includes("src/runtime/paid-execution-canary-ledger.ts"));
+    assert.ok(manifest.files.includes("src/services/production-setup.ts"));
+    assert.ok(manifest.files.includes("src/services/production-setup-supabase.ts"));
     await access("apps/mcp-server/src/mcp/http.ts");
     await access("apps/mcp-server/src/mcp/celo-agent-payment.ts");
     await access("apps/mcp-server/src/runtime/paid-execution-canary-ledger.ts");
+    await access("apps/mcp-server/src/services/production-setup.ts");
+    await access("apps/mcp-server/src/services/production-setup-supabase.ts");
+  });
+
+  it("publishes the isolated Celo onboarding web and deployment worker entrypoints", async () => {
+    const manifest = await readPackageJson("apps/setup-web");
+    const requiredFiles = [
+      "src/onboarding/start.ts",
+      "src/onboarding/runtime.ts",
+      "src/worker/start.ts",
+      "src/worker/runtime.ts",
+    ];
+
+    for (const file of requiredFiles) {
+      assert.ok(manifest.files.includes(file), `apps/setup-web must publish ${file}`);
+      await access(join("apps/setup-web", file));
+    }
+
+    assert.equal(manifest.scripts?.["start:onboarding"], "tsx src/onboarding/start.ts");
+    assert.equal(manifest.scripts?.["start:setup-worker"], "tsx src/worker/start.ts");
   });
 });
