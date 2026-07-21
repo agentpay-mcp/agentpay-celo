@@ -11,6 +11,7 @@
     "src/approval.ts",
     "src/auth.ts",
     "src/balance.ts",
+    "src/celo-attribution.ts",
     "src/chains.ts",
     "src/index.ts",
     "src/invoice.ts",
@@ -32,6 +33,7 @@
     "typecheck": "tsc -p ../../tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@celo/attribution-tags": "^0.3.0",
     "@noble/hashes": "^2.2.0",
     "zod": "^4.4.3"
   }

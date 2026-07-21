@@ -29,6 +29,10 @@ describe("README", () => {
     assert.match(contents, /Celo x402|x402 seller gate/i);
     assert.match(contents, /AGENTPAY_A2MCP_PAYMENT_ENABLED/);
     assert.match(contents, /PAYMENT-REQUIRED/);
+    assert.match(contents, /ERC-8021/);
+    assert.match(contents, /CELO_ATTRIBUTION_TAG/);
+    assert.match(contents, /x402 facilitator settlements.*not tagged|does not tag x402 facilitator settlements/i);
+    assert.match(contents, /CELO_MAINNET_RPC_FALLBACK_URL/);
     assert.doesNotMatch(contents, /docs\//);
     assert.doesNotMatch(contents, /AGENTPAY_CONCEPT/);
     assert.doesNotMatch(contents, /product blueprint/i);

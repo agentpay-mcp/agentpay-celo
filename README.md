@@ -79,7 +79,9 @@ Self-hosted operators expose the public MCP endpoint with `agentpay serve-http`.
 
 Core staging/local values are `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CELO_RPC_URL`, and `EXECUTOR_PRIVATE_KEY`. Network switching uses `CELO_MAINNET_RPC_URL` and `CELO_SEPOLIA_RPC_URL`. Setup also needs `SETUP_DEPLOYER_PRIVATE_KEY` and the V2 account bytecode.
 
-Celo mainnet production is isolated and readiness-gated. Use `AGENTPAY_ENVIRONMENT=production`, `AGENTPAY_HOME_CHAIN_ID=42220`, `AGENTPAY_ACCOUNT_VERSION=v2`, `SUPABASE_PRODUCTION_URL`, `SUPABASE_PRODUCTION_SERVICE_ROLE_KEY`, `CELO_MAINNET_RPC_URL=https://forno.celo.org`, and the tracked Celo mainnet manifest. Generic or Sepolia aliases are rejected by the production surface.
+Celo mainnet production is isolated and readiness-gated. Use `AGENTPAY_ENVIRONMENT=production`, `AGENTPAY_HOME_CHAIN_ID=42220`, `AGENTPAY_ACCOUNT_VERSION=v2`, `SUPABASE_PRODUCTION_URL`, `SUPABASE_PRODUCTION_SERVICE_ROLE_KEY`, a dedicated HTTPS `CELO_MAINNET_RPC_URL`, `CELO_MAINNET_RPC_FALLBACK_URL=https://forno.celo.org`, and the tracked Celo mainnet manifest. Generic or Sepolia aliases are rejected by the production surface.
+
+Direct AgentPay transactions append the assigned `CELO_ATTRIBUTION_TAG` as an ERC-8021 calldata suffix before signing and durable outbox hashing. Production accepts only the assigned lowercase `celo_` code; it does not derive or invent one. The x402 facilitator owns its settlement transaction, so AgentPay does not tag x402 facilitator settlements or create mirror transactions for attribution. Verify the suffix on the first live Celo transaction before enabling the public mode.
 
 The bounded first canary is canonical Celo USDC only, one lifecycle, no route target, and no silent expansion to USDT or USDm. Broader token and route support is enabled only after the canary gates pass.
 

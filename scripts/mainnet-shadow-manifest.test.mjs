@@ -29,6 +29,7 @@ function makeProductionEnv() {
     AGENTPAY_ACCOUNT_VERSION: "v2",
     CELO_MAINNET_RPC_URL: "https://rpc.provider.example/celo",
     CELO_MAINNET_RPC_FALLBACK_URL: "https://forno.celo.org",
+    CELO_ATTRIBUTION_TAG: "celo_agentpay",
     AGENTPAY_PUBLIC_SETUP_URL: "https://wallet.agentpay.site/celo/setup",
     SUPABASE_PRODUCTION_URL: "https://production-project.supabase.co",
     DIRECT_URL_PRODUCTION: "postgresql://production.example.invalid/postgres",
@@ -60,6 +61,12 @@ describe("Celo mainnet shadow manifest", () => {
       manifestSha256EnvRef: "AGENTPAY_ONBOARDING_MANIFEST_SHA256",
       factoryAddressEnvRef: "AGENTPAY_FACTORY_ADDRESS",
       sponsorAddressEnvRef: "AGENTPAY_SETUP_SPONSOR_ADDRESS",
+    });
+    assert.deepEqual(makeManifest().attribution, {
+      standard: "ERC-8021",
+      tagEnvRef: "CELO_ATTRIBUTION_TAG",
+      appliesTo: ["agentpay-direct-transactions"],
+      excludes: ["x402-facilitator-settlements"],
     });
   });
 
@@ -96,6 +103,17 @@ describe("Celo mainnet shadow manifest", () => {
     for (const field of ["enabled", "network", "asset", "price", "priceAtomic", "syncSettle", "toolAllowlist"]) {
       assert.match(result.errors.join("; "), new RegExp(`x402\\.${field}`));
     }
+  });
+
+  it("rejects ERC-8021 attribution policy drift and x402 settlement tagging", () => {
+    const manifest = makeManifest();
+    manifest.attribution.tagEnvRef = "AGENTPAY_ATTRIBUTION_TAG";
+    manifest.attribution.excludes = [];
+
+    const result = validate(manifest);
+    assert.equal(result.valid, false);
+    assert.match(result.errors.join("; "), /attribution\.tagEnvRef/);
+    assert.match(result.errors.join("; "), /attribution\.excludes/);
   });
 
   it("rejects non-USDC tokens or any route target in the production golden path", () => {
@@ -154,7 +172,7 @@ describe("Celo mainnet shadow manifest", () => {
     assert.equal(result.valid, true, result.errors.join("; "));
   });
 
-  it("rejects an unsafe primary RPC, a non-Forno fallback, or setup URL drift", () => {
+  it("rejects an unsafe primary RPC, a non-Forno fallback, setup URL drift, or attribution drift", () => {
     const unsafePrimary = makeProductionEnv();
     unsafePrimary.CELO_MAINNET_RPC_URL = "http://127.0.0.1:8545";
     let result = validateProductionEnvironmentIsolation(unsafePrimary);
@@ -172,6 +190,12 @@ describe("Celo mainnet shadow manifest", () => {
     result = validateProductionEnvironmentIsolation(setupDrift);
     assert.equal(result.valid, false);
     assert.match(result.errors.join("; "), /AGENTPAY_PUBLIC_SETUP_URL/);
+
+    const attributionDrift = makeProductionEnv();
+    attributionDrift.CELO_ATTRIBUTION_TAG = "agentpay";
+    result = validateProductionEnvironmentIsolation(attributionDrift);
+    assert.equal(result.valid, false);
+    assert.match(result.errors.join("; "), /CELO_ATTRIBUTION_TAG/);
   });
 
   it("rejects generic, staging, or non-OFF production environment configuration", () => {

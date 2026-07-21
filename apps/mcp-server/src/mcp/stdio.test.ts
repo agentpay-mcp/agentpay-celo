@@ -54,6 +54,7 @@ describe("startAgentPayMcpServer", () => {
             SUPABASE_PRODUCTION_SERVICE_ROLE_KEY: "production-service-role-key",
             CELO_MAINNET_RPC_URL: "https://rpc.example.com/celo",
             CELO_MAINNET_RPC_FALLBACK_URL: "https://forno.celo.org",
+            CELO_ATTRIBUTION_TAG: "celo_agentpay",
             EXECUTOR_PRIVATE_KEY: `0x${"1".repeat(64)}`,
             AGENTPAY_SESSION_HASH_KEY: "session-hash-key-012345678901234567890123",
             AGENTPAY_REVIEW_TOKEN_SECRET: "review-token-secret-012345678901234567890123",

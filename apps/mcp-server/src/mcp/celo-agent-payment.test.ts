@@ -36,6 +36,20 @@ describe("parseAgentPayMcpPaymentEnv", () => {
     );
   });
 
+  it("keeps ERC-8021 app attribution out of facilitator settlement configuration", () => {
+    const config = parseAgentPayMcpPaymentEnv({
+      AGENTPAY_A2MCP_PAYMENT_ENABLED: "true",
+      AGENTPAY_A2MCP_PAYMENT_PAY_TO: "0x0000000000000000000000000000000000000002",
+      AGENTPAY_A2MCP_PAYMENT_PRICE: "$0.01",
+      AGENTPAY_CELO_X402_API_KEY: "test-celo-x402-api-key",
+      CELO_ATTRIBUTION_TAG: "celo_agentpay",
+    });
+
+    assert.ok(config);
+    assert.equal("celoAttributionTag" in config, false);
+    assert.equal("mirrorTransaction" in config, false);
+  });
+
   it("reports invalid config names without echoing secret values", () => {
     assert.throws(
       () =>

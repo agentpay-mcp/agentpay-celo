@@ -23,6 +23,7 @@ import type {
 import {
   configureStableTokenMetadataOverrides,
   CELO_NETWORKS,
+  isAssignedCeloAttributionTag,
   MAINNET_ONBOARDING_URL,
   type StableTokenMetadataOverrides,
 } from "@agentpay-ai/shared-celo";
@@ -122,6 +123,7 @@ const REQUIRED_PRODUCTION_ENV_NAMES = [
   "SUPABASE_PRODUCTION_SERVICE_ROLE_KEY",
   "CELO_MAINNET_RPC_URL",
   "CELO_MAINNET_RPC_FALLBACK_URL",
+  "CELO_ATTRIBUTION_TAG",
   "EXECUTOR_PRIVATE_KEY",
   "AGENTPAY_SESSION_HASH_KEY",
   "AGENTPAY_REVIEW_TOKEN_SECRET",
@@ -154,6 +156,7 @@ export interface AgentPayRuntimeConfig {
   celoRpcUrl: string;
   celoRpcUrls?: Partial<Record<number, string>>;
   celoRpcFallbackUrls?: Partial<Record<number, string>>;
+  celoAttributionTag?: string;
   executorPrivateKey: string;
   lifiApiKey?: string;
   lifiBaseUrl?: string;
@@ -296,6 +299,9 @@ export function parseAgentPayEnv(env: NodeJS.ProcessEnv | Record<string, string 
     normalized.CELO_MAINNET_RPC_FALLBACK_URL !== "https://forno.celo.org"
       ? "CELO_MAINNET_RPC_FALLBACK_URL"
       : undefined,
+    normalized.CELO_ATTRIBUTION_TAG && !isAssignedCeloAttributionTag(normalized.CELO_ATTRIBUTION_TAG)
+      ? "CELO_ATTRIBUTION_TAG"
+      : undefined,
     normalized.EXECUTOR_PRIVATE_KEY && !privateKeyPattern.test(normalized.EXECUTOR_PRIVATE_KEY)
       ? "EXECUTOR_PRIVATE_KEY"
       : undefined,
@@ -339,6 +345,7 @@ export function parseAgentPayEnv(env: NodeJS.ProcessEnv | Record<string, string 
     celoRpcUrl,
     celoRpcUrls,
     celoRpcFallbackUrls,
+    celoAttributionTag: normalized.CELO_ATTRIBUTION_TAG,
     executorPrivateKey: normalized.EXECUTOR_PRIVATE_KEY,
     lifiApiKey: normalized.LIFI_API_KEY,
     lifiBaseUrl: normalized.LIFI_BASE_URL,
@@ -378,12 +385,15 @@ export function createAgentPayRuntime(config: AgentPayRuntimeConfig, options: Ag
       fetch: options.fetch,
     }) as LifiRouteQuoteProviderConfig,
   );
-  const chainAdapters = factories.createChainAdapters({
-    rpcUrl: config.celoRpcUrl,
-    rpcUrls: config.celoRpcUrls,
-    rpcFallbackUrls: config.celoRpcFallbackUrls,
-    executorPrivateKey: config.executorPrivateKey,
-  });
+  const chainAdapters = factories.createChainAdapters(
+    omitUndefined({
+      rpcUrl: config.celoRpcUrl,
+      rpcUrls: config.celoRpcUrls,
+      rpcFallbackUrls: config.celoRpcFallbackUrls,
+      celoAttributionTag: config.celoAttributionTag,
+      executorPrivateKey: config.executorPrivateKey,
+    }) as EthersRuntimeConfig,
+  );
   const x402BazaarDiscovery = factories.createX402BazaarDiscovery(
     omitUndefined({
       facilitatorUrl: config.x402BazaarFacilitatorUrl,

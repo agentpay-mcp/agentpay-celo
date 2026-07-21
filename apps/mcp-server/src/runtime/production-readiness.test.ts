@@ -42,6 +42,7 @@ function productionEnv(): Record<string, string> {
     AGENTPAY_SETUP_SPONSOR_ADDRESS: "0x3333333333333333333333333333333333333333",
     AGENTPAY_SETUP_SUPABASE_PROJECT_REF: "abcdefghijklmnopqrst",
     AGENTPAY_SETUP_MODE: "PUBLIC",
+    CELO_ATTRIBUTION_TAG: "celo_agentpay",
   };
 }
 
@@ -129,6 +130,12 @@ describe("production readiness gate", () => {
   it("requires explicit production aliases and rejects generic or staging boundaries", () => {
     const valid = validateProductionEnvironment(productionEnv());
     assert.equal(valid.valid, true, valid.errors.join("; "));
+    assert.deepEqual(baseManifest.attribution, {
+      standard: "ERC-8021",
+      tagEnvRef: "CELO_ATTRIBUTION_TAG",
+      appliesTo: ["agentpay-direct-transactions"],
+      excludes: ["x402-facilitator-settlements"],
+    });
 
     const invalid = productionEnv();
     invalid.CELO_RPC_URL = "https://forno.celo-sepolia.celo-testnet.org";
@@ -150,11 +157,12 @@ describe("production readiness gate", () => {
     delete missing.AGENTPAY_ONBOARDING_MANIFEST_SHA256;
     delete missing.AGENTPAY_SETUP_SUPABASE_PROJECT_REF;
     delete missing.CELO_MAINNET_RPC_FALLBACK_URL;
+    delete missing.CELO_ATTRIBUTION_TAG;
     const missingResult = validateProductionEnvironment(missing);
     assert.equal(missingResult.valid, false);
     assert.match(
       missingResult.errors.join("; "),
-      /AGENTPAY_FACTORY_ADDRESS|AGENTPAY_SETUP_SPONSOR_ADDRESS|AGENTPAY_ONBOARDING_MANIFEST_SHA256|AGENTPAY_SETUP_SUPABASE_PROJECT_REF|CELO_MAINNET_RPC_FALLBACK_URL/,
+      /AGENTPAY_FACTORY_ADDRESS|AGENTPAY_SETUP_SPONSOR_ADDRESS|AGENTPAY_ONBOARDING_MANIFEST_SHA256|AGENTPAY_SETUP_SUPABASE_PROJECT_REF|CELO_MAINNET_RPC_FALLBACK_URL|CELO_ATTRIBUTION_TAG/,
     );
 
     const drift = productionEnv();
@@ -163,9 +171,10 @@ describe("production readiness gate", () => {
     drift.CELO_MAINNET_RPC_URL = "http://127.0.0.1:8545";
     drift.CELO_MAINNET_RPC_FALLBACK_URL = "https://rpc.example.com";
     drift.AGENTPAY_SETUP_SUPABASE_PROJECT_REF = "differentprojectrefx";
+    drift.CELO_ATTRIBUTION_TAG = "agentpay";
     const driftResult = validateProductionEnvironment(drift);
     assert.equal(driftResult.valid, false);
-    assert.match(driftResult.errors.join("; "), /PUBLIC_SETUP_URL|CONSUMER_MCP_URL|RPC|project/i);
+    assert.match(driftResult.errors.join("; "), /PUBLIC_SETUP_URL|CONSUMER_MCP_URL|RPC|project|attribution/i);
   });
 
   it("keeps a shadow/OFF manifest unavailable for production execution", async () => {

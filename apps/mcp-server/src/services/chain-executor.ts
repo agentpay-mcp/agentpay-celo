@@ -1,6 +1,9 @@
 import { AbiCoder, FallbackProvider, Interface, JsonRpcProvider, Wallet, keccak256 } from "ethers";
 import type { AbstractProvider } from "ethers";
-import { getStableTokenDecimalsForChain } from "@agentpay-ai/shared-celo";
+import {
+  appendCeloAttributionTag,
+  getStableTokenDecimalsForChain,
+} from "@agentpay-ai/shared-celo";
 
 import type {
   ContractCallExecutionRequest,
@@ -51,6 +54,7 @@ export const agentPayAccountV2Interface = new Interface([
 export const erc20Interface = new Interface(["function balanceOf(address account) view returns (uint256)"]);
 
 export interface TransactionSender {
+  transformCalldata?(calldata: string, chainId?: number): string;
   sendTransaction(transaction: { to: string; data: string; value: bigint }, chainId?: number): Promise<{ hash: string }>;
   prepareAndSignTransaction?(
     transaction: { to: string; data: string; value: bigint },
@@ -87,34 +91,35 @@ export interface EthersRuntimeConfig {
   rpcUrls?: Partial<Record<number, string>>;
   rpcFallbackUrls?: Partial<Record<number, string>>;
   executorPrivateKey: string;
+  celoAttributionTag?: string;
 }
 
 export function createEthersRoutePaymentExecutor(sender: TransactionSender): PaymentExecutor {
   return {
     async executeDirectPayment(request: DirectPaymentExecutionRequest): Promise<RoutePaymentExecutionResult> {
-      const transaction = await sender.sendTransaction({
+      const transaction = await sender.sendTransaction(transformTransactionCalldata(sender, {
         to: request.accountAddress,
         data: encodeExecuteDirectPaymentCalldata(request),
         value: 0n,
-      }, request.chainId);
+      }, request.chainId), request.chainId);
 
       return { sourceTxHash: transaction.hash };
     },
     async executeRoutePayment(request: RoutePaymentExecutionRequest): Promise<RoutePaymentExecutionResult> {
-      const transaction = await sender.sendTransaction({
+      const transaction = await sender.sendTransaction(transformTransactionCalldata(sender, {
         to: request.accountAddress,
         data: encodeExecuteRoutePaymentCalldata(request),
         value: BigInt(request.maxNativeFee),
-      }, request.sourceChainId);
+      }, request.sourceChainId), request.sourceChainId);
 
       return { sourceTxHash: transaction.hash };
     },
     async executeContractCall(request: ContractCallExecutionRequest): Promise<RoutePaymentExecutionResult> {
-      const transaction = await sender.sendTransaction({
+      const transaction = await sender.sendTransaction(transformTransactionCalldata(sender, {
         to: request.accountAddress,
         data: encodeExecuteContractCallCalldata(request),
         value: BigInt(request.maxNativeFee),
-      }, request.chainId);
+      }, request.chainId), request.chainId);
 
       return { sourceTxHash: transaction.hash };
     },
@@ -166,8 +171,9 @@ async function sendAuthorizedTransaction(
   chainId: number,
   durableExecution?: DurableExecutionContext,
 ): Promise<{ hash: string }> {
+  const transformedTransaction = transformTransactionCalldata(sender, transaction, chainId);
   if (!durableExecution) {
-    return sender.sendTransaction(transaction, chainId);
+    return sender.sendTransaction(transformedTransaction, chainId);
   }
 
   if (!sender.prepareAndSignTransaction || !sender.broadcastSignedTransaction) {
@@ -201,12 +207,12 @@ async function sendAuthorizedTransaction(
     }
   }
 
-  const prepared = await sender.prepareAndSignTransaction(transaction, chainId);
-  assertPreparedTransactionBinding(prepared, transaction, chainId, durableExecution);
+  const prepared = await sender.prepareAndSignTransaction(transformedTransaction, chainId);
+  assertPreparedTransactionBinding(prepared, transformedTransaction, chainId, durableExecution);
   const preparedRecord = await durableExecution.outbox.prepare(existing.id, {
     executorNonce: prepared.executorNonce,
     transactionHash: prepared.transactionHash,
-    calldataHash: keccak256(transaction.data),
+    calldataHash: keccak256(transformedTransaction.data),
     ownerAuthorizationNonce: durableExecution.ownerAuthorizationNonce,
     rawTransaction: encryptRawTransaction(prepared.rawTransaction, durableExecution.rawTxEncryptionKey),
     at: durableExecution.now(),
@@ -392,6 +398,9 @@ export function createEthersRuntimeAdapters(config: EthersRuntimeConfig): {
 } {
   const providerRouter = createProviderRouter(config);
   const sender: TransactionSender = {
+    transformCalldata: config.celoAttributionTag
+      ? (calldata) => appendCeloAttributionTag(calldata, config.celoAttributionTag!)
+      : undefined,
     async sendTransaction(transaction, chainId) {
       const provider = await providerRouter.getCheckedWriteProvider(chainId);
       const wallet = new Wallet(config.executorPrivateKey, provider);
@@ -433,6 +442,15 @@ export function createEthersRuntimeAdapters(config: EthersRuntimeConfig): {
     nativeBalances: createEthersNativeBalanceReader(providerRouter),
     routeTargetAllowances: createEthersRouteTargetAllowanceChecker(providerRouter),
   };
+}
+
+function transformTransactionCalldata(
+  sender: TransactionSender,
+  transaction: { to: string; data: string; value: bigint },
+  chainId?: number,
+): { to: string; data: string; value: bigint } {
+  const data = sender.transformCalldata?.(transaction.data, chainId) ?? transaction.data;
+  return data === transaction.data ? transaction : { ...transaction, data };
 }
 
 export function assertExecutorRpcChain(expectedChainId: number, actualChainId: number): void {

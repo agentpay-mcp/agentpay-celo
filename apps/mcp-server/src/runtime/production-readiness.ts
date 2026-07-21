@@ -2,7 +2,11 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-import type { PaymentIntentRecord, SessionEnvironment } from "@agentpay-ai/shared-celo";
+import {
+  isAssignedCeloAttributionTag,
+  type PaymentIntentRecord,
+  type SessionEnvironment,
+} from "@agentpay-ai/shared-celo";
 
 import type { MainnetAccountVerificationResult } from "../services/mainnet-account-verifier.ts";
 
@@ -143,6 +147,7 @@ export function validateProductionEnvironment(env: Record<string, string | undef
     "SUPABASE_PRODUCTION_SERVICE_ROLE_KEY",
     "CELO_MAINNET_RPC_URL",
     "CELO_MAINNET_RPC_FALLBACK_URL",
+    "CELO_ATTRIBUTION_TAG",
     "AGENTPAY_SESSION_HASH_KEY",
     "AGENTPAY_REVIEW_TOKEN_SECRET",
     "AGENTPAY_CONSUMER_MCP_URL",
@@ -177,6 +182,10 @@ export function validateProductionEnvironment(env: Record<string, string | undef
 
   if (has("CELO_MAINNET_RPC_FALLBACK_URL") && env.CELO_MAINNET_RPC_FALLBACK_URL !== MAINNET_RPC_FALLBACK_URL) {
     add("CELO_MAINNET_RPC_FALLBACK_URL", `must be ${MAINNET_RPC_FALLBACK_URL}`);
+  }
+
+  if (has("CELO_ATTRIBUTION_TAG") && !isAssignedCeloAttributionTag(env.CELO_ATTRIBUTION_TAG)) {
+    add("CELO_ATTRIBUTION_TAG", "must be the assigned lowercase celo_ attribution code");
   }
 
   const publicRoutes = {
@@ -296,6 +305,14 @@ export function validateProductionManifest(manifest: unknown): { valid: boolean;
   }
   if (record.onboarding?.sponsorAddressEnvRef !== "AGENTPAY_SETUP_SPONSOR_ADDRESS") {
     add("onboarding.sponsorAddressEnvRef", "must be AGENTPAY_SETUP_SPONSOR_ADDRESS");
+  }
+  if (
+    record.attribution?.standard !== "ERC-8021" ||
+    record.attribution?.tagEnvRef !== "CELO_ATTRIBUTION_TAG" ||
+    JSON.stringify(record.attribution?.appliesTo) !== JSON.stringify(["agentpay-direct-transactions"]) ||
+    JSON.stringify(record.attribution?.excludes) !== JSON.stringify(["x402-facilitator-settlements"])
+  ) {
+    add("attribution", "must attribute direct AgentPay transactions and exclude x402 facilitator settlements");
   }
   if (mode === "OFF" && status !== "SHADOW_ONLY" && status !== "DEPLOYED") add("executionMode", "OFF is only valid before activation");
   if (status === "SHADOW_ONLY" && mode !== "OFF") add("executionMode", "SHADOW_ONLY manifests must remain OFF");

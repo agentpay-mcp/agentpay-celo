@@ -3,6 +3,7 @@ export * from "./account-admin.ts";
 export * from "./auth.ts";
 export * from "./balance.ts";
 export * from "./chains.ts";
+export * from "./celo-attribution.ts";
 export * from "./invoice.ts";
 export * from "./mainnet-wallet-setup.ts";
 export * from "./payment-authorization.ts";

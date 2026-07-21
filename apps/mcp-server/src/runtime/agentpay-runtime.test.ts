@@ -33,6 +33,7 @@ describe("parseAgentPayEnv", () => {
       AGENTPAY_REVIEW_TOKEN_SECRET: " review-token-secret-012345678901234567890123 ",
       AGENTPAY_CELO_SEPOLIA_USDC_ADDRESS: " 0x1111111111111111111111111111111111111111 ",
       AGENTPAY_CELO_SEPOLIA_USDT_ADDRESS: " 0x2222222222222222222222222222222222222222 ",
+      CELO_ATTRIBUTION_TAG: " celo_agentpay ",
     });
 
     assert.deepEqual(config, {
@@ -55,6 +56,7 @@ describe("parseAgentPayEnv", () => {
       environment: "staging",
       sessionHashKey: "session-hash-secret",
       reviewTokenSecret: "review-token-secret-012345678901234567890123",
+      celoAttributionTag: "celo_agentpay",
       stableTokenOverrides: {
         11142220: {
           USDC: {
@@ -117,6 +119,20 @@ describe("parseAgentPayEnv", () => {
     );
   });
 
+  it("rejects an invalid configured Celo attribution tag", () => {
+    assert.throws(
+      () =>
+        parseAgentPayEnv({
+          SUPABASE_URL: "https://agentpay.supabase.co",
+          SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+          CELO_RPC_URL: "https://rpc.celo.tech",
+          EXECUTOR_PRIVATE_KEY: validPrivateKey,
+          CELO_ATTRIBUTION_TAG: "celo_AgentPay",
+        }),
+      /CELO_ATTRIBUTION_TAG/,
+    );
+  });
+
   it("uses only explicit production Supabase and mainnet RPC aliases", () => {
     const config = parseAgentPayEnv({
       AGENTPAY_ENVIRONMENT: "production",
@@ -130,6 +146,7 @@ describe("parseAgentPayEnv", () => {
       AGENTPAY_SESSION_HASH_KEY: "s".repeat(64),
       AGENTPAY_REVIEW_TOKEN_SECRET: "r".repeat(64),
       AGENTPAY_PUBLIC_SETUP_URL: "https://wallet.agentpay.site/celo/setup",
+      CELO_ATTRIBUTION_TAG: "celo_agentpay",
       SETUP_WEB_URL: "https://setup.agentpay.site/review",
     });
 
@@ -139,6 +156,7 @@ describe("parseAgentPayEnv", () => {
     assert.equal(config.homeChainId, 42220);
     assert.equal(config.environment, "production");
     assert.equal(config.productionOnboardingUrl, "https://wallet.agentpay.site/celo/setup");
+    assert.equal(config.celoAttributionTag, "celo_agentpay");
 
     assert.throws(
       () => parseAgentPayEnv({

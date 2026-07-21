@@ -93,6 +93,16 @@
     "factoryAddressEnvRef": "AGENTPAY_FACTORY_ADDRESS",
     "sponsorAddressEnvRef": "AGENTPAY_SETUP_SPONSOR_ADDRESS"
   },
+  "attribution": {
+    "standard": "ERC-8021",
+    "tagEnvRef": "CELO_ATTRIBUTION_TAG",
+    "appliesTo": [
+      "agentpay-direct-transactions"
+    ],
+    "excludes": [
+      "x402-facilitator-settlements"
+    ]
+  },
   "canaryPolicy": {
     "maxAcceptedLifecycles": 1,
     "invoiceMaxUsdc": "0.10",

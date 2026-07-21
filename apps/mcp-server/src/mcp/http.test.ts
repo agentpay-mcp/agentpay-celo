@@ -1738,6 +1738,7 @@ function productionMcpEnv(): Record<string, string> {
     DIRECT_URL_PRODUCTION: "postgresql://production.example.invalid/postgres",
     CELO_MAINNET_RPC_URL: "https://rpc.provider.example/celo",
     CELO_MAINNET_RPC_FALLBACK_URL: "https://forno.celo.org",
+    CELO_ATTRIBUTION_TAG: "celo_agentpay",
     EXECUTOR_PRIVATE_KEY: `0x${"1".repeat(64)}`,
     AGENTPAY_SESSION_HASH_KEY: "s".repeat(64),
     AGENTPAY_REVIEW_TOKEN_SECRET: "r".repeat(64),

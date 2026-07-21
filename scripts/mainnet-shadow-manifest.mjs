@@ -16,6 +16,7 @@ export const MAINNET_MIGRATION_HEAD = "20260717120000_celo_home_chain_boundary";
 export const MAINNET_RPC_FALLBACK_URL = "https://forno.celo.org";
 export const MAINNET_SETUP_URL = "https://wallet.agentpay.site/celo/setup";
 export const MAINNET_SETUP_READINESS_URL = "https://wallet.agentpay.site/celo/setup/readyz";
+export const ASSIGNED_CELO_ATTRIBUTION_TAG_PATTERN = /^celo_[a-z0-9_]{1,27}$/;
 export const FORBIDDEN_PRODUCTION_RUNTIME_ENV_REFS = Object.freeze([
   "CELO_RPC_URL",
   "CELO_SEPOLIA_RPC_URL",
@@ -229,6 +230,12 @@ export function buildMainnetShadowManifest({ artifactDigests, generatedAt } = {}
       factoryAddressEnvRef: "AGENTPAY_FACTORY_ADDRESS",
       sponsorAddressEnvRef: "AGENTPAY_SETUP_SPONSOR_ADDRESS",
     },
+    attribution: {
+      standard: "ERC-8021",
+      tagEnvRef: "CELO_ATTRIBUTION_TAG",
+      appliesTo: ["agentpay-direct-transactions"],
+      excludes: ["x402-facilitator-settlements"],
+    },
     canaryPolicy: {
       maxAcceptedLifecycles: 1,
       invoiceMaxUsdc: "0.10",
@@ -434,6 +441,24 @@ export function validateMainnetShadowManifest(manifest, { artifactDigests } = {}
     );
   }
 
+  const attribution = manifest.attribution;
+  if (requireRecord(attribution, "attribution", issues)) {
+    requireEqual(attribution.standard, "ERC-8021", "attribution.standard", issues);
+    requireEqual(attribution.tagEnvRef, "CELO_ATTRIBUTION_TAG", "attribution.tagEnvRef", issues);
+    requireEqual(
+      JSON.stringify(attribution.appliesTo),
+      JSON.stringify(["agentpay-direct-transactions"]),
+      "attribution.appliesTo",
+      issues,
+    );
+    requireEqual(
+      JSON.stringify(attribution.excludes),
+      JSON.stringify(["x402-facilitator-settlements"]),
+      "attribution.excludes",
+      issues,
+    );
+  }
+
   const canary = manifest.canaryPolicy;
   if (requireRecord(canary, "canaryPolicy", issues)) {
     requireEqual(canary.maxAcceptedLifecycles, 1, "canaryPolicy.maxAcceptedLifecycles", issues);
@@ -540,6 +565,9 @@ export function validateProductionEnvironmentIsolation(env, { manifest } = {}) {
     issues,
   );
   requireEqual(env.AGENTPAY_PUBLIC_SETUP_URL, MAINNET_SETUP_URL, "AGENTPAY_PUBLIC_SETUP_URL", issues);
+  if (!ASSIGNED_CELO_ATTRIBUTION_TAG_PATTERN.test(String(env.CELO_ATTRIBUTION_TAG ?? ""))) {
+    addIssue(issues, "CELO_ATTRIBUTION_TAG", "must be the assigned lowercase celo_ attribution code");
+  }
 
   for (const name of FORBIDDEN_PRODUCTION_RUNTIME_ENV_REFS) {
     if (hasRuntimeValue(env, name)) {
