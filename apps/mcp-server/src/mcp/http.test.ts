@@ -1175,6 +1175,7 @@ describe("startAgentPayHttpServer", () => {
             verificationCalls += 1;
             return { valid: false, checks: {}, errors: ["test verifier"] };
           },
+          checkOnboardingReady: async () => true,
         },
       );
       return { readiness, verificationCalls };
@@ -1198,6 +1199,46 @@ describe("startAgentPayHttpServer", () => {
 
       const identityPublic = await resolve("PUBLIC", "OFF");
       assert.equal(identityPublic.verificationCalls, 1);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects onboarding mode drift before accepting live setup readiness", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "agentpay-onboarding-mode-test-"));
+    const manifestPath = join(directory, "activated.json");
+    const manifest = makeDeployedProductionManifest(JSON.parse(
+      await readFile(new URL("../../../../test/fixtures/celo-mainnet.shadow.json", import.meta.url), "utf8"),
+    ) as Record<string, any>);
+    manifest.status = "READY";
+    manifest.executionMode = "PUBLIC";
+    manifest.x402.enabled = true;
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    let onboardingChecks = 0;
+
+    try {
+      const env = {
+        ...productionMcpEnv(),
+        AGENTPAY_MAINNET_MANIFEST_PATH: manifestPath,
+        AGENTPAY_SETUP_MODE: "CANARY",
+      };
+      const readiness = await resolveProductionReadiness(
+        parseAgentPayEnv(env),
+        env,
+        undefined,
+        {
+          loadRuntimeIdentity: async () => productionIdentityFor(manifest, "PUBLIC"),
+          verifyAccount: async () => ({ valid: true, checks: {}, errors: [] }),
+          checkOnboardingReady: async () => {
+            onboardingChecks += 1;
+            return true;
+          },
+        },
+      );
+
+      assert.equal(onboardingChecks, 0);
+      assert.equal(readiness.ready, false);
+      assert.match(readiness.errors.join("; "), /setup mode.*effective production execution mode/i);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -1695,12 +1736,23 @@ function productionMcpEnv(): Record<string, string> {
     SUPABASE_PRODUCTION_URL: "https://abcdefghijklmnopqrst.supabase.co",
     SUPABASE_PRODUCTION_SERVICE_ROLE_KEY: "service-role-key",
     DIRECT_URL_PRODUCTION: "postgresql://production.example.invalid/postgres",
-    CELO_MAINNET_RPC_URL: "https://forno.celo.org",
+    CELO_MAINNET_RPC_URL: "https://rpc.provider.example/celo",
+    CELO_MAINNET_RPC_FALLBACK_URL: "https://forno.celo.org",
     EXECUTOR_PRIVATE_KEY: `0x${"1".repeat(64)}`,
-    SETUP_DEPLOYER_PRIVATE_KEY: `0x${"2".repeat(64)}`,
     AGENTPAY_SESSION_HASH_KEY: "s".repeat(64),
     AGENTPAY_REVIEW_TOKEN_SECRET: "r".repeat(64),
-    SETUP_WEB_URL: "https://setup.agentpay.site/review",
+    AGENTPAY_CONSUMER_MCP_URL: "https://wallet.agentpay.site/celo/mcp",
+    AGENTPAY_PAID_MCP_URL: "https://mcp.agentpay.site/celo/mcp",
+    AGENTPAY_PUBLIC_SETUP_URL: "https://wallet.agentpay.site/celo/setup",
+    AGENTPAY_PUBLIC_REVIEW_URL: "https://wallet.agentpay.site/celo/review",
+    AGENTPAY_ONBOARDING_MANIFEST_PATH: "/run/agentpay-celo/onboarding.json",
+    AGENTPAY_ONBOARDING_MANIFEST_SHA256: "a".repeat(64),
+    AGENTPAY_FACTORY_ADDRESS: "0x1111111111111111111111111111111111111111",
+    AGENTPAY_FACTORY_RUNTIME_CODE_HASH: `0x${"2".repeat(64)}`,
+    AGENTPAY_SETUP_SPONSOR_ADDRESS: "0x3333333333333333333333333333333333333333",
+    AGENTPAY_SETUP_SUPABASE_PROJECT_REF: "abcdefghijklmnopqrst",
+    AGENTPAY_SETUP_MODE: "PUBLIC",
+    SETUP_WEB_URL: "https://wallet.agentpay.site/celo/review",
   };
 }
 

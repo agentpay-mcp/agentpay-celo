@@ -63,7 +63,7 @@ describe("registerAgentPayMcpTools", () => {
 
     const registered = server.tools.get("prepare_wallet_creation");
     assert.ok(registered);
-    assert.match(String(registered.metadata.description), /wallet setup intent/);
+    assert.match(String(registered.metadata.description), /wallet setup/i);
 
     const result = await registered.handler({});
 
@@ -1123,16 +1123,16 @@ describe("registerAgentPayMcpTools", () => {
     assert.equal((result as { structuredContent?: { status?: string } }).structuredContent?.status, "SIGNED");
   });
 
-  it("derives wallet setup ownership from the trusted session", async () => {
+  it("derives ownership from the trusted session and returns the production Celo onboarding handoff", async () => {
     const server = new FakeMcpServer();
     const sessionContext = createSessionContext({
       sessionId: "session_setup",
       tenantId: "tenant_setup",
       ownerAddress: "0x1111111111111111111111111111111111111111",
       accountAddress: "0x2222222222222222222222222222222222222222",
-      homeChainId: 1952,
+      homeChainId: 42220,
       audience: "https://wallet.agentpay.site/celo/mcp",
-      environment: "staging",
+      environment: "production",
       scopes: ["session:manage"],
       authEpoch: 0,
       issuedAt: "2026-07-12T00:00:00.000Z",
@@ -1143,22 +1143,26 @@ describe("registerAgentPayMcpTools", () => {
       async prepareWalletCreation(input) {
         receivedOwner = input.ownerAddress;
         return {
-          setupIntentId: "setup_session",
-          status: "PENDING",
-          setupUrl: "https://wallet.agentpay.site/setup?setup_intent_id=setup_session",
-          messageToSign: "setup",
-          expiresAt: "2026-07-12T00:05:00.000Z",
-          homeChainId: 1952,
-          homeChain: "X Layer testnet",
+          status: "SETUP_REQUIRED",
+          setupUrl: "https://wallet.agentpay.site/celo/setup",
+          instructionToAgent: "Open the secure AgentPay setup link.",
+          homeChainId: 42220,
+          homeChain: "Celo",
         };
       },
     });
 
     registerAgentPayMcpTools(server, runtime, { sessionContext });
-    const result = await server.tools.get("prepare_wallet_creation")?.handler({ network: "testnet" });
+    const result = await server.tools.get("prepare_wallet_creation")?.handler({ network: "mainnet" });
 
     assert.equal(receivedOwner, sessionContext.ownerAddress);
-    assert.equal((result as { structuredContent?: { setupIntentId?: string } }).structuredContent?.setupIntentId, "setup_session");
+    assert.deepEqual((result as { structuredContent?: unknown }).structuredContent, {
+      status: "SETUP_REQUIRED",
+      setupUrl: "https://wallet.agentpay.site/celo/setup",
+      instructionToAgent: "Open the secure AgentPay setup link.",
+      homeChainId: 42220,
+      homeChain: "Celo",
+    });
   });
 });
 

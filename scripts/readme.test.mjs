@@ -136,6 +136,16 @@ describe("README", () => {
       assert.match(contents, /Use AgentPay MCP tools|Use AgentPay when/i, `${file} must route requests to AgentPay`);
       assert.match(contents, /prepare_wallet_creation/, `${file} must describe wallet setup`);
       assert.match(contents, /check_wallet_creation/, `${file} must describe wallet completion checks`);
+      assert.match(
+        contents,
+        /PENDING[\s\S]*check_wallet_creation/i,
+        `${file} must limit setup-intent polling to legacy PENDING responses`,
+      );
+      assert.match(
+        contents,
+        /SETUP_REQUIRED[\s\S]*setupUrl[\s\S]*get_agent_wallet/i,
+        `${file} must describe the production onboarding handoff`,
+      );
       assert.match(contents, /get_agent_wallet[\s\S]*get_balance|get_balance[\s\S]*get_agent_wallet/, `${file} must describe balance reads through AgentPay tools`);
       assert.match(contents, /Never use raw wallet balances, exchange balances, or generic RPC balance/i, `${file} must forbid non-AgentPay balance sources`);
       assert.match(contents, /quote_payment_route/, `${file} must describe route previews`);

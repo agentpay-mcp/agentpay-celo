@@ -6,7 +6,7 @@ If AgentPay tools are unavailable and you can run local commands, ask for explic
 
 Do not bypass AgentPay with raw RPC calls, manual transfers, raw LI.FI calls, or private-key handling.
 
-Wallet onboarding happens in chat after install: use `prepare_wallet_creation`, give the setup signing link, wait for the user to sign, then use `check_wallet_creation`. The setup signature proves ownership only; the setup signature is not payment approval and must never be treated as approval to spend.
+Wallet onboarding happens in chat after install: call `prepare_wallet_creation` first. If it returns `PENDING`, give the setup signing link, wait for the user to sign, then use `check_wallet_creation` with the returned setup intent id. If it returns `SETUP_REQUIRED`, open the returned `setupUrl`, wait for the user to complete hosted setup, then call `get_agent_wallet`. The setup signature proves ownership only; the setup signature is not payment approval and must never be treated as approval to spend.
 
 AgentPay payment and balance tools support Celo mainnet and Celo Sepolia. Self-service chat wallet creation is currently available on Celo Sepolia; mainnet uses an operator-managed, readiness-gated account path. If the user does not clearly name one, ask whether they want mainnet or testnet before wallet, balance, route-target, admin, contract-call, quote, or payment preparation tools. Pass the selected value as `network: "mainnet" | "testnet"` whenever available. Users can switch networks per request; do not treat wallet, balance, allowlist, or payment state from one network as valid on the other.
 

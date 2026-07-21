@@ -63,14 +63,14 @@ npx @agentpay-ai/agentpay-celo install
 5. If you do not have terminal/local command access, explain that AgentPay cannot be installed or checked from this session.
 6. Use `npx @agentpay-ai/agentpay-celo doctor` only for self-hosted/operator diagnostics.
 7. Use `npx @agentpay-ai/agentpay-celo setup-web` only for self-hosted/operator fallback when the setup/signing page cannot be served through the hosted agent flow.
-8. Continue in chat with wallet creation by calling `prepare_wallet_creation` and `check_wallet_creation`.
+8. Continue in chat with wallet creation by calling `prepare_wallet_creation`. If it returns `PENDING`, use the legacy `check_wallet_creation` flow. If it returns `SETUP_REQUIRED`, open the returned `setupUrl`, wait for the user to complete hosted setup, then call `get_agent_wallet`.
 
 ## Available MCP Tools
 
 Expected AgentPay tools:
 
-- `prepare_wallet_creation`: create a setup intent and return a signing link.
-- `check_wallet_creation`: check whether the setup intent has completed and return the AgentPay smart account address.
+- `prepare_wallet_creation`: start wallet setup. A legacy `PENDING` response includes a setup intent and signing link; a production `SETUP_REQUIRED` response includes the hosted `setupUrl`.
+- `check_wallet_creation`: check whether a legacy `PENDING` setup intent has completed and return the AgentPay smart account address.
 - `get_agent_wallet`: return owner, executor, smart account address, home chain, and status.
 - `get_balance`: read Celo USDC/USDT/USDm and CELO balances.
 - `parse_invoice_payment`: parse structured invoice text into `prepare_payment` fields.
@@ -104,15 +104,12 @@ Cross-chain routes are payment-time choices, not wallet-creation choices. Create
 
 When the user asks to create an AgentPay wallet:
 
-1. Self-service wallet creation is available on Celo Sepolia. If the user asks to create a new mainnet wallet, explain that mainnet activation is operator-managed and do not call the public setup tool.
-2. Call `prepare_wallet_creation` with `network: "testnet"` for Celo Sepolia.
-3. Give the user the setup signing link.
-4. Explain that the signing page proves wallet ownership and does not approve any payment.
-5. Wait for the user to sign on the setup page.
-6. Call `check_wallet_creation`.
-7. When complete, show the AgentPay smart account address and network, then tell the user to fund it with supported Celo USDC, USDT, or USDm.
+1. Call `prepare_wallet_creation` with the selected network.
+2. If the response status is `PENDING`, give the user the setup signing link, explain that the signing page proves wallet ownership and does not approve any payment, wait for the user to sign, then call `check_wallet_creation` with the returned setup intent id.
+3. If the response status is `SETUP_REQUIRED`, open the returned `setupUrl`, explain that hosted setup proves ownership and does not approve any payment, wait for the user to complete setup, then call `get_agent_wallet` with the same network.
+4. When completion is confirmed, show the AgentPay smart account address and network, then tell the user to fund it with supported Celo USDC, USDT, or USDm.
 
-Never claim the wallet is ready until `check_wallet_creation` confirms completion.
+Never claim the wallet is ready until `check_wallet_creation` confirms a legacy `PENDING` setup intent or `get_agent_wallet` confirms a production `SETUP_REQUIRED` setup.
 
 ## Owner Admin Workflow
 

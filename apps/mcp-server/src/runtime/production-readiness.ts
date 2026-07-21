@@ -15,6 +15,11 @@ export const MAINNET_USDC_ADDRESS = "0xcebA9300f2b948710d2653dD7B07f33A8B32118C"
 export const MAINNET_USDC_CODE_HASH =
   "0x14254a76b7b2554180021c6390e814e73dee647ae91b7198da08de5145214493";
 export const MAINNET_MIGRATION_HEAD = "20260717120000_celo_home_chain_boundary";
+export const MAINNET_RPC_FALLBACK_URL = "https://forno.celo.org";
+export const MAINNET_CONSUMER_MCP_URL = "https://wallet.agentpay.site/celo/mcp";
+export const MAINNET_PAID_MCP_URL = "https://mcp.agentpay.site/celo/mcp";
+export const MAINNET_SETUP_URL = "https://wallet.agentpay.site/celo/setup";
+export const MAINNET_REVIEW_URL = "https://wallet.agentpay.site/celo/review";
 export const DEFAULT_PRODUCTION_MANIFEST_PATH = fileURLToPath(
   new URL("../../../../ops/manifests/celo-mainnet.shadow.json", import.meta.url),
 );
@@ -36,6 +41,12 @@ const PRODUCTION_ENVIRONMENT_KEYS = [
   "SUPABASE_URL",
   "SUPABASE_SERVICE_ROLE_KEY",
   "DIRECT_URL",
+  "AGENTPAY_SETUP_WEB_TOKEN",
+  "AGENTPAY_SETUP_WORKER_TOKEN",
+  "AGENTPAY_SETUP_WEB_TOKEN_PATH",
+  "AGENTPAY_SETUP_WORKER_TOKEN_PATH",
+  "AGENTPAY_SETUP_DEPLOYER_PRIVATE_KEY",
+  "SETUP_DEPLOYER_PRIVATE_KEY",
 ];
 const EXECUTION_MODES = new Set<ExecutionMode>(["OFF", "CANARY", "PUBLIC", "DRAIN"]);
 const MANIFEST_STATUSES = new Set<RuntimeIdentityStatus>(["SHADOW_ONLY", "DEPLOYED", "READY", "DRAINING"]);
@@ -107,6 +118,8 @@ export interface ProductionReadinessInput {
   paymentConfig?: ProductionPaymentConfigSnapshot;
   /** True only after the durable Supabase ledger and frozen allowlist probe pass. */
   canaryAdmissionReady?: boolean;
+  /** Live `/celo/setup/readyz` result; the onboarding service revalidates its rotated scoped token. */
+  onboardingReady?: boolean;
 }
 
 export async function loadProductionManifest(path = DEFAULT_PRODUCTION_MANIFEST_PATH): Promise<unknown> {
@@ -129,8 +142,20 @@ export function validateProductionEnvironment(env: Record<string, string | undef
     "SUPABASE_PRODUCTION_URL",
     "SUPABASE_PRODUCTION_SERVICE_ROLE_KEY",
     "CELO_MAINNET_RPC_URL",
+    "CELO_MAINNET_RPC_FALLBACK_URL",
     "AGENTPAY_SESSION_HASH_KEY",
     "AGENTPAY_REVIEW_TOKEN_SECRET",
+    "AGENTPAY_CONSUMER_MCP_URL",
+    "AGENTPAY_PAID_MCP_URL",
+    "AGENTPAY_PUBLIC_SETUP_URL",
+    "AGENTPAY_PUBLIC_REVIEW_URL",
+    "AGENTPAY_ONBOARDING_MANIFEST_PATH",
+    "AGENTPAY_ONBOARDING_MANIFEST_SHA256",
+    "AGENTPAY_FACTORY_ADDRESS",
+    "AGENTPAY_FACTORY_RUNTIME_CODE_HASH",
+    "AGENTPAY_SETUP_SPONSOR_ADDRESS",
+    "AGENTPAY_SETUP_SUPABASE_PROJECT_REF",
+    "AGENTPAY_SETUP_MODE",
   ]) {
     if (!has(name)) add(name, "is required for production");
   }
@@ -138,12 +163,62 @@ export function validateProductionEnvironment(env: Record<string, string | undef
   if (has("CELO_MAINNET_RPC_URL")) {
     try {
       const rpcUrl = new URL(env.CELO_MAINNET_RPC_URL!);
-      if (rpcUrl.protocol !== "https:" || rpcUrl.hostname !== "forno.celo.org") {
-        add("CELO_MAINNET_RPC_URL", "must be the pinned Celo mainnet HTTPS host");
+      if (
+        rpcUrl.protocol !== "https:" ||
+        ["localhost", "127.0.0.1", "::1"].includes(rpcUrl.hostname) ||
+        /test|dev|staging/i.test(rpcUrl.hostname)
+      ) {
+        add("CELO_MAINNET_RPC_URL", "must be a production HTTPS RPC URL");
       }
     } catch {
       add("CELO_MAINNET_RPC_URL", "must be a valid HTTPS URL");
     }
+  }
+
+  if (has("CELO_MAINNET_RPC_FALLBACK_URL") && env.CELO_MAINNET_RPC_FALLBACK_URL !== MAINNET_RPC_FALLBACK_URL) {
+    add("CELO_MAINNET_RPC_FALLBACK_URL", `must be ${MAINNET_RPC_FALLBACK_URL}`);
+  }
+
+  const publicRoutes = {
+    AGENTPAY_CONSUMER_MCP_URL: MAINNET_CONSUMER_MCP_URL,
+    AGENTPAY_PAID_MCP_URL: MAINNET_PAID_MCP_URL,
+    AGENTPAY_PUBLIC_SETUP_URL: MAINNET_SETUP_URL,
+    AGENTPAY_PUBLIC_REVIEW_URL: MAINNET_REVIEW_URL,
+  } as const;
+  for (const [name, expected] of Object.entries(publicRoutes)) {
+    if (has(name) && env[name] !== expected) add(name, `must be ${expected}`);
+  }
+
+  if (has("AGENTPAY_ONBOARDING_MANIFEST_PATH") && !env.AGENTPAY_ONBOARDING_MANIFEST_PATH!.startsWith("/")) {
+    add("AGENTPAY_ONBOARDING_MANIFEST_PATH", "must be an absolute path");
+  }
+  if (has("AGENTPAY_ONBOARDING_MANIFEST_SHA256") && !SHA256_PATTERN.test(env.AGENTPAY_ONBOARDING_MANIFEST_SHA256!)) {
+    add("AGENTPAY_ONBOARDING_MANIFEST_SHA256", "must be a lowercase SHA-256 digest");
+  }
+  for (const name of ["AGENTPAY_FACTORY_ADDRESS", "AGENTPAY_SETUP_SPONSOR_ADDRESS"]) {
+    if (has(name) && (!ADDRESS_PATTERN.test(env[name]!) || env[name]!.toLowerCase() === ZERO_ADDRESS)) {
+      add(name, "must be a non-zero EVM address");
+    }
+  }
+  if (has("AGENTPAY_FACTORY_RUNTIME_CODE_HASH") && !HEX_HASH_PATTERN.test(env.AGENTPAY_FACTORY_RUNTIME_CODE_HASH!)) {
+    add("AGENTPAY_FACTORY_RUNTIME_CODE_HASH", "must be a 32-byte hash");
+  }
+  if (has("AGENTPAY_SETUP_MODE") && !EXECUTION_MODES.has(env.AGENTPAY_SETUP_MODE as ExecutionMode)) {
+    add("AGENTPAY_SETUP_MODE", "must be OFF, CANARY, PUBLIC, or DRAIN");
+  }
+  const setupProjectRef = env.AGENTPAY_SETUP_SUPABASE_PROJECT_REF;
+  const productionProjectRef = extractSupabaseProjectRef(env.SUPABASE_PRODUCTION_URL);
+  if (has("AGENTPAY_SETUP_SUPABASE_PROJECT_REF") && !/^[a-z0-9]{20}$/.test(setupProjectRef!)) {
+    add("AGENTPAY_SETUP_SUPABASE_PROJECT_REF", "must be a Supabase project ref");
+  } else if (setupProjectRef && setupProjectRef !== productionProjectRef) {
+    add("AGENTPAY_SETUP_SUPABASE_PROJECT_REF", "must match the isolated production Supabase project");
+  }
+  if (
+    has("AGENTPAY_FACTORY_ADDRESS") &&
+    has("AGENTPAY_SETUP_SPONSOR_ADDRESS") &&
+    env.AGENTPAY_FACTORY_ADDRESS!.toLowerCase() === env.AGENTPAY_SETUP_SPONSOR_ADDRESS!.toLowerCase()
+  ) {
+    add("AGENTPAY_SETUP_SPONSOR_ADDRESS", "must differ from the factory address");
   }
 
   if (has("SUPABASE_PRODUCTION_URL")) {
@@ -186,6 +261,12 @@ export function validateProductionManifest(manifest: unknown): { valid: boolean;
   if (record.chain?.chainId !== MAINNET_CHAIN_ID) add("chain.chainId", "must be 42220");
   if (record.chain?.caip2 !== MAINNET_CAIP2) add("chain.caip2", "must be eip155:42220");
   if (record.chain?.rpcEnvRef !== "CELO_MAINNET_RPC_URL") add("chain.rpcEnvRef", "must be CELO_MAINNET_RPC_URL");
+  if (record.chain?.fallbackRpcEnvRef !== "CELO_MAINNET_RPC_FALLBACK_URL") {
+    add("chain.fallbackRpcEnvRef", "must be CELO_MAINNET_RPC_FALLBACK_URL");
+  }
+  if (record.chain?.fallbackRpcUrl !== MAINNET_RPC_FALLBACK_URL) {
+    add("chain.fallbackRpcUrl", `must be ${MAINNET_RPC_FALLBACK_URL}`);
+  }
   if (record.database?.environment !== "production") add("database.environment", "must be production");
   if (record.database?.migrationHead !== MAINNET_MIGRATION_HEAD) add("database.migrationHead", "does not match the identity migration head");
   if (record.release?.migrationHead !== MAINNET_MIGRATION_HEAD) add("release.migrationHead", "does not match the identity migration head");
@@ -200,6 +281,22 @@ export function validateProductionManifest(manifest: unknown): { valid: boolean;
   if (record.x402?.network !== MAINNET_CAIP2 || record.x402?.asset !== "USDC" || record.x402?.tokenAddress?.toLowerCase() !== MAINNET_USDC_ADDRESS.toLowerCase()) add("x402", "must target Celo mainnet USDC on eip155:42220");
   if (record.x402?.decimals !== 6 || record.x402?.price !== "$0.01" || record.x402?.priceAtomic !== "10000" || record.x402?.syncSettle !== true) add("x402", "must use 6 decimals, $0.01/10000, and synchronous settlement");
   if (JSON.stringify(record.x402?.toolAllowlist ?? []) !== JSON.stringify(["execute_payment"])) add("x402.toolAllowlist", "must contain only execute_payment");
+  if (record.onboarding?.setupUrl !== MAINNET_SETUP_URL) add("onboarding.setupUrl", `must be ${MAINNET_SETUP_URL}`);
+  if (record.onboarding?.readinessUrl !== `${MAINNET_SETUP_URL}/readyz`) {
+    add("onboarding.readinessUrl", `must be ${MAINNET_SETUP_URL}/readyz`);
+  }
+  if (record.onboarding?.manifestPathEnvRef !== "AGENTPAY_ONBOARDING_MANIFEST_PATH") {
+    add("onboarding.manifestPathEnvRef", "must be AGENTPAY_ONBOARDING_MANIFEST_PATH");
+  }
+  if (record.onboarding?.manifestSha256EnvRef !== "AGENTPAY_ONBOARDING_MANIFEST_SHA256") {
+    add("onboarding.manifestSha256EnvRef", "must be AGENTPAY_ONBOARDING_MANIFEST_SHA256");
+  }
+  if (record.onboarding?.factoryAddressEnvRef !== "AGENTPAY_FACTORY_ADDRESS") {
+    add("onboarding.factoryAddressEnvRef", "must be AGENTPAY_FACTORY_ADDRESS");
+  }
+  if (record.onboarding?.sponsorAddressEnvRef !== "AGENTPAY_SETUP_SPONSOR_ADDRESS") {
+    add("onboarding.sponsorAddressEnvRef", "must be AGENTPAY_SETUP_SPONSOR_ADDRESS");
+  }
   if (mode === "OFF" && status !== "SHADOW_ONLY" && status !== "DEPLOYED") add("executionMode", "OFF is only valid before activation");
   if (status === "SHADOW_ONLY" && mode !== "OFF") add("executionMode", "SHADOW_ONLY manifests must remain OFF");
 
@@ -272,6 +369,19 @@ export async function evaluateProductionReadiness(input: ProductionReadinessInpu
   checks.canaryAdmission = canaryAdmissionReady;
   if (!canaryAdmissionReady) {
     errors.push("canary admission: durable Supabase ledger and frozen allowlist are required");
+  }
+
+  const setupMode = input.env.AGENTPAY_SETUP_MODE as ExecutionMode | undefined;
+  const onboardingModeMatches = mode !== "CANARY" && mode !== "PUBLIC" ? true : setupMode === mode;
+  checks.onboardingMode = onboardingModeMatches;
+  if (!onboardingModeMatches) {
+    errors.push("onboarding mode: AGENTPAY_SETUP_MODE must match the effective production execution mode");
+  }
+
+  const onboardingReady = mode === "OFF" || mode === "DRAIN" || input.onboardingReady === true;
+  checks.onboarding = onboardingReady;
+  if (!onboardingReady) {
+    errors.push("onboarding readiness: live /celo/setup/readyz verification is required");
   }
 
   if (mode === "PUBLIC" && status !== "READY") errors.push("execution mode: PUBLIC requires READY identity status");

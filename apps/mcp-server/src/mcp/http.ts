@@ -125,6 +125,7 @@ export interface StartAgentPayHttpServerOptions {
 export interface ResolveProductionReadinessDependencies {
   loadRuntimeIdentity?: () => Promise<RuntimeEnvironmentIdentity | null>;
   verifyAccount?: (expected: MainnetAccountVerificationExpected) => Promise<MainnetAccountVerificationResult>;
+  checkOnboardingReady?: (setupUrl: string, expectedMode: string) => Promise<boolean>;
 }
 
 /**
@@ -194,6 +195,15 @@ export async function startAgentPayHttpServer(options: StartAgentPayHttpServerOp
             });
           } catch {
             return withReadinessError(current, "canary admission: live Supabase ledger read failed");
+          }
+        }
+        if (current.mode === "CANARY" || current.mode === "PUBLIC") {
+          const onboardingReady = await checkProductionOnboardingReady(
+            String((options.env ?? process.env).AGENTPAY_PUBLIC_SETUP_URL ?? ""),
+            String((options.env ?? process.env).AGENTPAY_SETUP_MODE ?? ""),
+          );
+          if (!onboardingReady) {
+            return withReadinessError(current, "onboarding readiness: live rotated-token readiness check failed");
           }
         }
         return current;
@@ -2174,6 +2184,28 @@ export async function resolveProductionReadiness(
     }
   }
 
+  let onboardingReady: boolean | undefined;
+  if (requestedMode === "CANARY" || requestedMode === "PUBLIC") {
+    try {
+      const setupUrl = String(env.AGENTPAY_PUBLIC_SETUP_URL ?? "").trim();
+      const setupMode = String(env.AGENTPAY_SETUP_MODE ?? "").trim();
+      if (setupMode !== requestedMode) {
+        onboardingReady = false;
+        extraErrors.push("onboarding readiness: setup mode must match the effective production execution mode");
+      } else {
+        onboardingReady = await (
+          dependencies.checkOnboardingReady ?? checkProductionOnboardingReady
+        )(setupUrl, requestedMode);
+        if (!onboardingReady) {
+          extraErrors.push("onboarding readiness: live /celo/setup/readyz verification failed");
+        }
+      }
+    } catch {
+      onboardingReady = false;
+      extraErrors.push("onboarding readiness: live /celo/setup/readyz could not be verified");
+    }
+  }
+
   const result = await evaluateProductionReadiness({
     env: Object.fromEntries(
       Object.entries(env).map(([key, value]) => {
@@ -2186,8 +2218,36 @@ export async function resolveProductionReadiness(
     accountVerification,
     paymentConfig,
     canaryAdmissionReady,
+    onboardingReady,
   });
   return extraErrors.reduce(withReadinessError, result);
+}
+
+async function checkProductionOnboardingReady(setupUrl: string, expectedMode: string): Promise<boolean> {
+  if (setupUrl !== "https://wallet.agentpay.site/celo/setup") return false;
+  if (!["CANARY", "PUBLIC"].includes(expectedMode)) return false;
+  const readinessUrl = new URL(setupUrl);
+  readinessUrl.pathname = `${readinessUrl.pathname.replace(/\/$/, "")}/readyz`;
+  readinessUrl.search = "";
+  readinessUrl.hash = "";
+  const response = await fetch(readinessUrl, {
+    method: "GET",
+    redirect: "error",
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (!response.ok) return false;
+  const contentLength = Number(response.headers.get("content-length") ?? "0");
+  if (Number.isFinite(contentLength) && contentLength > 4_096) return false;
+  const responseText = await response.text();
+  if (Buffer.byteLength(responseText) > 4_096) return false;
+  let body: { status?: unknown; mode?: unknown };
+  try {
+    body = JSON.parse(responseText) as { status?: unknown; mode?: unknown };
+  } catch {
+    return false;
+  }
+  return body.status === "ready" && body.mode === expectedMode;
 }
 
 async function loadManifestCanaryPolicy(path: string | undefined): Promise<CanaryPolicy | undefined> {

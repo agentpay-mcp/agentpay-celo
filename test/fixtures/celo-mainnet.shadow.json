@@ -10,7 +10,8 @@
     "caip2": "eip155:42220",
     "nativeSymbol": "CELO",
     "rpcEnvRef": "CELO_MAINNET_RPC_URL",
-    "expectedRpcHost": "forno.celo.org"
+    "fallbackRpcEnvRef": "CELO_MAINNET_RPC_FALLBACK_URL",
+    "fallbackRpcUrl": "https://forno.celo.org"
   },
   "database": {
     "environment": "production",
@@ -82,6 +83,15 @@
     "publicOrigin": null,
     "consumerOrigin": "https://wallet.agentpay.site/celo/mcp",
     "siweAudience": "https://wallet.agentpay.site/celo/mcp"
+  },
+  "onboarding": {
+    "setupMode": "OFF",
+    "setupUrl": "https://wallet.agentpay.site/celo/setup",
+    "readinessUrl": "https://wallet.agentpay.site/celo/setup/readyz",
+    "manifestPathEnvRef": "AGENTPAY_ONBOARDING_MANIFEST_PATH",
+    "manifestSha256EnvRef": "AGENTPAY_ONBOARDING_MANIFEST_SHA256",
+    "factoryAddressEnvRef": "AGENTPAY_FACTORY_ADDRESS",
+    "sponsorAddressEnvRef": "AGENTPAY_SETUP_SPONSOR_ADDRESS"
   },
   "canaryPolicy": {
     "maxAcceptedLifecycles": 1,

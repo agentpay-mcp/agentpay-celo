@@ -128,6 +128,9 @@ export async function runLocalAgentPayDemo(): Promise<LocalAgentPayDemoResult> {
 
   const initialWallet = await runtime.getAgentWallet({});
   const setup = await runtime.prepareWalletCreation({ ownerAddress: demoWallet.ownerAddress });
+  if (setup.status !== "PENDING") {
+    throw new Error("The local demo requires the legacy in-memory setup intent path.");
+  }
   const completedSetup = await completeWalletSetup(
     {
       setupIntentId: setup.setupIntentId,

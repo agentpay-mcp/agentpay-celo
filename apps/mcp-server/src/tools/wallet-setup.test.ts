@@ -57,6 +57,61 @@ describe("prepareWalletCreation", () => {
     });
   });
 
+  it("returns the canonical production onboarding link without creating a legacy setup intent", async () => {
+    let createCalls = 0;
+
+    const output = await prepareWalletCreation(
+      { network: "mainnet" },
+      {
+        setupIntents: {
+          async createSetupIntent() {
+            createCalls += 1;
+          },
+          async getSetupIntent() {
+            return null;
+          },
+        },
+        executorAddress: "0x4444444444444444444444444444444444444444",
+        setupWebUrl: "https://wallet.agentpay.site/celo/review",
+        productionOnboardingUrl: "https://wallet.agentpay.site/celo/setup",
+        clock: () => new Date("2026-07-21T04:00:00.000Z"),
+        createSetupIntentId: () => "must_not_be_created",
+      },
+    );
+
+    assert.equal(createCalls, 0);
+    assert.deepEqual(output, {
+      status: "SETUP_REQUIRED",
+      setupUrl: "https://wallet.agentpay.site/celo/setup",
+      homeChainId: 42220,
+      homeChain: "Celo",
+      instructionToAgent: "Open the secure AgentPay setup link, connect the owner wallet, and approve the setup signature. Never share a seed phrase or private key.",
+    });
+  });
+
+  it("rejects testnet selection and non-canonical links on the production onboarding path", async () => {
+    const dependencies = {
+      setupIntents: {
+        async createSetupIntent() {},
+        async getSetupIntent() { return null; },
+      },
+      executorAddress: "0x4444444444444444444444444444444444444444",
+      setupWebUrl: "https://wallet.agentpay.site/celo/review",
+      productionOnboardingUrl: "https://wallet.agentpay.site/celo/setup",
+      clock: () => new Date("2026-07-21T04:00:00.000Z"),
+      createSetupIntentId: () => "must_not_be_created",
+    };
+
+    await assert.rejects(
+      prepareWalletCreation({ network: "testnet" }, dependencies),
+      /Celo mainnet/i,
+    );
+    await assert.rejects(
+      prepareWalletCreation({}, { ...dependencies, productionOnboardingUrl: "https://evil.example/setup" }),
+      /onboarding URL/i,
+    );
+  });
+
   it("includes a preset owner address in the setup signing message", async () => {
     const created: SetupIntentRecord[] = [];
 
