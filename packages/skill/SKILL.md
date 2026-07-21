@@ -18,19 +18,19 @@ Do not bypass AgentPay with raw RPC calls, manual wallet transfers, raw LI.FI ca
 The public install command is:
 
 ```bash
-npx @agentpay-ai/agentpay install
+npx @agentpay-ai/agentpay-celo install
 ```
 
 The install command only installs/configures the MCP plugin and instructions. It must not create a wallet, deploy a smart account, sign messages, approve payments, or move funds.
 
-Default installs connect to the authenticated consumer AgentPay MCP endpoint at `https://wallet.agentpay.site/mcp`. Users do not need Supabase, RPC, executor, deployer, or bytecode config for normal chat usage. The separate paid public execution ASP is `https://mcp.agentpay.site/mcp` and is used only after Review & Sign.
+Default installs connect to the authenticated consumer AgentPay MCP endpoint at `https://wallet.agentpay.site/celo/mcp`. Users do not need Supabase, RPC, executor, deployer, or bytecode config for normal chat usage. The separate paid public execution ASP is `https://mcp.agentpay.site/celo/mcp` and is used only after Review & Sign.
 
 After installation, ask the user to reload or reconnect the agent runtime if needed. Then return to the agent chat and continue with wallet creation or payment using AgentPay MCP tools.
 
 Use this diagnostic command only when checking self-hosted/operator configuration readiness or troubleshooting:
 
 ```bash
-npx @agentpay-ai/agentpay doctor
+npx @agentpay-ai/agentpay-celo doctor
 ```
 
 This checks self-hosted MCP and setup-web readiness without starting services or printing secret values.
@@ -38,7 +38,7 @@ This checks self-hosted MCP and setup-web readiness without starting services or
 Use this fallback command only for self-hosted/operator mode when the setup/signing page needs to be served outside the hosted agent tool flow:
 
 ```bash
-npx @agentpay-ai/agentpay setup-web
+npx @agentpay-ai/agentpay-celo setup-web
 ```
 
 ## If AgentPay Is Not Installed
@@ -49,20 +49,20 @@ If the user asks for a crypto payment and AgentPay MCP tools are unavailable:
 2. If you have terminal/local command access, ask for explicit approval before installing:
 
 ```txt
-I can install AgentPay by running `npx @agentpay-ai/agentpay install`.
+I can install AgentPay by running `npx @agentpay-ai/agentpay-celo install`.
 This will modify local MCP/runtime configuration. Do you approve?
 ```
 
 3. Only after approval, run:
 
 ```bash
-npx @agentpay-ai/agentpay install
+npx @agentpay-ai/agentpay-celo install
 ```
 
 4. Ask the user to reload or reconnect the runtime if needed, then return to the agent chat. Do not ask normal users to fill local Supabase, RPC, executor, deployer, or bytecode config.
 5. If you do not have terminal/local command access, explain that AgentPay cannot be installed or checked from this session.
-6. Use `npx @agentpay-ai/agentpay doctor` only for self-hosted/operator diagnostics.
-7. Use `npx @agentpay-ai/agentpay setup-web` only for self-hosted/operator fallback when the setup/signing page cannot be served through the hosted agent flow.
+6. Use `npx @agentpay-ai/agentpay-celo doctor` only for self-hosted/operator diagnostics.
+7. Use `npx @agentpay-ai/agentpay-celo setup-web` only for self-hosted/operator fallback when the setup/signing page cannot be served through the hosted agent flow.
 8. Continue in chat with wallet creation by calling `prepare_wallet_creation` and `check_wallet_creation`.
 
 ## Available MCP Tools
@@ -288,7 +288,7 @@ Use these responses:
 - Never ask the user to send funds to an address that was not returned by AgentPay.
 - Never modify payment details after approval.
 - Never execute payment outside AgentPay MCP tools.
-- Never run `npx @agentpay-ai/agentpay install` without explicit user approval when acting on the user's machine.
+- Never run `npx @agentpay-ai/agentpay-celo install` without explicit user approval when acting on the user's machine.
 - Never treat installation approval as payment approval.
 - Never treat setup signature as payment approval.
 - Never treat an x402 parse result as payment approval or protocol settlement; retry x402 resources only after the matching payment intent is `COMPLETED`.

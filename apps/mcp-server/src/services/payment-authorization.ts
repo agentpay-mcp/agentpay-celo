@@ -10,7 +10,7 @@ import {
   type RoutePaymentAuthorization,
   type PaymentIntentRecord,
   getStableTokenDecimalsForChain,
-} from "@agentpay-ai/shared";
+} from "@agentpay-ai/shared-celo";
 
 export type DirectPaymentAuthorizationTypedData = AgentPayTypedData<DirectPaymentAuthorization>;
 export type RoutePaymentAuthorizationTypedData = AgentPayTypedData<RoutePaymentAuthorization>;

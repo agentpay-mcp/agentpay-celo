@@ -51,6 +51,33 @@ export const CELO_NETWORK_CHAIN_IDS = {
   testnet: 11142220,
 } as const;
 
+export const CELO_NETWORKS = {
+  mainnet: {
+    chainId: 42220,
+    caip2: "eip155:42220",
+    name: "Celo Mainnet",
+    nativeCurrency: { symbol: "CELO", decimals: 18 },
+    rpcEnvName: "CELO_MAINNET_RPC_URL",
+    fallbackRpcEnvName: "CELO_MAINNET_RPC_FALLBACK_URL",
+    explorerUrl: "https://celoscan.io",
+  },
+  testnet: {
+    chainId: 11142220,
+    caip2: "eip155:11142220",
+    name: "Celo Sepolia",
+    nativeCurrency: { symbol: "CELO", decimals: 18 },
+    rpcEnvName: "CELO_SEPOLIA_RPC_URL",
+    explorerUrl: "https://celo-sepolia.blockscout.com",
+  },
+} as const;
+
+export const AGENTPAY_CELO_PUBLIC_URLS = {
+  consumerMcp: "https://wallet.agentpay.site/celo/mcp",
+  paidMcp: "https://mcp.agentpay.site/celo/mcp",
+  setup: "https://wallet.agentpay.site/celo/setup",
+  review: "https://wallet.agentpay.site/celo/review",
+} as const;
+
 export const celoNetworkSchema = z.enum(["mainnet", "testnet"]);
 export const celoHomeChainIdSchema = z.union([z.literal(42220), z.literal(11142220)]);
 export const networkSelectionShape = {

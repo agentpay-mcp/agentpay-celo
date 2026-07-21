@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createDirectPaymentRouteQuote } from "@agentpay-ai/shared";
+import { createDirectPaymentRouteQuote } from "@agentpay-ai/shared-celo";
 import { MAINNET_USDC_ADDRESS } from "./production-readiness.ts";
 import { assertCanaryRequestAllowed, createCanaryUsageStore, DEFAULT_CANARY_CAPS } from "./paid-execution-canary.ts";
 

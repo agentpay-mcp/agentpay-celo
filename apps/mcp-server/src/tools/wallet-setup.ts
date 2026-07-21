@@ -9,7 +9,7 @@ import {
   type GetAgentWalletInput,
   type PrepareWalletCreationInput,
   type SetupIntentRecord,
-} from "@agentpay-ai/shared";
+} from "@agentpay-ai/shared-celo";
 
 import type { AgentWalletRepository } from "./prepare-payment.ts";
 

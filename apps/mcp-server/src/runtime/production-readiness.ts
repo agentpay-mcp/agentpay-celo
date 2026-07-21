@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-import type { PaymentIntentRecord, SessionEnvironment } from "@agentpay-ai/shared";
+import type { PaymentIntentRecord, SessionEnvironment } from "@agentpay-ai/shared-celo";
 
 import type { MainnetAccountVerificationResult } from "../services/mainnet-account-verifier.ts";
 

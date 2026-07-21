@@ -14,6 +14,7 @@ const canaryOwnerRebindingMigrationPath = "supabase/migrations/20260714180000_ca
 const oauthConsumerAuthorizationMigrationPath = "supabase/migrations/20260715110000_oauth_consumer_authorization.sql";
 const paymentIntentAuditMigrationPath = "supabase/migrations/20260715153000_payment_intent_atomic_audit.sql";
 const celoBoundaryMigrationPath = "supabase/migrations/20260717120000_celo_home_chain_boundary.sql";
+const celoConsumerResourceMigrationPath = "supabase/migrations/20260721120000_celo_consumer_resource.sql";
 const migrationsDir = "supabase/migrations";
 const requiredTables = ["setup_intents", "agent_wallets", "payment_intents", "payment_events"];
 const requiredSecurityStatements = [
@@ -354,5 +355,15 @@ describe("AgentPay Supabase migration", () => {
       assert.ok(sql.includes(statement), statement);
     }
     assert.ok(!sql.includes("default 196"));
+  });
+
+  it("migrates OAuth authorization resources to the isolated Celo MCP path", async () => {
+    const sql = normalizeSql(await readFile(celoConsumerResourceMigrationPath, "utf8"));
+
+    assert.ok(sql.startsWith("begin;"));
+    assert.ok(sql.endsWith("commit;"));
+    assert.ok(sql.includes("drop constraint if exists oauth_authorizations_resource_check"));
+    assert.ok(sql.includes("check (resource = 'https://wallet.agentpay.site/celo/mcp')"));
+    assert.ok(sql.includes("notify pgrst, 'reload schema'"));
   });
 });

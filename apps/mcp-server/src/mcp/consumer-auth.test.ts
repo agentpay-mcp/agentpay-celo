@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createSessionContext, type SessionContext } from "@agentpay-ai/shared";
+import { createSessionContext, type SessionContext } from "@agentpay-ai/shared-celo";
 
 import { authenticateConsumerRequest, type ConsumerSessionAuthenticator } from "./consumer-auth.ts";
 
@@ -11,7 +11,7 @@ const trustedContext: SessionContext = createSessionContext({
   ownerAddress: "0x1111111111111111111111111111111111111111",
   accountAddress: "0x2222222222222222222222222222222222222222",
   homeChainId: 1952,
-  audience: "https://wallet.agentpay.site/mcp",
+  audience: "https://wallet.agentpay.site/celo/mcp",
   environment: "staging",
   scopes: ["wallet:read"],
   authEpoch: 0,

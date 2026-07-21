@@ -13,11 +13,11 @@ const publishablePackages = [
 ];
 const publishScope = "@agentpay-ai";
 const expectedPackageNames = new Map([
-  ["packages/skill", "@agentpay-ai/skill"],
-  ["packages/shared", "@agentpay-ai/shared"],
-  ["apps/mcp-server", "@agentpay-ai/mcp-server"],
-  ["apps/setup-web", "@agentpay-ai/setup-web"],
-  ["packages/cli", "@agentpay-ai/agentpay"],
+  ["packages/skill", "@agentpay-ai/skill-celo"],
+  ["packages/shared", "@agentpay-ai/shared-celo"],
+  ["apps/mcp-server", "@agentpay-ai/mcp-server-celo"],
+  ["apps/setup-web", "@agentpay-ai/setup-web-celo"],
+  ["packages/cli", "@agentpay-ai/agentpay-celo"],
 ]);
 
 async function readPackageJson(packageDir) {
@@ -94,21 +94,21 @@ describe("publishable AgentPay package manifests", () => {
     const rootManifest = await readPackageJson(".");
     const skillManifest = await readPackageJson("packages/skill");
     const expectedDependencies = {
-      "@agentpay-ai/shared": {
+      "@agentpay-ai/shared-celo": {
         "@noble/hashes": rootManifest.dependencies["@noble/hashes"],
         zod: rootManifest.dependencies.zod,
       },
-      "@agentpay-ai/mcp-server": {
+      "@agentpay-ai/mcp-server-celo": {
         "@x402/core": rootManifest.dependencies["@x402/core"],
         "@x402/evm": rootManifest.dependencies["@x402/evm"],
         "@supabase/supabase-js": rootManifest.dependencies["@supabase/supabase-js"],
         ethers: rootManifest.dependencies.ethers,
       },
-      "@agentpay-ai/setup-web": {
+      "@agentpay-ai/setup-web-celo": {
         ethers: rootManifest.dependencies.ethers,
       },
-      "@agentpay-ai/agentpay": {
-        "@agentpay-ai/skill": skillManifest.version,
+      "@agentpay-ai/agentpay-celo": {
+        "@agentpay-ai/skill-celo": skillManifest.version,
       },
     };
 
@@ -170,7 +170,7 @@ describe("publishable AgentPay package manifests", () => {
       const template = JSON.parse(await readFile(templatePath, "utf8"));
 
       assert.deepEqual(template.mcpServers.agentpay, {
-        url: "https://wallet.agentpay.site/mcp",
+        url: "https://wallet.agentpay.site/celo/mcp",
       });
     }
   });

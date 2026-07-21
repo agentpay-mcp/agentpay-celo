@@ -9,7 +9,7 @@ import { Wallet } from "ethers";
 import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
 import { describe, it } from "node:test";
 
-import { createSessionContext, type SessionContext } from "@agentpay-ai/shared";
+import { createSessionContext, type SessionContext } from "@agentpay-ai/shared-celo";
 import { createConsumerOAuthApi } from "../auth/oauth-api.ts";
 import type {
   OAuthAuthorizationRecord,
@@ -26,7 +26,7 @@ import type { RuntimeEnvironmentIdentity } from "../runtime/production-readiness
 import type { CanaryLedgerStore } from "../runtime/paid-execution-canary-ledger.ts";
 import { createInMemoryInvoiceExecutionOutboxStore } from "../services/paid-execution-outbox.ts";
 import { createInMemoryPaidExecutionLifecycleStore } from "../services/paid-execution-lifecycle.ts";
-import type { PaymentIntentRecord } from "@agentpay-ai/shared";
+import type { PaymentIntentRecord } from "@agentpay-ai/shared-celo";
 import type { AgentPayMcpPaymentProcessor } from "./celo-agent-payment.ts";
 import {
   resolveProductionReadiness,
@@ -1035,7 +1035,7 @@ describe("startAgentPayHttpServer", () => {
           const pathname = new URL(request.url).pathname;
           if (pathname === "/.well-known/oauth-protected-resource/mcp") {
             return new Response(JSON.stringify({
-              resource: "https://wallet.agentpay.site/mcp",
+              resource: "https://wallet.agentpay.site/celo/mcp",
               authorization_servers: ["https://wallet.agentpay.site"],
               scopes_supported: ["wallet:read", "payment:prepare", "payment:read", "payment:review", "session:manage"],
               bearer_methods_supported: ["header"],
@@ -1063,7 +1063,7 @@ describe("startAgentPayHttpServer", () => {
       const resourceMetadata = await fetch(new URL("/.well-known/oauth-protected-resource/mcp", server.url));
       assert.equal(resourceMetadata.status, 200);
       assert.deepEqual(await resourceMetadata.json(), {
-        resource: "https://wallet.agentpay.site/mcp",
+        resource: "https://wallet.agentpay.site/celo/mcp",
         authorization_servers: ["https://wallet.agentpay.site"],
         scopes_supported: ["wallet:read", "payment:prepare", "payment:read", "payment:review", "session:manage"],
         bearer_methods_supported: ["header"],
@@ -1410,7 +1410,7 @@ describe("startAgentPayHttpServer", () => {
       authorizationStore: stores.authorizationStore,
       challengeStore: stores.challengeStore,
       serverSecret,
-      audience: "https://wallet.agentpay.site/mcp",
+      audience: "https://wallet.agentpay.site/celo/mcp",
       environment: "staging",
       clock: () => new Date("2026-07-12T00:00:00.000Z"),
       resolveOwner: async (ownerAddress, chainId) => ({
@@ -1435,7 +1435,7 @@ describe("startAgentPayHttpServer", () => {
             credential,
             sessionStore: stores.sessionStore,
             serverSecret,
-            audience: "https://wallet.agentpay.site/mcp",
+            audience: "https://wallet.agentpay.site/celo/mcp",
             environment: "staging",
             clock: () => new Date("2026-07-12T00:00:00.000Z"),
             currentAuthenticationEpoch: async () => 0,
@@ -1469,7 +1469,7 @@ describe("startAgentPayHttpServer", () => {
         resource: string;
         authorization_servers: string[];
       };
-      assert.equal(protectedResourceMetadata.resource, "https://wallet.agentpay.site/mcp");
+      assert.equal(protectedResourceMetadata.resource, "https://wallet.agentpay.site/celo/mcp");
 
       const authorizationServer = protectedResourceMetadata.authorization_servers[0]!;
       const authorizationMetadataResponse = await fetch(localize(`${authorizationServer}/.well-known/oauth-authorization-server`));
@@ -1565,7 +1565,7 @@ describe("startAgentPayHttpServer", () => {
       ownerAddress: "0x1111111111111111111111111111111111111111",
       accountAddress: "0x2222222222222222222222222222222222222222",
       homeChainId: 11142220,
-      audience: "https://wallet.agentpay.site/mcp",
+      audience: "https://wallet.agentpay.site/celo/mcp",
       environment: "staging",
       scopes: ["wallet:read"],
       authEpoch: 0,
@@ -1617,7 +1617,7 @@ describe("startAgentPayHttpServer", () => {
       ownerAddress: "0x1111111111111111111111111111111111111111",
       accountAddress: "0x2222222222222222222222222222222222222222",
       homeChainId: 11142220,
-      audience: "https://wallet.agentpay.site/mcp",
+      audience: "https://wallet.agentpay.site/celo/mcp",
       environment: "staging",
       scopes: ["payment:read"],
       authEpoch: 0,

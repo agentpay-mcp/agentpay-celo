@@ -12,16 +12,16 @@ import {
   type AgentPayHttpServer,
   type StartAgentPayHttpServerOptions,
   type StartAgentPayMcpServerOptions,
-} from "@agentpay-ai/mcp-server";
+} from "@agentpay-ai/mcp-server-celo";
 import {
   createSetupWebDependencies,
   parseSetupWebEnv,
   startSetupWebServer,
   type SetupWebDependencies,
-} from "@agentpay-ai/setup-web";
+} from "@agentpay-ai/setup-web-celo";
 
 const runtimeNames = ["codex", "claude", "cursor", "generic", "hermes"] as const;
-const DEFAULT_HOSTED_MCP_URL = "https://wallet.agentpay.site/mcp";
+const DEFAULT_HOSTED_MCP_URL = "https://wallet.agentpay.site/celo/mcp";
 const requiredConfigKeys = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "CELO_RPC_URL", "EXECUTOR_PRIVATE_KEY"] as const;
 const setupRequiredConfigKeys = [
   "SUPABASE_URL",
@@ -32,6 +32,7 @@ const setupRequiredConfigKeys = [
 const optionalConfigKeys = [
   "BASE_RPC_URL",
   "CELO_MAINNET_RPC_URL",
+  "CELO_MAINNET_RPC_FALLBACK_URL",
   "CELO_SEPOLIA_RPC_URL",
   "SETUP_WEB_URL",
   "LIFI_API_KEY",
@@ -40,6 +41,10 @@ const optionalConfigKeys = [
   "AGENTPAY_OWNER_ADDRESS",
   "AGENTPAY_EXECUTOR_ADDRESS",
   "AGENTPAY_HOME_CHAIN_ID",
+  "AGENTPAY_CONSUMER_MCP_URL",
+  "AGENTPAY_PAID_MCP_URL",
+  "AGENTPAY_PUBLIC_SETUP_URL",
+  "AGENTPAY_PUBLIC_REVIEW_URL",
   "AGENTPAY_HTTP_MODE",
   "AGENTPAY_ENVIRONMENT",
   "AGENTPAY_MAINNET_MANIFEST_PATH",
@@ -623,7 +628,7 @@ function createAgentPayMcpConfig(options: { selfHosted: boolean; mcpUrl: string 
       agentpay: options.selfHosted
         ? {
             command: "npx",
-            args: ["-y", "@agentpay-ai/agentpay", "mcp"],
+            args: ["-y", "@agentpay-ai/agentpay-celo", "mcp"],
             env: {
               AGENTPAY_CONFIG: "~/.agentpay/config.json",
             },
@@ -868,7 +873,7 @@ function resolveAgentPaySkillRoot(packageRoot: string): string {
   }
 
   try {
-    return dirname(require.resolve("@agentpay-ai/skill/package.json"));
+    return dirname(require.resolve("@agentpay-ai/skill-celo/package.json"));
   } catch {
     throw new Error("AgentPay skill package was not found.");
   }

@@ -12,7 +12,7 @@ import type {
   HTTPTransportContext,
 } from "@x402/core/http";
 import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
-import { AgentPayAuthError, type SessionContext } from "@agentpay-ai/shared";
+import { AgentPayAuthError, type SessionContext } from "@agentpay-ai/shared-celo";
 import { AGENTPAY_CONSUMER_URI } from "../auth/siwe.ts";
 import { authenticateServiceSession } from "../auth/session.ts";
 import { createConsumerSessionApi, type ConsumerSessionApi } from "../auth/consumer-session-api.ts";

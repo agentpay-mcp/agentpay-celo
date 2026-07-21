@@ -11,7 +11,7 @@ import {
   type PaymentIntentRecord,
   type RetryX402RequestInput,
   retryX402RequestInputSchema,
-} from "@agentpay-ai/shared";
+} from "@agentpay-ai/shared-celo";
 
 export interface ParseX402PaymentRequiredOutput extends ParsedX402PaymentRequired {
   status: "PARSED";

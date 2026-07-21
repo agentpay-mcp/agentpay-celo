@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { parseX402PaymentRequired } from "@agentpay-ai/shared";
+import { parseX402PaymentRequired } from "@agentpay-ai/shared-celo";
 
 import {
   createPinnedX402HttpClient,

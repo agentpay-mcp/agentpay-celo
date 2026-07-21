@@ -5,7 +5,7 @@ import {
   sessionScopeSchema,
   type SessionEnvironment,
   type SessionScope,
-} from "@agentpay-ai/shared";
+} from "@agentpay-ai/shared-celo";
 import { z } from "zod";
 
 import {

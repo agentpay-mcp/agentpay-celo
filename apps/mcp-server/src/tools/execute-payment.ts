@@ -4,8 +4,8 @@ import {
   executePaymentInputSchema,
   type PaymentIntentRecord,
   type RoutePaymentAuthorization,
-} from "@agentpay-ai/shared";
-import { executeAuthorizedPaymentInputSchema, type ExecuteAuthorizedPaymentInput } from "@agentpay-ai/shared";
+} from "@agentpay-ai/shared-celo";
+import { executeAuthorizedPaymentInputSchema, type ExecuteAuthorizedPaymentInput } from "@agentpay-ai/shared-celo";
 import {
   createPaymentAuthorizationFromIntent,
   verifyPaymentAuthorizationSignature,

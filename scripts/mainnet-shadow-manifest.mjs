@@ -213,8 +213,8 @@ export function buildMainnetShadowManifest({ artifactDigests, generatedAt } = {}
     },
     domains: {
       publicOrigin: null,
-      consumerOrigin: "https://wallet.agentpay.site/mcp",
-      siweAudience: "https://wallet.agentpay.site/mcp",
+      consumerOrigin: "https://wallet.agentpay.site/celo/mcp",
+      siweAudience: "https://wallet.agentpay.site/celo/mcp",
     },
     canaryPolicy: {
       maxAcceptedLifecycles: 1,
@@ -380,8 +380,8 @@ export function validateMainnetShadowManifest(manifest, { artifactDigests } = {}
   const domains = manifest.domains;
   if (requireRecord(domains, "domains", issues)) {
     requireNullableString(domains.publicOrigin, "domains.publicOrigin", issues);
-    requireEqual(domains.consumerOrigin, "https://wallet.agentpay.site/mcp", "domains.consumerOrigin", issues);
-    requireEqual(domains.siweAudience, "https://wallet.agentpay.site/mcp", "domains.siweAudience", issues);
+    requireEqual(domains.consumerOrigin, "https://wallet.agentpay.site/celo/mcp", "domains.consumerOrigin", issues);
+    requireEqual(domains.siweAudience, "https://wallet.agentpay.site/celo/mcp", "domains.siweAudience", issues);
   }
 
   const canary = manifest.canaryPolicy;

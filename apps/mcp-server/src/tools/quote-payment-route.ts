@@ -8,7 +8,7 @@ import {
   type CeloHomeChainId,
   type QuotePaymentRouteInput,
   type RouteProvider,
-} from "@agentpay-ai/shared";
+} from "@agentpay-ai/shared-celo";
 
 import type { AgentWalletRepository, RouteQuoteProvider } from "./prepare-payment.ts";
 import { assertSufficientSourceTokenBalance } from "./prepare-payment.ts";

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import type { PaymentIntentRecord, RouteQuote, SetupIntentRecord } from "@agentpay-ai/shared";
+import type { PaymentIntentRecord, RouteQuote, SetupIntentRecord } from "@agentpay-ai/shared-celo";
 
 import {
   createAgentPayRuntime,

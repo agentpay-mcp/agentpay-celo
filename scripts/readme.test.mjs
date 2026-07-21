@@ -12,9 +12,9 @@ describe("README", () => {
     assert.match(contents, /npm run release:smoke/);
     assert.match(contents, /skills\/agentpay\/SKILL\.md/);
     assert.match(contents, /detects the target runtime/i);
-    assert.match(contents, /npx @agentpay-ai\/agentpay install/);
-    assert.match(quickStart, /https:\/\/wallet\.agentpay\.site\/mcp/);
-    assert.match(contents, /https:\/\/mcp\.agentpay\.site\/mcp/);
+    assert.match(contents, /npx @agentpay-ai\/agentpay-celo install/);
+    assert.match(quickStart, /https:\/\/wallet\.agentpay\.site\/celo\/mcp/);
+    assert.match(contents, /https:\/\/mcp\.agentpay\.site\/celo\/mcp/);
     assert.match(contents, /normal users do not need Supabase, RPC, executor, deployer, or bytecode config/i);
     assert.match(contents, /install --self-hosted/);
     assert.match(contents, /Create an AgentPay wallet/i);
@@ -41,10 +41,10 @@ describe("README", () => {
     const contents = await readFile("packages/cli/README.md", "utf8");
     const quickStart = contents.split("## Commands")[0] ?? contents;
 
-    assert.match(contents, /npx @agentpay-ai\/agentpay install/);
+    assert.match(contents, /npx @agentpay-ai\/agentpay-celo install/);
     assert.match(contents, /return to your agent chat/i);
-    assert.match(quickStart, /https:\/\/wallet\.agentpay\.site\/mcp/);
-    assert.match(contents, /https:\/\/mcp\.agentpay\.site\/mcp/);
+    assert.match(quickStart, /https:\/\/wallet\.agentpay\.site\/celo\/mcp/);
+    assert.match(contents, /https:\/\/mcp\.agentpay\.site\/celo\/mcp/);
     assert.match(contents, /No user secrets are required|do not manage Supabase/i);
     assert.match(contents, /install --self-hosted/);
     assert.match(contents, /create an AgentPay wallet/i);

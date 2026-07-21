@@ -1,5 +1,5 @@
 import { AbiCoder, Interface, JsonRpcProvider, Wallet, keccak256 } from "ethers";
-import { getStableTokenDecimalsForChain } from "@agentpay-ai/shared";
+import { getStableTokenDecimalsForChain } from "@agentpay-ai/shared-celo";
 
 import type {
   ContractCallExecutionRequest,

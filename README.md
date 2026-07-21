@@ -18,10 +18,10 @@ The submission name and product brand are both **AgentPay**. The main website re
 Install AgentPay in a project:
 
 ```bash
-npx @agentpay-ai/agentpay install
+npx @agentpay-ai/agentpay-celo install
 ```
 
-The installer detects the target runtime and connects normal chat usage to the authenticated consumer MCP endpoint at `https://wallet.agentpay.site/mcp`. The separate paid public execution endpoint is `https://mcp.agentpay.site/mcp` and is used only after Review & Sign. Normal users do not need Supabase, RPC, executor, deployer, or bytecode config. Return to the agent chat and ask:
+The installer detects the target runtime and connects normal chat usage to the authenticated consumer MCP endpoint at `https://wallet.agentpay.site/celo/mcp`. The separate paid public execution endpoint is `https://mcp.agentpay.site/celo/mcp` and is used only after Review & Sign. Normal users do not need Supabase, RPC, executor, deployer, or bytecode config. Return to the agent chat and ask:
 
 ```text
 Create an AgentPay wallet for me on Celo Sepolia.
@@ -30,7 +30,7 @@ Create an AgentPay wallet for me on Celo Sepolia.
 For an operator-managed deployment, use:
 
 ```bash
-npx @agentpay-ai/agentpay install --self-hosted
+npx @agentpay-ai/agentpay-celo install --self-hosted
 ```
 
 Self-hosting generates local config and the pinned AgentPay smart-account bytecode.
@@ -70,7 +70,7 @@ Self-hosted operators expose the public MCP endpoint with `agentpay serve-http`.
 - `apps/mcp-server/` — MCP tools, OAuth/SIWE boundary, Celo RPC adapters, x402, LI.FI, Supabase repositories, and production readiness gates.
 - `apps/setup-web/` — setup and Review & Sign web flow.
 - `packages/shared/` — Celo chain/token metadata, schemas, typed authorization, invoice, and x402 helpers.
-- `packages/cli/` — the `@agentpay-ai/agentpay` installer and runtime templates.
+- `packages/cli/` — the `@agentpay-ai/agentpay-celo` installer and runtime templates.
 - `packages/skill/` — source for the installed `skills/agentpay/SKILL.md` instructions.
 - `contracts/` — non-upgradeable owner-signed smart accounts and Foundry tests.
 - `supabase/migrations/` — tenant, payment, audit, OAuth, canary, and Celo boundary migrations.

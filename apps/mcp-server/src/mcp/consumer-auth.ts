@@ -2,7 +2,7 @@ import {
   AgentPayAuthError,
   type SessionContext,
   type SessionScope,
-} from "@agentpay-ai/shared";
+} from "@agentpay-ai/shared-celo";
 
 import { parseBearerToken } from "../auth/session.ts";
 

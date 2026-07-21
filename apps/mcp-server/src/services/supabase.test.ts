@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createSessionContext, type PaymentReviewHandoffRecord } from "@agentpay-ai/shared";
+import { createSessionContext, type PaymentReviewHandoffRecord } from "@agentpay-ai/shared-celo";
 
 import {
   type AgentPaySupabaseClient,
@@ -571,7 +571,7 @@ describe("createSupabaseAgentPayRepositories", () => {
       ownerAddress: "0x2222222222222222222222222222222222222222",
       accountAddress: "0x3333333333333333333333333333333333333333",
       homeChainId: 42220,
-      audience: "https://wallet.agentpay.site/mcp",
+      audience: "https://wallet.agentpay.site/celo/mcp",
       environment: "production",
       scopes: ["payment:review"],
       authEpoch: 0,
@@ -1000,7 +1000,7 @@ describe("createSupabaseAgentPayRepositories", () => {
       ownerAddress: reviewRow.owner_address,
       accountAddress: reviewRow.account_address,
       homeChainId: 42220,
-      audience: "https://wallet.agentpay.site/mcp",
+      audience: "https://wallet.agentpay.site/celo/mcp",
       environment: "staging",
       scopes: ["payment:review"],
       authEpoch: 0,

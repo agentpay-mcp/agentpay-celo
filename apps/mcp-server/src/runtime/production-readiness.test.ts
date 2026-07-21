@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 
-import type { PaymentIntentRecord } from "@agentpay-ai/shared";
+import type { PaymentIntentRecord } from "@agentpay-ai/shared-celo";
 
 import {
   MAINNET_USDC_ADDRESS,

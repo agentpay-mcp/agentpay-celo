@@ -1,4 +1,4 @@
-# @agentpay-ai/shared
+# @agentpay-ai/shared-celo
 
 Shared AgentPay schemas and helpers:
 

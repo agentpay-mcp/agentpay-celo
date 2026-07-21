@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { createSessionContext } from "@agentpay-ai/shared";
+import { createSessionContext } from "@agentpay-ai/shared-celo";
 import type { AgentPayRuntime } from "../runtime/agentpay-runtime.ts";
 import { registerAgentPayMcpTools, type AgentPayMcpServer } from "./agentpay-mcp.ts";
 
@@ -1051,7 +1051,7 @@ describe("registerAgentPayMcpTools", () => {
       ownerAddress: "0x1111111111111111111111111111111111111111",
       accountAddress: "0x2222222222222222222222222222222222222222",
       homeChainId: 1952,
-      audience: "https://wallet.agentpay.site/mcp",
+      audience: "https://wallet.agentpay.site/celo/mcp",
       environment: "staging",
       scopes: ["payment:read"],
       authEpoch: 0,
@@ -1097,7 +1097,7 @@ describe("registerAgentPayMcpTools", () => {
       ownerAddress: "0x1111111111111111111111111111111111111111",
       accountAddress: "0x2222222222222222222222222222222222222222",
       homeChainId: 1952,
-      audience: "https://wallet.agentpay.site/mcp",
+      audience: "https://wallet.agentpay.site/celo/mcp",
       environment: "staging",
       scopes: ["payment:review"],
       authEpoch: 0,
@@ -1131,7 +1131,7 @@ describe("registerAgentPayMcpTools", () => {
       ownerAddress: "0x1111111111111111111111111111111111111111",
       accountAddress: "0x2222222222222222222222222222222222222222",
       homeChainId: 1952,
-      audience: "https://wallet.agentpay.site/mcp",
+      audience: "https://wallet.agentpay.site/celo/mcp",
       environment: "staging",
       scopes: ["session:manage"],
       authEpoch: 0,

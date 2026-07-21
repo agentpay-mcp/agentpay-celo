@@ -3,7 +3,7 @@ import { Wallet } from "ethers";
 import { describe, it } from "node:test";
 import { startAuthorization } from "@modelcontextprotocol/sdk/client/auth.js";
 
-import type { SessionEnvironment, SessionScope } from "@agentpay-ai/shared";
+import type { SessionEnvironment, SessionScope } from "@agentpay-ai/shared-celo";
 
 import {
   type OAuthAuthorizationRecord,
@@ -26,7 +26,7 @@ import { authenticateServiceSession } from "./session.ts";
 const owner = new Wallet(`0x${"2".repeat(64)}`);
 const accountAddress = "0x2222222222222222222222222222222222222222";
 const redirectUri = "http://127.0.0.1:4567/callback";
-const resource = "https://wallet.agentpay.site/mcp";
+const resource = "https://wallet.agentpay.site/celo/mcp";
 const verifier = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~abc";
 const codeChallenge = "dYSqskoTcWrpu8GYY0XpWlzOc0c5rd9YO3uAgh_zmV4";
 

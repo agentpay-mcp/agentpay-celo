@@ -19,7 +19,7 @@ function context(overrides: Partial<SessionContext> = {}): SessionContext {
     ownerAddress,
     accountAddress,
     homeChainId: 1952,
-    audience: "https://wallet.agentpay.site/mcp",
+    audience: "https://wallet.agentpay.site/celo/mcp",
     environment: "staging",
     scopes: ["wallet:read", "payment:prepare", "payment:read", "payment:review", "session:manage"],
     authEpoch: 0,

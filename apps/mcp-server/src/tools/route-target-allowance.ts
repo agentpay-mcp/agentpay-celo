@@ -6,7 +6,7 @@ import {
   type CheckRouteTargetAllowanceInput,
   prepareRouteTargetAllowanceInputSchema,
   type PrepareRouteTargetAllowanceInput,
-} from "@agentpay-ai/shared";
+} from "@agentpay-ai/shared-celo";
 import { Interface } from "ethers";
 
 import type { AgentWalletRepository } from "./prepare-payment.ts";

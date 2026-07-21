@@ -80,8 +80,8 @@
   },
   "domains": {
     "publicOrigin": null,
-    "consumerOrigin": "https://wallet.agentpay.site/mcp",
-    "siweAudience": "https://wallet.agentpay.site/mcp"
+    "consumerOrigin": "https://wallet.agentpay.site/celo/mcp",
+    "siweAudience": "https://wallet.agentpay.site/celo/mcp"
   },
   "canaryPolicy": {
     "maxAcceptedLifecycles": 1,

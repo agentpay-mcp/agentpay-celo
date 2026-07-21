@@ -1,11 +1,11 @@
-# @agentpay-ai/mcp-server
+# @agentpay-ai/mcp-server-celo
 
 AgentPay's MCP server exposes owner-authorized Celo payment tools over stdio or Streamable HTTP. It supports wallet setup, Celo USDC/USDT/USDm balances, direct payments, invoice parsing, LI.FI remittance routes, x402 service discovery and purchase, Review & Sign, execution, tracking, and audit events.
 
 Run locally:
 
 ```bash
-npm run start --workspace @agentpay-ai/mcp-server
+npm run start --workspace @agentpay-ai/mcp-server-celo
 ```
 
 Core local/staging configuration is `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CELO_RPC_URL`, and `EXECUTOR_PRIVATE_KEY`. Per-request network switching can use `CELO_MAINNET_RPC_URL` and `CELO_SEPOLIA_RPC_URL`.
