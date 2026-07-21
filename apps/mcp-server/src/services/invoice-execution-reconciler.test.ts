@@ -14,7 +14,7 @@ async function createBroadcastedOutbox(status: "BROADCASTED" | "BROADCAST_UNKNOW
     tenantId: "tenant_1",
     lifecycleId: "lifecycle_reconcile",
     paymentIntentId: "pay_reconcile",
-    chainId: 196,
+    chainId: 42220,
     executorAddress: "0x9999999999999999999999999999999999999999",
     createdAt: "2026-07-13T00:00:00.000Z",
   });
@@ -42,7 +42,7 @@ describe("invoice execution reconciler", () => {
       tenantId: "tenant_1",
       lifecycleId: "lifecycle_stale",
       paymentIntentId: "pay_stale",
-      chainId: 196,
+      chainId: 42220,
       executorAddress: "0x9999999999999999999999999999999999999999",
       createdAt: "2026-07-13T00:00:00.000Z",
     });
@@ -73,7 +73,7 @@ describe("invoice execution reconciler", () => {
       tenantId: "tenant_1",
       lifecycleId: "lifecycle_unsettled",
       paymentIntentId: "pay_unsettled",
-      chainId: 196,
+      chainId: 42220,
       executorAddress: "0x9999999999999999999999999999999999999999",
       createdAt: "2026-07-13T00:00:00.000Z",
     });
@@ -102,7 +102,7 @@ describe("invoice execution reconciler", () => {
       tenantId: "tenant_1",
       lifecycleId: "lifecycle_prepared",
       paymentIntentId: "pay_prepared",
-      chainId: 196,
+      chainId: 42220,
       executorAddress: "0x9999999999999999999999999999999999999999",
       createdAt: "2026-07-13T00:00:00.000Z",
     });
@@ -141,7 +141,7 @@ describe("invoice execution reconciler", () => {
         async getSourceTransactionStatus(request) {
           receiptCalls += 1;
           assert.equal(request.txHash, `0x${"ab".repeat(32)}`);
-          assert.equal(request.chainId, 196);
+          assert.equal(request.chainId, 42220);
           return { status: "SUCCESS" };
         },
       },

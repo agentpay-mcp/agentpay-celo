@@ -18,7 +18,7 @@ export const MAINNET_CAIP2 = "eip155:42220";
 export const MAINNET_USDC_ADDRESS = "0xcebA9300f2b948710d2653dD7B07f33A8B32118C";
 export const MAINNET_USDC_CODE_HASH =
   "0x14254a76b7b2554180021c6390e814e73dee647ae91b7198da08de5145214493";
-export const MAINNET_MIGRATION_HEAD = "20260717120000_celo_home_chain_boundary";
+export const MAINNET_MIGRATION_HEAD = "20260721160000_celo_x402_settlement_audit";
 export const MAINNET_RPC_FALLBACK_URL = "https://forno.celo.org";
 export const MAINNET_CONSUMER_MCP_URL = "https://wallet.agentpay.site/celo/mcp";
 export const MAINNET_PAID_MCP_URL = "https://mcp.agentpay.site/celo/mcp";
@@ -101,6 +101,8 @@ export interface ProductionPaymentConfigSnapshot {
   facilitatorUrl?: string;
   facilitatorApiKey?: string;
 }
+
+export const MAINNET_X402_FACILITATOR_URL = "https://api.x402.celo.org";
 
 export interface ProductionReadinessResult {
   ready: boolean;
@@ -488,6 +490,7 @@ function validateIdentityAgainstManifest(
     compare("owner", identity.ownerAddress, record.contract?.ownerAddress);
     compare("executor", identity.executorAddress, record.contract?.executorAddress);
     compare("deployer", identity.deployerAddress, record.contract?.deployerAddress);
+    compare("facilitator", identity.facilitatorRef, record.x402?.facilitatorUrl);
     if (!identity.payToAddress || !ADDRESS_PATTERN.test(identity.payToAddress)) errors.push("runtime identity: payTo address is not provisioned");
     if (!identity.facilitatorRef) errors.push("runtime identity: facilitator reference is not provisioned");
   }
@@ -512,17 +515,10 @@ function validatePaymentConfig(config: ProductionPaymentConfigSnapshot | undefin
   if (config.assetDecimals !== 6) errors.push("payment config: asset decimals must be 6 for USDC");
   if (config.syncSettle !== true) errors.push("payment config: synchronous settlement must be explicitly true");
   if (!ADDRESS_PATTERN.test(config.payTo) || config.payTo.toLowerCase() === ZERO_ADDRESS) errors.push("payment config: payTo must be a non-zero EVM address");
-  if (config.facilitatorUrl) {
-    try {
-      const url = new URL(config.facilitatorUrl);
-      if (url.protocol !== "https:" || ["localhost", "127.0.0.1", "::1"].includes(url.hostname)) errors.push("payment config: facilitator URL must be HTTPS and non-loopback");
-    } catch {
-      errors.push("payment config: facilitator URL is invalid");
-    }
-  } else {
-    errors.push("payment config: facilitator URL is required");
+  if (config.facilitatorUrl !== MAINNET_X402_FACILITATOR_URL) {
+    errors.push(`payment config: facilitator URL must be ${MAINNET_X402_FACILITATOR_URL}`);
   }
-  if (config.facilitatorUrl === "https://api.x402.celo.org" && !config.facilitatorApiKey) {
+  if (!config.facilitatorApiKey) {
     errors.push("payment config: AGENTPAY_CELO_X402_API_KEY is required for the hosted Celo facilitator");
   }
   return errors;

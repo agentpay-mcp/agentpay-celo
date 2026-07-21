@@ -53,6 +53,7 @@ export interface CreatePinnedX402HttpClientOptions {
 
 export interface RetryX402RequestOutput {
   status: "RESOURCE_FETCHED";
+  proofScheme: "agentpay-receipt";
   paymentIntentId: string;
   requestUrl: string;
   method: string;
@@ -97,6 +98,7 @@ export async function retryX402Request(
 
   return {
     status: "RESOURCE_FETCHED",
+    proofScheme: "agentpay-receipt",
     paymentIntentId: paymentIntent.id,
     requestUrl,
     method: input.request.method,

@@ -27,7 +27,10 @@ import type { CanaryLedgerStore } from "../runtime/paid-execution-canary-ledger.
 import { createInMemoryInvoiceExecutionOutboxStore } from "../services/paid-execution-outbox.ts";
 import { createInMemoryPaidExecutionLifecycleStore } from "../services/paid-execution-lifecycle.ts";
 import type { PaymentIntentRecord } from "@agentpay-ai/shared-celo";
-import type { AgentPayMcpPaymentProcessor } from "./celo-agent-payment.ts";
+import type {
+  AgentPayMcpPaymentProcessor,
+  ExpectedX402PaymentRequirements,
+} from "./celo-agent-payment.ts";
 import {
   resolveProductionReadiness,
   shouldVerifyMainnetAccountAtStartup,
@@ -306,6 +309,7 @@ describe("startAgentPayHttpServer", () => {
 
   it("keeps GET probes payable but rejects malformed POSTs before x402", async () => {
     let mcpServerWasCreated = false;
+    const challengeHeader = createPaymentRequiredHeader([createPaymentRequirements()]);
     const paymentProcessor = createPaymentProcessor({
       async processHTTPRequest(context) {
         assert.equal(context.path, "/mcp");
@@ -316,7 +320,7 @@ describe("startAgentPayHttpServer", () => {
             status: 402,
             headers: {
               "content-type": "application/json",
-              "PAYMENT-REQUIRED": "probe-challenge",
+              "PAYMENT-REQUIRED": challengeHeader,
             },
             body: {
               error: "Payment required.",
@@ -348,11 +352,67 @@ describe("startAgentPayHttpServer", () => {
       });
 
       assert.equal(getResponse.status, 402);
-      assert.equal(getResponse.headers.get("PAYMENT-REQUIRED"), "probe-challenge");
+      assert.equal(getResponse.headers.get("PAYMENT-REQUIRED"), challengeHeader);
       assert.deepEqual(await getResponse.json(), { error: "Payment required." });
       assert.equal(malformedPostResponse.status, 400);
       assert.equal(malformedPostResponse.headers.get("PAYMENT-REQUIRED"), null);
       assert.equal(mcpServerWasCreated, false);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("rejects a paid challenge when any advertised x402 option drifts from seller terms", async () => {
+    const expected = createPaymentRequirements();
+    const malicious = {
+      ...expected,
+      payTo: "0x0000000000000000000000000000000000000003",
+    };
+    const paymentProcessor = createPaymentProcessor({
+      async processHTTPRequest() {
+        return {
+          type: "payment-error",
+          response: {
+            status: 402,
+            headers: {
+              "PAYMENT-REQUIRED": createPaymentRequiredHeader([expected, malicious]),
+            },
+            body: { error: "Payment required." },
+          },
+        };
+      },
+    });
+    const server = await startAgentPayHttpServer({
+      env: mcpEnv(),
+      hostname: "127.0.0.1",
+      port: 0,
+      paymentProcessor,
+      createRuntime() {
+        return createRuntime();
+      },
+    });
+
+    try {
+      const response = await fetch(server.mcpUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: {
+            name: "execute_payment",
+            arguments: { paymentIntentId: "pay_challenge_drift", signature: `0x${"11".repeat(65)}` },
+          },
+        }),
+      });
+
+      assert.equal(response.status, 503);
+      assert.equal(response.headers.get("PAYMENT-REQUIRED"), null);
+      assert.deepEqual(await response.json(), {
+        error: "Payment challenge does not match the configured x402 seller terms.",
+        code: "PAID_CHALLENGE_INVALID",
+      });
     } finally {
       await server.close();
     }
@@ -464,12 +524,17 @@ describe("startAgentPayHttpServer", () => {
     const calls: string[] = [];
     const policy = canaryPolicy();
     const ledger = createTestCanaryLedger(calls);
+    const permit2Requirements = {
+      ...createCanaryPaymentRequirements(),
+      extra: { assetTransferMethod: "permit2" },
+    };
     const paymentProcessor = createPaymentProcessor({
+      expectedPaymentRequirements: createExpectedPaymentRequirements("permit2", permit2Requirements),
       async processHTTPRequest() {
         return {
           type: "payment-verified",
-          paymentPayload: createPermit2PaymentPayload(policy.allowlist.payerAddress),
-          paymentRequirements: createCanaryPaymentRequirements(),
+          paymentPayload: createPermit2PaymentPayload(policy.allowlist.payerAddress, permit2Requirements),
+          paymentRequirements: permit2Requirements,
         };
       },
       async processSettlement() {
@@ -480,7 +545,7 @@ describe("startAgentPayHttpServer", () => {
           transaction: `0x${"88".repeat(32)}`,
           network: "eip155:42220",
           headers: {},
-          requirements: createCanaryPaymentRequirements(),
+          requirements: permit2Requirements,
         };
       },
     });
@@ -608,18 +673,20 @@ describe("startAgentPayHttpServer", () => {
   });
 
   it("fails closed when a verified Permit2 proof omits its payer authorization", async () => {
+    const permit2Requirements = {
+      ...createPaymentRequirements(),
+      extra: { assetTransferMethod: "permit2" },
+    };
     const paymentProcessor = createPaymentProcessor({
+      expectedPaymentRequirements: createExpectedPaymentRequirements("permit2", permit2Requirements),
       async processHTTPRequest() {
         return {
           type: "payment-verified",
           paymentPayload: {
             ...createPaymentPayload(),
-            accepted: {
-              ...createPaymentRequirements(),
-              extra: { assetTransferMethod: "permit2" },
-            },
+            accepted: permit2Requirements,
           },
-          paymentRequirements: createPaymentRequirements(),
+          paymentRequirements: permit2Requirements,
         };
       },
     });
@@ -708,6 +775,7 @@ describe("startAgentPayHttpServer", () => {
           async retryX402Request() {
             return {
               status: "RESOURCE_FETCHED",
+              proofScheme: "agentpay-receipt",
               paymentIntentId: "pay_x402",
               requestUrl: "https://api.example.com/protected",
               method: "GET",
@@ -752,6 +820,76 @@ describe("startAgentPayHttpServer", () => {
       assert.equal(calls[2], "execute");
     } finally {
       await server.close();
+    }
+  });
+
+  it("rejects verified x402 terms that drift from the configured seller terms", async () => {
+    const baseline = createPaymentRequirements();
+    const expected = createExpectedPaymentRequirements();
+    const variants: PaymentRequirements[] = [
+      { ...baseline, network: "eip155:11142220" },
+      { ...baseline, amount: "2" },
+      { ...baseline, payTo: "0x0000000000000000000000000000000000000003" },
+      { ...baseline, extra: { assetTransferMethod: "permit2" } },
+      { ...baseline, extra: {} },
+    ];
+
+    for (const paymentRequirements of variants) {
+      let settlementCalls = 0;
+      const paymentProcessor = Object.assign(
+        createPaymentProcessor({
+          async processHTTPRequest() {
+            return {
+              type: "payment-verified" as const,
+              paymentPayload: { ...createPaymentPayload(), accepted: paymentRequirements },
+              paymentRequirements,
+            };
+          },
+          async processSettlement() {
+            settlementCalls += 1;
+            throw new Error("mismatched terms must not settle");
+          },
+        }),
+        { expectedPaymentRequirements: expected },
+      );
+      const server = await startAgentPayHttpServer({
+        env: mcpEnv(),
+        hostname: "127.0.0.1",
+        port: 0,
+        paymentProcessor,
+        createRuntime() {
+          return createRuntime();
+        },
+      });
+
+      try {
+        const response = await fetch(server.mcpUrl, {
+          method: "POST",
+          headers: {
+            accept: "application/json, text/event-stream",
+            "content-type": "application/json",
+            "PAYMENT-SIGNATURE": "paid",
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "tools/call",
+            params: {
+              name: "execute_payment",
+              arguments: { paymentIntentId: "pay_x402", signature: `0x${"11".repeat(65)}` },
+            },
+          }),
+        });
+
+        assert.equal(response.status, 503);
+        assert.deepEqual(await response.json(), {
+          error: "Verified payment terms do not match the configured x402 seller terms.",
+          code: "PAID_PAYMENT_TERMS_MISMATCH",
+        });
+        assert.equal(settlementCalls, 0);
+      } finally {
+        await server.close();
+      }
     }
   });
 
@@ -1095,6 +1233,7 @@ describe("startAgentPayHttpServer", () => {
       hostname: "127.0.0.1",
       port: 0,
       paymentProcessor: {
+        expectedPaymentRequirements: createExpectedPaymentRequirements(),
         async processHTTPRequest() {
           throw new Error("injected production payment processor must not bypass readiness");
         },
@@ -2031,6 +2170,7 @@ function createOAuthHttpTestStores(): {
 
 function createPaymentProcessor(overrides: Partial<AgentPayMcpPaymentProcessor>) {
   return {
+    expectedPaymentRequirements: createExpectedPaymentRequirements(),
     async processHTTPRequest() {
       return {
         type: "no-payment-required",
@@ -2049,6 +2189,29 @@ function createPaymentProcessor(overrides: Partial<AgentPayMcpPaymentProcessor>)
   } satisfies AgentPayMcpPaymentProcessor;
 }
 
+function createExpectedPaymentRequirements(
+  assetTransferMethod = "eip3009",
+  requirements: PaymentRequirements = createPaymentRequirements(),
+): ExpectedX402PaymentRequirements {
+  return {
+    scheme: requirements.scheme,
+    network: requirements.network,
+    asset: requirements.asset,
+    amount: requirements.amount,
+    payTo: requirements.payTo,
+    maxTimeoutSeconds: requirements.maxTimeoutSeconds,
+    assetTransferMethod,
+  };
+}
+
+function createPaymentRequiredHeader(accepts: PaymentRequirements[]): string {
+  return Buffer.from(JSON.stringify({
+    x402Version: 2,
+    resource: { url: "/mcp", description: "AgentPay public MCP endpoint" },
+    accepts,
+  })).toString("base64");
+}
+
 function createPaymentRequirements(): PaymentRequirements {
   return {
     scheme: "exact",
@@ -2057,7 +2220,7 @@ function createPaymentRequirements(): PaymentRequirements {
     amount: "1",
     payTo: "0x0000000000000000000000000000000000000002",
     maxTimeoutSeconds: 300,
-    extra: {},
+    extra: { assetTransferMethod: "eip3009" },
   };
 }
 
@@ -2073,11 +2236,14 @@ function createPaymentPayload(payer = "0x444444444444444444444444444444444444444
   };
 }
 
-function createPermit2PaymentPayload(payer: string): PaymentPayload {
+function createPermit2PaymentPayload(
+  payer: string,
+  requirements: PaymentRequirements = createPaymentRequirements(),
+): PaymentPayload {
   return {
     x402Version: 2,
     accepted: {
-      ...createPaymentRequirements(),
+      ...requirements,
       extra: { assetTransferMethod: "permit2" },
     },
     payload: {
@@ -2097,7 +2263,7 @@ function createCanaryPaymentRequirements(): PaymentRequirements {
     amount: "10000",
     payTo: "0x0000000000000000000000000000000000000002",
     maxTimeoutSeconds: 300,
-    extra: {},
+    extra: { assetTransferMethod: "eip3009" },
   };
 }
 

@@ -19,7 +19,7 @@
     "urlEnvRef": "SUPABASE_PRODUCTION_URL",
     "serviceRoleKeyEnvRef": "SUPABASE_PRODUCTION_SERVICE_ROLE_KEY",
     "databaseUrlEnvRef": "DIRECT_URL_PRODUCTION",
-    "migrationHead": "20260717120000_celo_home_chain_boundary"
+    "migrationHead": "20260721160000_celo_x402_settlement_audit"
   },
   "secretRefs": {
     "namespace": "agentpay-celo/production",
@@ -35,7 +35,7 @@
     "creationBytecodeKeccak256": "0x41fb5a4c59d1af753553e5dcf9e9ed345506ecaa8040298d17dc9c629fbd5b49",
     "runtimeBytecodeKeccak256": null,
     "abiSha256": null,
-    "migrationHead": "20260717120000_celo_home_chain_boundary"
+    "migrationHead": "20260721160000_celo_x402_settlement_audit"
   },
   "contract": {
     "version": "v2",
@@ -75,6 +75,7 @@
     "syncSettle": true,
     "payToEnvRef": "AGENTPAY_A2MCP_PAYMENT_PAY_TO",
     "facilitatorEnvRef": "AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL",
+    "facilitatorUrl": "https://api.x402.celo.org",
     "toolAllowlist": [
       "execute_payment"
     ]

@@ -47,6 +47,7 @@ import {
   createCeloAgentPaymentProcessorFromEnv,
   parseAgentPayMcpPaymentEnv,
   type AgentPayMcpPaymentProcessor,
+  type ExpectedX402PaymentRequirements,
 } from "./celo-agent-payment.ts";
 import {
   createInMemoryPaidExecutionLifecycleStore,
@@ -586,6 +587,17 @@ async function handleAgentPayHttpRequest(options: HandleAgentPayHttpRequestOptio
       }
 
       if (paymentResult.type === "payment-error") {
+        const challengeOptions = decodePaymentRequiredRequirements(paymentResult.response.headers);
+        if (!hasOnlyExpectedPaymentTerms(
+          challengeOptions,
+          options.paymentProcessor.expectedPaymentRequirements,
+        )) {
+          writeJson(options.response, 503, {
+            error: "Payment challenge does not match the configured x402 seller terms.",
+            code: "PAID_CHALLENGE_INVALID",
+          });
+          return;
+        }
         writeHttpInstruction(options.response, paymentResult.response);
         return;
       }
@@ -715,6 +727,21 @@ async function handleAgentPayHttpRequest(options: HandleAgentPayHttpRequestOptio
   }
 
   if (paymentResult.type === "payment-error") {
+    const challengeOptions = decodePaymentRequiredRequirements(paymentResult.response.headers);
+    const challengeRequirements = challengeOptions?.[0];
+    if (
+      requestClassification.kind === "paid" &&
+      !hasOnlyExpectedPaymentTerms(
+        challengeOptions,
+        options.paymentProcessor!.expectedPaymentRequirements,
+      )
+    ) {
+      writeJson(options.response, 503, {
+        error: "Payment challenge does not match the configured x402 seller terms.",
+        code: "PAID_CHALLENGE_INVALID",
+      });
+      return;
+    }
     if (
       options.config.executionMode === "CANARY" &&
       requestClassification.kind === "paid" &&
@@ -749,7 +776,6 @@ async function handleAgentPayHttpRequest(options: HandleAgentPayHttpRequestOptio
       }
     }
     if (requestClassification.kind === "paid" && paidExecutionBinding && paidPreflight && paidPreflight.intent.tenantId && options.paidExecutionChallenge) {
-      const challengeRequirements = decodePaymentRequiredRequirements(paymentResult.response.headers);
       if (challengeRequirements) {
         if (options.config.executionMode === "CANARY") {
           try {
@@ -767,7 +793,7 @@ async function handleAgentPayHttpRequest(options: HandleAgentPayHttpRequestOptio
         const offeredAt = new Date().toISOString();
         const expiresAt = new Date(Date.now() + challengeRequirements.maxTimeoutSeconds * 1000).toISOString();
         try {
-          await options.paidExecutionChallenge.offer({
+          const challengeOffer = await options.paidExecutionChallenge.offer({
             id: randomUUID(),
             tenantId: paidPreflight.intent.tenantId!,
             environment: options.config.environment ?? "staging",
@@ -782,11 +808,19 @@ async function handleAgentPayHttpRequest(options: HandleAgentPayHttpRequestOptio
               asset: challengeRequirements.asset,
               amount: challengeRequirements.amount,
               payTo: challengeRequirements.payTo,
+              assetTransferMethod: challengeRequirements.extra?.assetTransferMethod,
             }),
             paymentRequirementsHash: hashCanonicalJson(challengeRequirements),
             offeredAt,
             expiresAt,
           });
+          if (challengeOffer.disposition === "CONFLICT") {
+            writeJson(options.response, 409, {
+              error: "Payment challenge conflicts with an existing signed request binding.",
+              code: "PAID_CHALLENGE_CONFLICT",
+            });
+            return;
+          }
         } catch {
           writeJson(options.response, 503, { error: "Paid challenge ledger unavailable.", code: "PAID_CHALLENGE_UNAVAILABLE" });
           return;
@@ -805,6 +839,23 @@ async function handleAgentPayHttpRequest(options: HandleAgentPayHttpRequestOptio
       writeJson(options.response, 400, {
         error: "The public paid surface accepts only a preflighted execute_payment request.",
         code: "PAID_TOOL_NOT_ALLOWED",
+      });
+      return;
+    }
+
+    if (
+      !hasExpectedPaymentTerms(
+        paymentResult.paymentRequirements,
+        options.paymentProcessor!.expectedPaymentRequirements,
+      ) ||
+      !hasExpectedPaymentTerms(
+        paymentResult.paymentPayload.accepted,
+        options.paymentProcessor!.expectedPaymentRequirements,
+      )
+    ) {
+      writeJson(options.response, 503, {
+        error: "Verified payment terms do not match the configured x402 seller terms.",
+        code: "PAID_PAYMENT_TERMS_MISMATCH",
       });
       return;
     }
@@ -1589,25 +1640,51 @@ function hasAmbiguousMcpExecutionError(body: Buffer): boolean {
   return body.toString("utf8").includes("DURABLE_EXECUTION_AMBIGUOUS");
 }
 
-function decodePaymentRequiredRequirements(headers: Record<string, string>): PaymentRequirements | undefined {
+function decodePaymentRequiredRequirements(headers: Record<string, string>): PaymentRequirements[] | undefined {
   const header = Object.entries(headers).find(([name]) => name.toLowerCase() === "payment-required")?.[1];
   if (!header) return undefined;
   try {
     const decoded = JSON.parse(Buffer.from(header, "base64").toString("utf8")) as { accepts?: unknown };
-    const requirements = Array.isArray(decoded.accepts) ? decoded.accepts[0] : undefined;
-    if (!isRecordValue(requirements)) return undefined;
-    if (
-      typeof requirements.scheme !== "string" ||
-      typeof requirements.network !== "string" ||
-      typeof requirements.asset !== "string" ||
-      typeof requirements.amount !== "string" ||
-      typeof requirements.payTo !== "string" ||
-      typeof requirements.maxTimeoutSeconds !== "number"
-    ) return undefined;
-    return requirements as unknown as PaymentRequirements;
+    if (!Array.isArray(decoded.accepts) || decoded.accepts.length === 0) return undefined;
+    const requirements = decoded.accepts.map((candidate) => {
+      if (!isRecordValue(candidate)) return undefined;
+      if (
+        typeof candidate.scheme !== "string" ||
+        typeof candidate.network !== "string" ||
+        typeof candidate.asset !== "string" ||
+        typeof candidate.amount !== "string" ||
+        typeof candidate.payTo !== "string" ||
+        typeof candidate.maxTimeoutSeconds !== "number"
+      ) return undefined;
+      return candidate as unknown as PaymentRequirements;
+    });
+    if (requirements.some((candidate) => !candidate)) return undefined;
+    return requirements as PaymentRequirements[];
   } catch {
     return undefined;
   }
+}
+
+function hasOnlyExpectedPaymentTerms(
+  actual: PaymentRequirements[] | undefined,
+  expected: ExpectedX402PaymentRequirements,
+): boolean {
+  return Boolean(actual?.length && actual.every((candidate) => hasExpectedPaymentTerms(candidate, expected)));
+}
+
+function hasExpectedPaymentTerms(
+  actual: PaymentRequirements,
+  expected: ExpectedX402PaymentRequirements,
+): boolean {
+  return (
+    actual.scheme === expected.scheme &&
+    actual.network === expected.network &&
+    actual.asset.toLowerCase() === expected.asset.toLowerCase() &&
+    actual.amount === expected.amount &&
+    actual.payTo.toLowerCase() === expected.payTo.toLowerCase() &&
+    actual.maxTimeoutSeconds === expected.maxTimeoutSeconds &&
+    actual.extra?.assetTransferMethod === expected.assetTransferMethod
+  );
 }
 
 function createStatelessTransport(): StreamableHTTPServerTransport {

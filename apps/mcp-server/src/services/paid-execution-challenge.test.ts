@@ -71,4 +71,28 @@ describe("paid execution challenge ledger", () => {
       null,
     );
   });
+
+  it("renews only an expired identical binding and rejects conflicting reuse", async () => {
+    const store = createInMemoryPaidExecutionChallengeStore(() => "challenge_1");
+    await store.offer(offer);
+    await store.expire("2026-07-13T00:06:00.000Z");
+
+    const renewed = await store.offer({
+      ...offer,
+      id: "challenge_2",
+      offeredAt: "2026-07-13T00:06:00.000Z",
+      expiresAt: "2026-07-13T00:11:00.000Z",
+    });
+    assert.equal(renewed.disposition, "OFFERED");
+    assert.equal(renewed.record.id, "challenge_1");
+    assert.equal(renewed.record.expiresAt, "2026-07-13T00:11:00.000Z");
+
+    const conflict = await store.offer({
+      ...offer,
+      paymentIntentId: "pay_2",
+      offeredAt: "2026-07-13T00:06:01.000Z",
+      expiresAt: "2026-07-13T00:11:01.000Z",
+    });
+    assert.equal(conflict.disposition, "CONFLICT");
+  });
 });

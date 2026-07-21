@@ -12,10 +12,11 @@ export const MAINNET_USDC_CODE_HASH =
   "0x14254a76b7b2554180021c6390e814e73dee647ae91b7198da08de5145214493";
 export const MAINNET_ACCOUNT_CREATION_BYTECODE_HASH =
   "0x41fb5a4c59d1af753553e5dcf9e9ed345506ecaa8040298d17dc9c629fbd5b49";
-export const MAINNET_MIGRATION_HEAD = "20260717120000_celo_home_chain_boundary";
+export const MAINNET_MIGRATION_HEAD = "20260721160000_celo_x402_settlement_audit";
 export const MAINNET_RPC_FALLBACK_URL = "https://forno.celo.org";
 export const MAINNET_SETUP_URL = "https://wallet.agentpay.site/celo/setup";
 export const MAINNET_SETUP_READINESS_URL = "https://wallet.agentpay.site/celo/setup/readyz";
+export const MAINNET_X402_FACILITATOR_URL = "https://api.x402.celo.org";
 export const ASSIGNED_CELO_ATTRIBUTION_TAG_PATTERN = /^celo_[a-z0-9_]{1,27}$/;
 export const FORBIDDEN_PRODUCTION_RUNTIME_ENV_REFS = Object.freeze([
   "CELO_RPC_URL",
@@ -214,6 +215,7 @@ export function buildMainnetShadowManifest({ artifactDigests, generatedAt } = {}
       syncSettle: true,
       payToEnvRef: "AGENTPAY_A2MCP_PAYMENT_PAY_TO",
       facilitatorEnvRef: "AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL",
+      facilitatorUrl: MAINNET_X402_FACILITATOR_URL,
       toolAllowlist: ["execute_payment"],
     },
     domains: {
@@ -400,6 +402,7 @@ export function validateMainnetShadowManifest(manifest, { artifactDigests } = {}
     requireEqual(x402.syncSettle, true, "x402.syncSettle", issues);
     requireEqual(x402.payToEnvRef, "AGENTPAY_A2MCP_PAYMENT_PAY_TO", "x402.payToEnvRef", issues);
     requireEqual(x402.facilitatorEnvRef, "AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL", "x402.facilitatorEnvRef", issues);
+    requireEqual(x402.facilitatorUrl, MAINNET_X402_FACILITATOR_URL, "x402.facilitatorUrl", issues);
     requireArrayEqual(x402.toolAllowlist, ["execute_payment"], "x402.toolAllowlist", issues);
   }
 

@@ -103,7 +103,7 @@ function identityFor(manifest: Record<string, any>): RuntimeEnvironmentIdentity 
     x402SyncSettle: manifest.x402.syncSettle,
     x402Enabled: manifest.x402.enabled,
     payToAddress: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-    facilitatorRef: "https://facilitator.example.com",
+    facilitatorRef: "https://api.x402.celo.org",
     executionMode: "PUBLIC",
     status: "READY",
   };
@@ -117,12 +117,13 @@ const exactPaymentConfig = {
   asset: MAINNET_USDC_ADDRESS,
   assetDecimals: 6,
   syncSettle: true,
-  facilitatorUrl: "https://facilitator.example.com",
+  facilitatorUrl: "https://api.x402.celo.org",
+  facilitatorApiKey: "test-celo-x402-api-key",
 };
 
 describe("production readiness gate", () => {
   it("pins production readiness to the atomic payment audit migration", () => {
-    assert.equal(MAINNET_MIGRATION_HEAD, "20260717120000_celo_home_chain_boundary");
+    assert.equal(MAINNET_MIGRATION_HEAD, "20260721160000_celo_x402_settlement_audit");
     assert.equal(baseManifest.database.migrationHead, MAINNET_MIGRATION_HEAD);
     assert.equal(baseManifest.release.migrationHead, MAINNET_MIGRATION_HEAD);
   });
@@ -348,12 +349,29 @@ describe("production readiness gate", () => {
       accountVerification: { valid: true, errors: [], checks: {} },
       paymentConfig: {
         ...exactPaymentConfig,
-        facilitatorUrl: "https://api.x402.celo.org",
+        facilitatorApiKey: undefined,
       },
       onboardingReady: true,
     });
 
     assert.equal(result.ready, false);
     assert.match(result.errors.join("; "), /CELO_X402_API_KEY/i);
+  });
+
+  it("rejects facilitator URL drift from the hosted Celo mainnet service", async () => {
+    const result = await evaluateProductionReadiness({
+      env: productionEnv(),
+      manifest: readyManifest(),
+      identity: identityFor(readyManifest()),
+      accountVerification: { valid: true, errors: [], checks: {} },
+      paymentConfig: {
+        ...exactPaymentConfig,
+        facilitatorUrl: "https://facilitator.example.com",
+      },
+      onboardingReady: true,
+    });
+
+    assert.equal(result.ready, false);
+    assert.match(result.errors.join("; "), /facilitator URL must be https:\/\/api\.x402\.celo\.org/i);
   });
 });

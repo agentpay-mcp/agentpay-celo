@@ -16,6 +16,7 @@ const paymentIntentAuditMigrationPath = "supabase/migrations/20260715153000_paym
 const celoBoundaryMigrationPath = "supabase/migrations/20260717120000_celo_home_chain_boundary.sql";
 const celoConsumerResourceMigrationPath = "supabase/migrations/20260721120000_celo_consumer_resource.sql";
 const productionSetupMigrationPath = "supabase/migrations/20260721130000_celo_production_mainnet_onboarding.sql";
+const celoX402SettlementAuditMigrationPath = "supabase/migrations/20260721160000_celo_x402_settlement_audit.sql";
 const migrationsDir = "supabase/migrations";
 const requiredTables = ["setup_intents", "agent_wallets", "payment_intents", "payment_events"];
 const requiredSecurityStatements = [
@@ -364,6 +365,21 @@ describe("AgentPay Supabase migration", () => {
     assert.ok(sql.includes("alter table public.asp_payment_challenges enable row level security"));
     assert.ok(sql.includes("alter table public.invoice_execution_outbox enable row level security"));
     assert.ok(sql.includes("grant select, insert, update on table public.asp_payment_challenges, public.invoice_execution_outbox to service_role"));
+  });
+
+  it("records complete Celo x402 fee settlement evidence in the payment audit log", async () => {
+    const sql = normalizeSql(await readFile(celoX402SettlementAuditMigrationPath, "utf8"));
+
+    for (const column of ["fee_network text", "fee_asset text", "fee_amount text", "fee_pay_to text"]) {
+      assert.ok(sql.includes(column), column);
+    }
+    assert.ok(sql.includes("create or replace function public.record_paid_execution_settlement_event"));
+    assert.ok(sql.includes("'x402_fee_settled'"));
+    for (const field of ["lifecycleid", "payer", "payto", "amount", "asset", "network", "transactionhash"]) {
+      assert.ok(sql.includes(`'${field}'`), field);
+    }
+    assert.ok(sql.includes("insert into public.payment_events"));
+    assert.ok(sql.includes("on conflict do nothing"));
   });
 
   it("adds a transactional canary reservation ledger without enabling execution", async () => {

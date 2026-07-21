@@ -1148,6 +1148,10 @@ describe("createSupabaseAgentPayRepositories", () => {
       argumentsHash: "d".repeat(64),
       authorizationHash: `0x${"e".repeat(64)}`,
       environment: "staging" as const,
+      feeNetwork: "eip155:42220",
+      feeAsset: "0x0000000000000000000000000000000000000001",
+      feeAmount: "10000",
+      feePayTo: "0x0000000000000000000000000000000000000002",
       createdAt: "2026-07-13T00:00:00.000Z",
     };
 
@@ -1170,6 +1174,10 @@ describe("createSupabaseAgentPayRepositories", () => {
       arguments_hash: input.argumentsHash,
       authorization_hash: input.authorizationHash,
       environment: input.environment,
+      fee_network: input.feeNetwork,
+      fee_asset: input.feeAsset,
+      fee_amount: input.feeAmount,
+      fee_pay_to: input.feePayTo,
       status: "CLAIMED",
       fee_status: "ACCEPTED",
       execution_status: "NOT_QUEUED",

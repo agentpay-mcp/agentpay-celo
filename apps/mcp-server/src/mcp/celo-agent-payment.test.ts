@@ -1,7 +1,20 @@
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { describe, it } from "node:test";
+import {
+  decodePaymentRequiredHeader,
+  encodePaymentSignatureHeader,
+  type HTTPRequestContext,
+} from "@x402/core/http";
+import type { PaymentPayload } from "@x402/core/types";
 
-import { createCeloPaymentOption, parseAgentPayMcpPaymentEnv } from "./celo-agent-payment.ts";
+import {
+  createCeloAgentPaymentProcessor,
+  createCeloExpectedPaymentTerms,
+  createCeloPaymentOption,
+  parseAgentPayMcpPaymentEnv,
+} from "./celo-agent-payment.ts";
 
 describe("parseAgentPayMcpPaymentEnv", () => {
   it("leaves public MCP payments disabled by default", () => {
@@ -141,6 +154,15 @@ describe("parseAgentPayMcpPaymentEnv", () => {
         version: "2",
       },
     });
+    assert.deepEqual(createCeloExpectedPaymentTerms(config), {
+      scheme: "exact",
+      network: "eip155:42220",
+      asset: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+      amount: "20000",
+      payTo: "0x0000000000000000000000000000000000000002",
+      maxTimeoutSeconds: 300,
+      assetTransferMethod: "eip3009",
+    });
   });
 
   it("rejects non-positive, over-precision, and non-USDC decimal seller pricing", () => {
@@ -156,4 +178,119 @@ describe("parseAgentPayMcpPaymentEnv", () => {
       );
     }
   });
+
+  it("uses the configured facilitator for supported, verify, and settle", async () => {
+    const payer = "0x0000000000000000000000000000000000000003";
+    const transaction = `0x${"44".repeat(32)}`;
+    const calls: Array<{ path: string; method: string; apiKey?: string; body?: unknown }> = [];
+    const facilitator = createServer(async (request, response) => {
+      const chunks: Buffer[] = [];
+      for await (const chunk of request) chunks.push(Buffer.from(chunk));
+      const rawBody = Buffer.concat(chunks).toString("utf8");
+      calls.push({
+        path: request.url ?? "",
+        method: request.method ?? "",
+        ...(typeof request.headers["x-api-key"] === "string"
+          ? { apiKey: request.headers["x-api-key"] }
+          : {}),
+        ...(rawBody ? { body: JSON.parse(rawBody) as unknown } : {}),
+      });
+
+      response.writeHead(200, { "content-type": "application/json" });
+      if (request.url === "/supported") {
+        response.end(JSON.stringify({
+          kinds: [{ x402Version: 2, scheme: "exact", network: "eip155:42220" }],
+          extensions: [],
+          signers: {},
+        }));
+        return;
+      }
+      if (request.url === "/verify") {
+        response.end(JSON.stringify({ isValid: true, payer }));
+        return;
+      }
+      response.end(JSON.stringify({ success: true, payer, transaction, network: "eip155:42220" }));
+    });
+    await new Promise<void>((resolve, reject) => {
+      facilitator.once("error", reject);
+      facilitator.listen(0, "127.0.0.1", resolve);
+    });
+
+    try {
+      const address = facilitator.address() as AddressInfo;
+      const config = {
+        enabled: true,
+        payTo: "0x0000000000000000000000000000000000000002",
+        price: "$0.02",
+        network: "eip155:42220" as const,
+        asset: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+        maxTimeoutSeconds: 300,
+        facilitatorUrl: `http://127.0.0.1:${address.port}`,
+        facilitatorApiKey: "test-facilitator-key",
+        syncSettle: true,
+        assetTransferMethod: "eip3009" as const,
+        assetDecimals: 6,
+      };
+      const processor = await createCeloAgentPaymentProcessor(config, { mcpPath: "/celo/mcp" });
+      const challenge = await processor.processHTTPRequest(createRequestContext());
+      if (challenge.type !== "payment-error") throw new Error("Expected the seller to issue a payment challenge.");
+      const challengeHeader = Object.entries(challenge.response.headers)
+        .find(([name]) => name.toLowerCase() === "payment-required")?.[1];
+      assert.ok(challengeHeader);
+      const requirements = decodePaymentRequiredHeader(challengeHeader).accepts[0]!;
+      const paymentPayload: PaymentPayload = {
+        x402Version: 2,
+        accepted: requirements,
+        payload: {
+          authorization: { from: payer },
+          signature: `0x${"11".repeat(65)}`,
+        },
+      };
+      const verified = await processor.processHTTPRequest(
+        createRequestContext(encodePaymentSignatureHeader(paymentPayload)),
+      );
+      if (verified.type !== "payment-verified") throw new Error("Expected the facilitator to verify the payment.");
+      const settled = await processor.processSettlement(
+        verified.paymentPayload,
+        verified.paymentRequirements,
+        verified.declaredExtensions,
+      );
+
+      assert.equal(settled.success, true);
+      assert.equal(settled.transaction, transaction);
+      assert.deepEqual(calls.map((call) => `${call.method} ${call.path}`), [
+        "GET /supported",
+        "POST /verify",
+        "POST /settle",
+      ]);
+      assert.deepEqual(calls.map((call) => call.apiKey), [
+        "test-facilitator-key",
+        "test-facilitator-key",
+        "test-facilitator-key",
+      ]);
+      assert.deepEqual(processor.expectedPaymentRequirements, createCeloExpectedPaymentTerms(config));
+    } finally {
+      await new Promise<void>((resolve, reject) => {
+        facilitator.close((error) => error ? reject(error) : resolve());
+      });
+    }
+  });
 });
+
+function createRequestContext(paymentHeader?: string): HTTPRequestContext {
+  return {
+    method: "POST",
+    path: "/celo/mcp",
+    ...(paymentHeader ? { paymentHeader } : {}),
+    adapter: {
+      getHeader(name) {
+        return name.toLowerCase() === "payment-signature" ? paymentHeader : undefined;
+      },
+      getMethod: () => "POST",
+      getPath: () => "/celo/mcp",
+      getUrl: () => "https://mcp.agentpay.site/celo/mcp",
+      getAcceptHeader: () => "application/json",
+      getUserAgent: () => "agentpay-integration-test",
+    },
+  };
+}

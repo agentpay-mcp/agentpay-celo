@@ -447,6 +447,7 @@ describe("registerAgentPayMcpTools", () => {
         retryInputs.push(input);
         return {
           status: "RESOURCE_FETCHED",
+          proofScheme: "agentpay-receipt",
           paymentIntentId: "pay_x402",
           requestUrl: "https://api.example.com/premium-data",
           method: "GET",
@@ -487,6 +488,7 @@ describe("registerAgentPayMcpTools", () => {
     assert.equal(retryInputs.length, 1);
     assert.deepEqual((result as { structuredContent: unknown }).structuredContent, {
       status: "RESOURCE_FETCHED",
+      proofScheme: "agentpay-receipt",
       paymentIntentId: "pay_x402",
       requestUrl: "https://api.example.com/premium-data",
       method: "GET",
