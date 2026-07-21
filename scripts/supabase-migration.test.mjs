@@ -15,6 +15,7 @@ const oauthConsumerAuthorizationMigrationPath = "supabase/migrations/20260715110
 const paymentIntentAuditMigrationPath = "supabase/migrations/20260715153000_payment_intent_atomic_audit.sql";
 const celoBoundaryMigrationPath = "supabase/migrations/20260717120000_celo_home_chain_boundary.sql";
 const celoConsumerResourceMigrationPath = "supabase/migrations/20260721120000_celo_consumer_resource.sql";
+const productionSetupMigrationPath = "supabase/migrations/20260721130000_celo_production_mainnet_onboarding.sql";
 const migrationsDir = "supabase/migrations";
 const requiredTables = ["setup_intents", "agent_wallets", "payment_intents", "payment_events"];
 const requiredSecurityStatements = [
@@ -202,6 +203,82 @@ describe("AgentPay Supabase migration", () => {
       ),
     );
     assert.ok(sql.includes("notify pgrst, 'reload schema'"));
+  });
+
+  it("defines a fail-closed atomic Celo production setup lifecycle", async () => {
+    const sql = normalizeSql(await readFile(productionSetupMigrationPath, "utf8"));
+
+    for (const tableName of [
+      "setup_runtime_state",
+      "setup_canary_owners",
+      "setup_deployment_jobs",
+      "setup_deployment_events",
+      "setup_sponsor_budgets",
+      "setup_rate_limit_buckets",
+    ]) {
+      assert.match(sql, new RegExp(`create table if not exists public\\.${tableName}\\b`), tableName);
+      assert.ok(sql.includes(`alter table public.${tableName} enable row level security`), `${tableName} RLS`);
+    }
+
+    for (const column of [
+      "capability_digest text",
+      "deployment_nonce text",
+      "manifest_sha256 text",
+      "factory_address text",
+      "factory_runtime_code_hash text",
+      "deployment_salt text",
+      "predicted_account text",
+      "account_creation_code_hash text",
+      "account_runtime_code_hash text",
+      "authorization_hash text",
+      "owner_setup_signature text",
+      "public_error_code text",
+    ]) {
+      assert.ok(sql.includes(column), column);
+    }
+
+    for (const control of [
+      "unique (setup_intent_id)",
+      "unique (chain_id, deployer_address, deployer_nonce)",
+      "unique (transaction_hash)",
+      "agent_wallets_tenant_owner_chain_unique",
+      "create role agentpay_setup_web nologin noinherit",
+      "create role agentpay_setup_worker nologin noinherit",
+      "grant agentpay_setup_web, agentpay_setup_worker to authenticator",
+      "revoke all on all tables in schema public from public, anon, authenticated",
+      "revoke all on all sequences in schema public from public, anon, authenticated",
+      "revoke all on all functions in schema public from public, anon, authenticated",
+      "set search_path = pg_catalog, public, extensions",
+      "notify pgrst, 'reload schema'",
+    ]) {
+      assert.ok(sql.includes(control), control);
+    }
+
+    for (const functionName of [
+      "create_production_setup_challenge",
+      "read_production_setup_status",
+      "consume_production_setup_admission",
+      "claim_setup_deployment_job",
+      "reserve_setup_sponsor_budget",
+      "persist_setup_signed_transaction",
+      "mark_setup_broadcast_result",
+      "record_setup_receipt",
+      "finalize_verified_setup_wallet",
+      "mark_setup_manual_review",
+      "prune_expired_production_setups",
+    ]) {
+      assert.ok(sql.includes(`create or replace function public.${functionName}`), functionName);
+      assert.ok(sql.includes("security definer"), `${functionName} security definer`);
+    }
+
+    assert.ok(sql.includes("owner_setup_signature ~ '^0x[0-9a-fa-f]{130}$'"), "normalized 65-byte setup signature");
+    assert.ok(sql.includes("home_chain_id = 42220"), "production setup is pinned to Celo mainnet");
+    assert.ok(!sql.includes("home_chain_id = 196"), "legacy X Layer chain cannot enter the Celo setup lifecycle");
+    assert.ok(sql.includes("new.owner_setup_signature is distinct from old.owner_setup_signature"), "signature is immutable");
+    assert.ok(
+      sql.includes("metadata ?| array['ownersetupsignature', 'owner_setup_signature', 'rawtransaction', 'raw_tx']"),
+      "events reject setup signatures and raw transaction material",
+    );
   });
 
   it("adds opaque OAuth clients and one-time PKCE authorization records", async () => {
