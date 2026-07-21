@@ -4,6 +4,7 @@ export * from "./auth.ts";
 export * from "./balance.ts";
 export * from "./chains.ts";
 export * from "./invoice.ts";
+export * from "./mainnet-wallet-setup.ts";
 export * from "./payment-authorization.ts";
 export * from "./payment-intent.ts";
 export * from "./payment-review.ts";

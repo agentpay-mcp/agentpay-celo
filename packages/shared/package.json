@@ -14,6 +14,7 @@
     "src/chains.ts",
     "src/index.ts",
     "src/invoice.ts",
+    "src/mainnet-wallet-setup.ts",
     "src/payment-authorization.ts",
     "src/payment-intent.ts",
     "src/payment-review.ts",

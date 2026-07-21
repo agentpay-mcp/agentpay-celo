@@ -38,6 +38,8 @@ describe("publishable AgentPay package manifests", () => {
     const rootManifest = await readPackageJson(".");
 
     assert.match(rootManifest.scripts?.["contracts:deploy:celo"] ?? "", /CELO_MAINNET_RPC_URL/);
+    assert.match(rootManifest.scripts?.["contracts:deploy:celo"] ?? "", /DeployAgentPayCeloAccountFactoryV1/);
+    assert.doesNotMatch(rootManifest.scripts?.["contracts:deploy:celo"] ?? "", /DeployAgentPayAccountV2/);
     assert.match(rootManifest.scripts?.["contracts:deploy:celo:sepolia"] ?? "", /CELO_SEPOLIA_RPC_URL/);
     assert.equal(rootManifest.scripts?.["contracts:deploy:xlayer"], undefined);
   });
