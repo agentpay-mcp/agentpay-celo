@@ -17,6 +17,7 @@
     "src/mcp/consumer-auth.ts",
     "src/mcp/http.ts",
     "src/mcp/celo-agent-payment.ts",
+    "src/mcp/erc8004-registration.ts",
     "src/mcp/stdio.ts",
     "src/runtime/agentpay-runtime.ts",
     "src/runtime/production-readiness.ts",

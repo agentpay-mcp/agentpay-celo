@@ -110,6 +110,8 @@ contract AgentPayAccountV2 {
     uint256 private constant _NOT_ENTERED = 1;
     uint256 private constant _ENTERED = 2;
     uint256 private constant _SECP256K1_N_HALF = 0x7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0;
+    bytes4 private constant _ERC1271_MAGIC_VALUE = 0x1626ba7e;
+    bytes4 private constant _ERC1271_INVALID_VALUE = 0xffffffff;
 
     address public immutable owner;
     address public executor;
@@ -190,6 +192,14 @@ contract AgentPayAccountV2 {
 
     function hashRouteAuthorization(RoutePaymentAuthorization calldata authorization) external view returns (bytes32) {
         return _hashRouteAuthorization(authorization);
+    }
+
+    /// @notice Validates arbitrary digests for ERC-1271 integrations such as
+    ///         ERC-8004 agent-wallet ownership proofs.
+    /// @dev Payment execution remains limited to the dedicated typed-data
+    ///      entrypoints; this view function never executes calls or consumes a nonce.
+    function isValidSignature(bytes32 digest, bytes calldata signature) external view returns (bytes4) {
+        return _tryRecover(digest, signature) == owner ? _ERC1271_MAGIC_VALUE : _ERC1271_INVALID_VALUE;
     }
 
     function setExecutor(address newExecutor) external onlyOwner {
@@ -395,20 +405,24 @@ contract AgentPayAccountV2 {
     }
 
     function _recover(bytes32 digest, bytes calldata signature) private pure returns (address signer) {
-        if (signature.length != 65) revert InvalidSignature();
+        signer = _tryRecover(digest, signature);
+        if (signer == address(0)) revert InvalidSignature();
+    }
 
-        bytes memory signatureCopy = signature;
+    function _tryRecover(bytes32 digest, bytes calldata signature) private pure returns (address signer) {
+        if (signature.length != 65) return address(0);
+
         bytes32 r;
         bytes32 s;
         uint8 v;
         assembly {
-            r := mload(add(signatureCopy, 32))
-            s := mload(add(signatureCopy, 64))
+            r := calldataload(signature.offset)
+            s := calldataload(add(signature.offset, 32))
+            v := byte(0, calldataload(add(signature.offset, 64)))
         }
-        v = uint8(signatureCopy[64]);
-        if (v != 27 && v != 28) revert InvalidSignature();
-        if (uint256(r) == 0) revert InvalidSignature();
-        if (uint256(s) == 0 || uint256(s) > _SECP256K1_N_HALF) revert InvalidSignature();
+        if (v != 27 && v != 28) return address(0);
+        if (uint256(r) == 0) return address(0);
+        if (uint256(s) == 0 || uint256(s) > _SECP256K1_N_HALF) return address(0);
         signer = ecrecover(digest, v, r, s);
     }
 

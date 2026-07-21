@@ -85,6 +85,34 @@ Direct AgentPay transactions append the assigned `CELO_ATTRIBUTION_TAG` as an ER
 
 The bounded first canary is canonical Celo USDC only, one lifecycle, no route target, and no silent expansion to USDT or USDm. Broader token and route support is enabled only after the canary gates pass.
 
+## ERC-8004 Agent Identity
+
+AgentPay publishes its registration document at `https://wallet.agentpay.site/.well-known/agent-registration.json` only when a real Celo mainnet AgentPay wallet is configured. The document advertises the live website, authenticated MCP endpoint, x402 support, and wallet address. It intentionally makes no reputation or validation claim before those trust signals exist.
+
+The Celo mainnet Identity Registry is pinned to `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`. Registry preparation never reads a private key or broadcasts a transaction:
+
+```bash
+# 1. Deploy AgentPayAccountV2 and expose the metadata endpoint first.
+npm run erc8004 -- register
+
+# 2. After registration confirms, set AGENTPAY_ERC8004_AGENT_ID only in the
+#    operator environment and prepare the short-lived wallet proof.
+npm run erc8004 -- wallet-proof
+
+# 3. Sign the returned EIP-712 payload with the immutable account owner,
+#    then provide the exact deadline and signature. Submit the printed
+#    transaction from the ERC-8004 NFT owner.
+npm run erc8004 -- set-wallet
+
+# 4. Only after setAgentWallet confirms, restart the MCP surface with the
+#    real AGENTPAY_ERC8004_AGENT_ID so startup verification can pass.
+
+# 5. Read the registry and public metadata back before submission.
+npm run erc8004 -- verify
+```
+
+`AgentPayAccountV2` implements ERC-1271 solely as a view-only owner-signature validator, allowing ERC-8004 to verify the smart account as `agentWallet`. It does not add an unsigned execution path or turn an identity proof into payment authorization. Each generated registry transaction must still be reviewed and submitted by the owner.
+
 Contract commands:
 
 ```bash

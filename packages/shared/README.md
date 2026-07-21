@@ -4,6 +4,7 @@ Shared AgentPay schemas and helpers:
 
 - Celo mainnet and Celo Sepolia chain metadata;
 - canonical Celo USDC, USDT, and USDm addresses and decimals;
+- strict AgentPay ERC-8004 registration metadata for the Celo mainnet identity registry;
 - balance, invoice, x402, and payment-intent validation;
 - direct and route EIP-712 authorization builders;
 - exact approval, nonce, deadline, route, and receipt helpers used by the MCP and setup surfaces.

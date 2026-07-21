@@ -9,7 +9,11 @@ import { Wallet } from "ethers";
 import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
 import { describe, it } from "node:test";
 
-import { createSessionContext, type SessionContext } from "@agentpay-ai/shared-celo";
+import {
+  createAgentPayErc8004Registration,
+  createSessionContext,
+  type SessionContext,
+} from "@agentpay-ai/shared-celo";
 import { createConsumerOAuthApi } from "../auth/oauth-api.ts";
 import type {
   OAuthAuthorizationRecord,
@@ -86,6 +90,58 @@ describe("startAgentPayHttpServer", () => {
       await client.close();
 
       assert.deepEqual(tools.tools.map((tool) => tool.name), ["execute_payment"]);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("serves validated ERC-8004 domain metadata without authentication or payment", async () => {
+    const agentRegistration = createAgentPayErc8004Registration({
+      agentWalletAddress: "0x1234567890abcdef1234567890abcdef12345678",
+      agentId: 42,
+    });
+    const server = await startAgentPayHttpServer({
+      env: mcpEnv(),
+      hostname: "127.0.0.1",
+      port: 0,
+      agentRegistration,
+      createRuntime() {
+        return createRuntime();
+      },
+    });
+
+    try {
+      const response = await fetch(new URL("/.well-known/agent-registration.json", server.url));
+
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("access-control-allow-origin"), "*");
+      assert.equal(response.headers.get("cache-control"), "public, max-age=300");
+      assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+      assert.deepEqual(await response.json(), agentRegistration);
+
+      const post = await fetch(new URL("/.well-known/agent-registration.json", server.url), {
+        method: "POST",
+      });
+      assert.equal(post.status, 405);
+      assert.equal(post.headers.get("allow"), "GET");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("does not publish an ERC-8004 identity before real wallet inputs are configured", async () => {
+    const server = await startAgentPayHttpServer({
+      env: mcpEnv(),
+      hostname: "127.0.0.1",
+      port: 0,
+      createRuntime() {
+        return createRuntime();
+      },
+    });
+
+    try {
+      const response = await fetch(new URL("/.well-known/agent-registration.json", server.url));
+      assert.equal(response.status, 404);
     } finally {
       await server.close();
     }

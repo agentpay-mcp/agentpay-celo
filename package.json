@@ -15,6 +15,7 @@
     "contracts:deploy:celo": "cd contracts && forge script script/DeployAgentPayCeloAccountFactoryV1.s.sol:DeployAgentPayCeloAccountFactoryV1 --rpc-url \"$CELO_MAINNET_RPC_URL\" --broadcast",
     "contracts:deploy:celo:sepolia": "cd contracts && forge script script/DeployAgentPayAccountV2.s.sol:DeployAgentPayAccountV2 --rpc-url \"$CELO_SEPOLIA_RPC_URL\" --broadcast",
     "demo:local": "tsx scripts/demo-agentpay-flow.ts",
+    "erc8004": "tsx scripts/erc8004-registration.ts",
     "lint": "npm run lint --workspaces --if-present",
     "manifest:mainnet:shadow": "node scripts/generate-mainnet-shadow-manifest.mjs",
     "manifest:mainnet:activate": "node scripts/mainnet-activation-manifest.mjs",

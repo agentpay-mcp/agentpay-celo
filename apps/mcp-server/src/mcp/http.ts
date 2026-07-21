@@ -12,7 +12,11 @@ import type {
   HTTPTransportContext,
 } from "@x402/core/http";
 import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
-import { AgentPayAuthError, type SessionContext } from "@agentpay-ai/shared-celo";
+import {
+  AgentPayAuthError,
+  type AgentPayErc8004Registration,
+  type SessionContext,
+} from "@agentpay-ai/shared-celo";
 import { AGENTPAY_CONSUMER_URI } from "../auth/siwe.ts";
 import { authenticateServiceSession } from "../auth/session.ts";
 import { createConsumerSessionApi, type ConsumerSessionApi } from "../auth/consumer-session-api.ts";
@@ -49,6 +53,10 @@ import {
   type AgentPayMcpPaymentProcessor,
   type ExpectedX402PaymentRequirements,
 } from "./celo-agent-payment.ts";
+import {
+  parseAgentPayErc8004Env,
+  verifyConfiguredAgentPayErc8004Identity,
+} from "./erc8004-registration.ts";
 import {
   createInMemoryPaidExecutionLifecycleStore,
   createPaidExecutionLifecycleClaimInput,
@@ -90,6 +98,7 @@ const freeJsonRpcMethods = new Set(["initialize", "notifications/initialized", "
 const consumerAuthorizationServer = "https://wallet.agentpay.site";
 const consumerResourceMetadataPath = "/.well-known/oauth-protected-resource/mcp";
 const consumerAuthorizationMetadataPath = "/.well-known/oauth-authorization-server";
+const agentRegistrationMetadataPath = "/.well-known/agent-registration.json";
 
 export interface AgentPayHttpServer {
   url: string;
@@ -120,6 +129,8 @@ export interface StartAgentPayHttpServerOptions {
   consumerAuth?: ConsumerSessionAuthenticator;
   sessionApi?: ConsumerSessionApi;
   oauthApi?: ConsumerOAuthApi;
+  /** @internal Validated metadata seam for tests; production parses env. */
+  agentRegistration?: AgentPayErc8004Registration;
 }
 
 /** @internal Dependency seam for resolver tests; production callers use the pinned defaults. */
@@ -139,7 +150,14 @@ export function shouldVerifyMainnetAccountAtStartup(requestedMode: ExecutionMode
 }
 
 export async function startAgentPayHttpServer(options: StartAgentPayHttpServerOptions = {}): Promise<AgentPayHttpServer> {
-  const config = parseAgentPayEnv(options.env ?? process.env);
+  const runtimeEnv = options.env ?? process.env;
+  const config = parseAgentPayEnv(runtimeEnv);
+  const agentRegistration = config.environment === "production"
+    ? parseAgentPayErc8004Env(runtimeEnv)
+    : options.agentRegistration ?? parseAgentPayErc8004Env(runtimeEnv);
+  if (config.environment === "production" && agentRegistration?.registrations.length) {
+    await verifyConfiguredAgentPayErc8004Identity(agentRegistration, runtimeEnv);
+  }
   const mode = options.mode ?? config.httpMode ?? "public";
   const paymentEnabled = String((options.env ?? process.env).AGENTPAY_A2MCP_PAYMENT_ENABLED ?? "")
     .trim()
@@ -339,6 +357,7 @@ export async function startAgentPayHttpServer(options: StartAgentPayHttpServerOp
       consumerAuth,
       sessionApi,
       oauthApi,
+      agentRegistration,
       legacySiweSessionApiEnabled,
       createRuntime,
       mcpPath,
@@ -401,6 +420,7 @@ interface HandleAgentPayHttpRequestOptions {
   consumerAuth?: ConsumerSessionAuthenticator;
   sessionApi?: ConsumerSessionApi;
   oauthApi?: ConsumerOAuthApi;
+  agentRegistration?: AgentPayErc8004Registration;
   legacySiweSessionApiEnabled: boolean;
   createRuntime: (config: AgentPayRuntimeConfig, tenantContext?: SessionContext) => AgentPayRuntime;
   mcpPath: string;
@@ -424,6 +444,23 @@ async function handleAgentPayHttpRequest(options: HandleAgentPayHttpRequestOptio
 
   if (options.request.method === "OPTIONS") {
     options.response.writeHead(204).end();
+    return;
+  }
+
+  if (pathname === agentRegistrationMetadataPath) {
+    if (options.request.method !== "GET") {
+      writeJson(options.response, 405, { error: "Method not allowed." }, { allow: "GET" });
+      return;
+    }
+    if (!options.agentRegistration) {
+      writeJson(options.response, 404, { error: "Not found" });
+      return;
+    }
+    writeJson(options.response, 200, options.agentRegistration, {
+      "access-control-allow-origin": "*",
+      "cache-control": "public, max-age=300",
+      "x-content-type-options": "nosniff",
+    });
     return;
   }
 

@@ -32,6 +32,10 @@ describe("README", () => {
     assert.match(contents, /ERC-8021/);
     assert.match(contents, /CELO_ATTRIBUTION_TAG/);
     assert.match(contents, /x402 facilitator settlements.*not tagged|does not tag x402 facilitator settlements/i);
+    assert.match(contents, /ERC-8004 Agent Identity/i);
+    assert.match(contents, /\.well-known\/agent-registration\.json/);
+    assert.match(contents, /ERC-1271/);
+    assert.match(contents, /npm run erc8004 -- verify/);
     assert.match(contents, /CELO_MAINNET_RPC_FALLBACK_URL/);
     assert.doesNotMatch(contents, /docs\//);
     assert.doesNotMatch(contents, /AGENTPAY_CONCEPT/);
