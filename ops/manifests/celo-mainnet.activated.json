@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "kind": "agentpay-mainnet-activated-manifest",
+  "status": "DEPLOYED",
+  "environment": "production",
+  "executionMode": "OFF",
+  "chain": {
+    "name": "Celo",
+    "chainId": 42220,
+    "caip2": "eip155:42220",
+    "nativeSymbol": "CELO",
+    "rpcEnvRef": "CELO_MAINNET_RPC_URL",
+    "fallbackRpcEnvRef": "CELO_MAINNET_RPC_FALLBACK_URL",
+    "fallbackRpcUrl": "https://forno.celo.org"
+  },
+  "database": {
+    "environment": "production",
+    "projectRef": null,
+    "urlEnvRef": "SUPABASE_PRODUCTION_URL",
+    "serviceRoleKeyEnvRef": "SUPABASE_PRODUCTION_SERVICE_ROLE_KEY",
+    "databaseUrlEnvRef": "DIRECT_URL_PRODUCTION",
+    "migrationHead": "20260721160000_celo_x402_settlement_audit"
+  },
+  "secretRefs": {
+    "namespace": "agentpay-celo/production",
+    "executorPrivateKeyEnvRef": "EXECUTOR_PRIVATE_KEY",
+    "setupDeployerPrivateKeyEnvRef": "SETUP_DEPLOYER_PRIVATE_KEY",
+    "sessionHashKeyEnvRef": "AGENTPAY_SESSION_HASH_KEY",
+    "reviewTokenSecretEnvRef": "AGENTPAY_REVIEW_TOKEN_SECRET",
+    "rawTransactionEncryptionKeyEnvRef": "AGENTPAY_RAW_TX_ENCRYPTION_KEY"
+  },
+  "release": {
+    "commit": null,
+    "packageLockSha256": "91b857d17fb7c7e65d312135595275b72887c0b73510f935de9a8a26d09fe68e",
+    "creationBytecodeKeccak256": "0x2ede9e46a03a9b3d8e8dc322905443b0fedfabd324c54c73fe1c748f10d0152a",
+    "runtimeBytecodeKeccak256": "0xa1a627f011931eba8d6aeb3f16290f3d91f0f777a8fabc635f00882c457c38a3",
+    "abiSha256": "2e2c3a0610e7f4961423baa07284c7d69ebef5f4cef9b285a99595e4b01d30e6",
+    "migrationHead": "20260721160000_celo_x402_settlement_audit"
+  },
+  "contract": {
+    "version": "v2",
+    "address": "0xA495Eaff5809Efb32beb6eCd18a48e9469Acf121",
+    "deploymentTxHash": "0x212ccf9ca2a0f8ef08a5533705e3b319bf8fe57db260b8048b2dc28c7603d8fa",
+    "creationBytecodeHash": "0x2ede9e46a03a9b3d8e8dc322905443b0fedfabd324c54c73fe1c748f10d0152a",
+    "runtimeBytecodeHash": "0xa1a627f011931eba8d6aeb3f16290f3d91f0f777a8fabc635f00882c457c38a3",
+    "ownerAddress": "0x9CEef6d89915628331C25F48360FfE97CD71B3EE",
+    "executorAddress": "0x645d39b3943D27cfE53184a446f551a69a4b1FDe",
+    "deployerAddress": "0x72936d76E840ddBB18976705779b6E24834B4d93",
+    "paused": false,
+    "domain": {
+      "name": "AgentPay",
+      "version": "1",
+      "chainId": 42220,
+      "verifyingContract": "0xA495Eaff5809Efb32beb6eCd18a48e9469Acf121"
+    },
+    "allowedTokens": [
+      "0xcebA9300f2b948710d2653dD7B07f33A8B32118C"
+    ],
+    "allowedRouteTargets": []
+  },
+  "token": {
+    "symbol": "USDC",
+    "address": "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+    "decimals": 6,
+    "codeHash": "0x14254a76b7b2554180021c6390e814e73dee647ae91b7198da08de5145214493"
+  },
+  "x402": {
+    "enabled": false,
+    "network": "eip155:42220",
+    "asset": "USDC",
+    "tokenAddress": "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+    "decimals": 6,
+    "price": "$0.01",
+    "priceAtomic": "10000",
+    "syncSettle": true,
+    "payToEnvRef": "AGENTPAY_A2MCP_PAYMENT_PAY_TO",
+    "facilitatorEnvRef": "AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL",
+    "facilitatorUrl": "https://api.x402.celo.org",
+    "toolAllowlist": [
+      "execute_payment"
+    ]
+  },
+  "domains": {
+    "publicOrigin": null,
+    "consumerOrigin": "https://wallet.agentpay.site/celo/mcp",
+    "siweAudience": "https://wallet.agentpay.site/celo/mcp"
+  },
+  "onboarding": {
+    "setupMode": "OFF",
+    "setupUrl": "https://wallet.agentpay.site/celo/setup",
+    "readinessUrl": "https://wallet.agentpay.site/celo/setup/readyz",
+    "manifestPathEnvRef": "AGENTPAY_ONBOARDING_MANIFEST_PATH",
+    "manifestSha256EnvRef": "AGENTPAY_ONBOARDING_MANIFEST_SHA256",
+    "factoryAddressEnvRef": "AGENTPAY_FACTORY_ADDRESS",
+    "sponsorAddressEnvRef": "AGENTPAY_SETUP_SPONSOR_ADDRESS"
+  },
+  "attribution": {
+    "standard": "ERC-8021",
+    "tagEnvRef": "CELO_ATTRIBUTION_TAG",
+    "appliesTo": [
+      "agentpay-direct-transactions"
+    ],
+    "excludes": [
+      "x402-facilitator-settlements"
+    ]
+  },
+  "canaryPolicy": {
+    "maxAcceptedLifecycles": 1,
+    "invoiceMaxUsdc": "0.10",
+    "accountFundingUsdc": "0.10",
+    "payerFeeWalletFundingMaxUsdc": "0.02",
+    "aspFeeUsdc": "0.01",
+    "maxNativeFee": "0",
+    "executorGasMaxCelo": "0.005",
+    "allowlistedTenantId": null,
+    "allowlistedOwnerAddress": null,
+    "allowlistedAccountAddress": null,
+    "payerAddress": null,
+    "recipientAddress": null
+  },
+  "isolation": {
+    "stagingChainId": 11142220,
+    "productionChainId": 42220,
+    "forbiddenRuntimeEnvRefs": [
+      "CELO_RPC_URL",
+      "CELO_SEPOLIA_RPC_URL",
+      "AGENTPAY_CELO_SEPOLIA_USDC_ADDRESS",
+      "AGENTPAY_CELO_SEPOLIA_USDT_ADDRESS",
+      "AGENTPAY_CELO_SEPOLIA_USDM_ADDRESS"
+    ],
+    "secretNamespaces": {
+      "staging": "agentpay-celo/staging",
+      "production": "agentpay-celo/production"
+    },
+    "separateSupabase": true,
+    "separateExecutor": true,
+    "separateDeployment": true
+  },
+  "activation": {
+    "sourceManifest": "celo-mainnet.shadow.json",
+    "accountDeployment": "DEPLOYED",
+    "executionEnabled": false
+  }
+}
