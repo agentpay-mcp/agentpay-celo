@@ -1,0 +1,36 @@
+[Unit]
+Description=Rotate AgentPay Celo scoped setup JWT files
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+WorkingDirectory=__RELEASE_ROOT__
+EnvironmentFile=/opt/agentpay-celo/private/rotator.env
+ExecStart=/usr/bin/node __RELEASE_ROOT__/scripts/rotate-setup-token-files.mjs
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RestrictAddressFamilies=AF_UNIX
+SocketBindDeny=any
+LockPersonality=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_OVERRIDE CAP_FOWNER
+AmbientCapabilities=
+ReadOnlyPaths=__RELEASE_ROOT__ /opt/agentpay-celo/private/rotator.env
+ReadWritePaths=/opt/agentpay-celo/private/web /opt/agentpay-celo/private/worker
+TimeoutStartSec=30s

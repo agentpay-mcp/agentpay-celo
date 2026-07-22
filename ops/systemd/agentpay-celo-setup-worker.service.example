@@ -1,0 +1,38 @@
+[Unit]
+Description=AgentPay Celo production setup sponsor worker (OFF by default)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=agentpay-celo-worker
+Group=agentpay-celo-worker
+WorkingDirectory=/opt/agentpay-celo
+Environment=NODE_ENV=production
+EnvironmentFile=/opt/agentpay-celo/private/worker/setup-worker.env
+ExecStart=__RELEASE_ROOT__/node_modules/.bin/tsx __RELEASE_ROOT__/apps/setup-web/src/worker/start.ts
+Restart=always
+RestartSec=5
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SocketBindDeny=any
+LockPersonality=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadOnlyPaths=__RELEASE_ROOT__ /opt/agentpay-celo/private/worker
+InaccessiblePaths=/opt/agentpay-celo/private/web /opt/agentpay-celo/private/rotator.env
+
+[Install]
+WantedBy=multi-user.target
