@@ -5,6 +5,9 @@ import type {
   SetupWorkerClaim,
 } from "@agentpay-ai/mcp-server-celo";
 import {
+  isAssignedCeloAttributionTag,
+} from "@agentpay-ai/shared-celo";
+import {
   buildSetupDeploymentTransaction,
   decryptSetupRawTransaction,
   encryptSetupRawTransaction,
@@ -31,6 +34,7 @@ export interface SetupDeploymentWorkerConfig {
   readonly workerId: string;
   readonly leaseSeconds: number;
   readonly encryptionKey: Uint8Array;
+  readonly celoAttributionTag: string;
   readonly factoryDeploymentBlock: number;
   readonly receiptTimeoutSeconds: number;
   readonly limits: SetupTransactionLimits;
@@ -116,6 +120,7 @@ export function createSetupDeploymentWorker(dependencies: SetupDeploymentWorkerD
       gasLimit: 1n,
       maxFeePerGas: feeData.maxFeePerGas,
       maxPriorityFeePerGas: feeData.maxPriorityFeePerGas,
+      attributionTag: dependencies.config.celoAttributionTag,
       limits: dependencies.config.limits,
     });
     const { gasLimit: _estimateGasLimit, ...unboundedEstimateRequest } = estimateRequest;
@@ -127,6 +132,7 @@ export function createSetupDeploymentWorker(dependencies: SetupDeploymentWorkerD
       gasLimit,
       maxFeePerGas: feeData.maxFeePerGas,
       maxPriorityFeePerGas: feeData.maxPriorityFeePerGas,
+      attributionTag: dependencies.config.celoAttributionTag,
       limits: dependencies.config.limits,
     });
     await dependencies.store.reserve({
@@ -157,7 +163,12 @@ export function createSetupDeploymentWorker(dependencies: SetupDeploymentWorkerD
     let rawTransaction: string;
     try {
       rawTransaction = decryptSetupRawTransaction(claim.rawTransaction, dependencies.config.encryptionKey);
-      assertPersistedTransaction(claim, rawTransaction, dependencies.config.limits);
+      assertPersistedTransaction(
+        claim,
+        rawTransaction,
+        dependencies.config.limits,
+        dependencies.config.celoAttributionTag,
+      );
     } catch {
       return manualReview(claim, at, "SETUP_OUTBOX_MISMATCH");
     }
@@ -287,6 +298,7 @@ function assertPersistedTransaction(
   claim: SetupWorkerClaim,
   rawTransaction: string,
   limits: SetupTransactionLimits,
+  attributionTag: string,
 ): void {
   if (keccak256(rawTransaction).toLowerCase() !== claim.transactionHash?.toLowerCase()) {
     throw new Error("SETUP_OUTBOX_MISMATCH");
@@ -303,6 +315,7 @@ function assertPersistedTransaction(
     gasLimit: parsed.gasLimit,
     maxFeePerGas: parsed.maxFeePerGas,
     maxPriorityFeePerGas: parsed.maxPriorityFeePerGas,
+    attributionTag,
     limits,
   });
   if (parsed.from.toLowerCase() !== expected.from.toLowerCase()
@@ -336,6 +349,7 @@ function validateWorkerConfig(config: SetupDeploymentWorkerConfig): void {
   if (!/^[A-Za-z0-9:_-]{1,128}$/.test(config.workerId)
     || !Number.isSafeInteger(config.leaseSeconds) || config.leaseSeconds < 15 || config.leaseSeconds > 900
     || !(config.encryptionKey instanceof Uint8Array) || config.encryptionKey.byteLength !== 32
+    || !isAssignedCeloAttributionTag(config.celoAttributionTag)
     || !Number.isSafeInteger(config.factoryDeploymentBlock) || config.factoryDeploymentBlock < 0
     || !Number.isSafeInteger(config.receiptTimeoutSeconds)
     || config.receiptTimeoutSeconds < 30 || config.receiptTimeoutSeconds > 3_600) {

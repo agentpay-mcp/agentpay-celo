@@ -179,6 +179,7 @@ export async function createProductionOnboardingE2eFixture(
         workerId: "production-e2e-worker",
         leaseSeconds: 15,
         encryptionKey: new Uint8Array(32).fill(23),
+        celoAttributionTag: "celo_agentpay",
         factoryDeploymentBlock: 100,
         receiptTimeoutSeconds: 60,
         limits: {

@@ -11,6 +11,7 @@ import {
 
 import type { EncryptedSetupTransaction, SetupWorkerClaim } from "@agentpay-ai/mcp-server-celo";
 import {
+  appendCeloAttributionTag,
   MAINNET_SETUP_ENVIRONMENT,
   MAINNET_SETUP_ROUTE_ALLOWLIST_HASH,
   MAINNET_SETUP_TOKEN_ALLOWLIST_HASH,
@@ -101,6 +102,7 @@ export function buildSetupDeploymentTransaction(input: {
   readonly gasLimit: bigint;
   readonly maxFeePerGas: bigint;
   readonly maxPriorityFeePerGas: bigint;
+  readonly attributionTag: string;
   readonly limits: SetupTransactionLimits;
 }): SetupDeploymentTransaction {
   const deployerAddress = normalizeAddress(input.deployerAddress, "SETUP_DEPLOYER_INVALID");
@@ -120,6 +122,10 @@ export function buildSetupDeploymentTransaction(input: {
   if (input.gasLimit * input.maxFeePerGas > input.limits.maxNativeCostWei) throw new Error("SETUP_NATIVE_COST_CAP");
 
   const authorization = buildSetupAuthorizationFromClaim(input.claim);
+  const calldata = factoryInterface.encodeFunctionData(
+    "deployAccount",
+    [authorization, input.claim.ownerSetupSignature],
+  );
   return Object.freeze({
     type: 2 as const,
     chainId: 42220n as const,
@@ -130,7 +136,7 @@ export function buildSetupDeploymentTransaction(input: {
     gasLimit: input.gasLimit,
     maxFeePerGas: input.maxFeePerGas,
     maxPriorityFeePerGas: input.maxPriorityFeePerGas,
-    data: factoryInterface.encodeFunctionData("deployAccount", [authorization, input.claim.ownerSetupSignature]),
+    data: appendCeloAttributionTag(calldata, input.attributionTag),
   });
 }
 
