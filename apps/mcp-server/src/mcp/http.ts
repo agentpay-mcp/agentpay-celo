@@ -2254,7 +2254,8 @@ export async function resolveProductionReadiness(
     typeof contract.deploymentTxHash === "string" &&
     typeof contract.runtimeBytecodeHash === "string" &&
     typeof contract.ownerAddress === "string" &&
-    typeof contract.executorAddress === "string"
+    typeof contract.executorAddress === "string" &&
+    typeof contract.deployerAddress === "string"
   ) {
     try {
       const expected: MainnetAccountVerificationExpected = {
@@ -2264,6 +2265,7 @@ export async function resolveProductionReadiness(
         runtimeBytecodeHash: contract.runtimeBytecodeHash,
         ownerAddress: contract.ownerAddress,
         executorAddress: contract.executorAddress,
+        deployerAddress: contract.deployerAddress,
         tokenAddress: manifest.token.address,
         tokenCodeHash: manifest.token.codeHash,
         tokenDecimals: manifest.token.decimals,

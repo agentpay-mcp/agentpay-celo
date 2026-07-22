@@ -1367,6 +1367,7 @@ describe("startAgentPayHttpServer", () => {
       environmentMode: "OFF" | "PUBLIC" | " OFF " | "   ",
     ) => {
       let verificationCalls = 0;
+      let verificationDeployerAddress: string | undefined;
       const env = {
         ...productionMcpEnv(),
         AGENTPAY_MAINNET_MANIFEST_PATH: manifestPath,
@@ -1380,14 +1381,15 @@ describe("startAgentPayHttpServer", () => {
           loadRuntimeIdentity: async () => identityMode
             ? productionIdentityFor(manifest, identityMode)
             : null,
-          verifyAccount: async () => {
+          verifyAccount: async (verificationExpected) => {
             verificationCalls += 1;
+            verificationDeployerAddress = (verificationExpected as { deployerAddress?: string }).deployerAddress;
             return { valid: false, checks: {}, errors: ["test verifier"] };
           },
           checkOnboardingReady: async () => true,
         },
       );
-      return { readiness, verificationCalls };
+      return { readiness, verificationCalls, verificationDeployerAddress };
     };
 
     try {
@@ -1397,6 +1399,7 @@ describe("startAgentPayHttpServer", () => {
 
       const environmentPublic = await resolve(null, "PUBLIC");
       assert.equal(environmentPublic.verificationCalls, 1);
+      assert.equal(environmentPublic.verificationDeployerAddress, manifest.contract.deployerAddress);
 
       const paddedEnvironmentOff = await resolve(null, " OFF ");
       assert.equal(paddedEnvironmentOff.verificationCalls, 0);
