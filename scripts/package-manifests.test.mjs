@@ -36,10 +36,17 @@ describe("publishable AgentPay package manifests", () => {
 
   it("keeps mainnet and testnet deployment commands explicit", async () => {
     const rootManifest = await readPackageJson(".");
+    const mainnetCommand = rootManifest.scripts?.["contracts:deploy:celo"] ?? "";
+    const mainnetSimulationCommand = rootManifest.scripts?.["contracts:deploy:celo:simulate"] ?? "";
+    const mainnetDeploymentSource = await readFile("scripts/deploy-celo-factory.ts", "utf8");
 
-    assert.match(rootManifest.scripts?.["contracts:deploy:celo"] ?? "", /CELO_MAINNET_RPC_URL/);
-    assert.match(rootManifest.scripts?.["contracts:deploy:celo"] ?? "", /DeployAgentPayCeloAccountFactoryV1/);
-    assert.doesNotMatch(rootManifest.scripts?.["contracts:deploy:celo"] ?? "", /DeployAgentPayAccountV2/);
+    assert.match(mainnetCommand, /deploy-celo-factory\.ts --broadcast/);
+    assert.match(mainnetSimulationCommand, /deploy-celo-factory\.ts/);
+    assert.doesNotMatch(mainnetSimulationCommand, /--broadcast/);
+    assert.match(mainnetDeploymentSource, /CELO_MAINNET_RPC_URL/);
+    assert.match(mainnetDeploymentSource, /CELO_ATTRIBUTION_TAG/);
+    assert.match(mainnetDeploymentSource, /toDataSuffix/);
+    assert.doesNotMatch(mainnetCommand, /DeployAgentPayAccountV2/);
     assert.match(rootManifest.scripts?.["contracts:deploy:celo:sepolia"] ?? "", /CELO_SEPOLIA_RPC_URL/);
     assert.equal(rootManifest.scripts?.["contracts:deploy:xlayer"], undefined);
   });
