@@ -1,5 +1,9 @@
-import { AbiCoder, Interface, JsonRpcProvider, Wallet, keccak256 } from "ethers";
-import { getStableTokenDecimalsForChain } from "@agentpay-ai/shared";
+import { AbiCoder, FallbackProvider, Interface, JsonRpcProvider, Wallet, keccak256 } from "ethers";
+import type { AbstractProvider } from "ethers";
+import {
+  appendCeloAttributionTag,
+  getStableTokenDecimalsForChain,
+} from "@agentpay-ai/shared-celo";
 
 import type {
   ContractCallExecutionRequest,
@@ -50,6 +54,7 @@ export const agentPayAccountV2Interface = new Interface([
 export const erc20Interface = new Interface(["function balanceOf(address account) view returns (uint256)"]);
 
 export interface TransactionSender {
+  transformCalldata?(calldata: string, chainId?: number): string;
   sendTransaction(transaction: { to: string; data: string; value: bigint }, chainId?: number): Promise<{ hash: string }>;
   prepareAndSignTransaction?(
     transaction: { to: string; data: string; value: bigint },
@@ -84,35 +89,37 @@ export interface TransactionReceiptCaller {
 export interface EthersRuntimeConfig {
   rpcUrl: string;
   rpcUrls?: Partial<Record<number, string>>;
+  rpcFallbackUrls?: Partial<Record<number, string>>;
   executorPrivateKey: string;
+  celoAttributionTag?: string;
 }
 
 export function createEthersRoutePaymentExecutor(sender: TransactionSender): PaymentExecutor {
   return {
     async executeDirectPayment(request: DirectPaymentExecutionRequest): Promise<RoutePaymentExecutionResult> {
-      const transaction = await sender.sendTransaction({
+      const transaction = await sender.sendTransaction(transformTransactionCalldata(sender, {
         to: request.accountAddress,
         data: encodeExecuteDirectPaymentCalldata(request),
         value: 0n,
-      }, request.chainId);
+      }, request.chainId), request.chainId);
 
       return { sourceTxHash: transaction.hash };
     },
     async executeRoutePayment(request: RoutePaymentExecutionRequest): Promise<RoutePaymentExecutionResult> {
-      const transaction = await sender.sendTransaction({
+      const transaction = await sender.sendTransaction(transformTransactionCalldata(sender, {
         to: request.accountAddress,
         data: encodeExecuteRoutePaymentCalldata(request),
         value: BigInt(request.maxNativeFee),
-      }, request.sourceChainId);
+      }, request.sourceChainId), request.sourceChainId);
 
       return { sourceTxHash: transaction.hash };
     },
     async executeContractCall(request: ContractCallExecutionRequest): Promise<RoutePaymentExecutionResult> {
-      const transaction = await sender.sendTransaction({
+      const transaction = await sender.sendTransaction(transformTransactionCalldata(sender, {
         to: request.accountAddress,
         data: encodeExecuteContractCallCalldata(request),
         value: BigInt(request.maxNativeFee),
-      }, request.chainId);
+      }, request.chainId), request.chainId);
 
       return { sourceTxHash: transaction.hash };
     },
@@ -164,8 +171,9 @@ async function sendAuthorizedTransaction(
   chainId: number,
   durableExecution?: DurableExecutionContext,
 ): Promise<{ hash: string }> {
+  const transformedTransaction = transformTransactionCalldata(sender, transaction, chainId);
   if (!durableExecution) {
-    return sender.sendTransaction(transaction, chainId);
+    return sender.sendTransaction(transformedTransaction, chainId);
   }
 
   if (!sender.prepareAndSignTransaction || !sender.broadcastSignedTransaction) {
@@ -199,12 +207,12 @@ async function sendAuthorizedTransaction(
     }
   }
 
-  const prepared = await sender.prepareAndSignTransaction(transaction, chainId);
-  assertPreparedTransactionBinding(prepared, transaction, chainId, durableExecution);
+  const prepared = await sender.prepareAndSignTransaction(transformedTransaction, chainId);
+  assertPreparedTransactionBinding(prepared, transformedTransaction, chainId, durableExecution);
   const preparedRecord = await durableExecution.outbox.prepare(existing.id, {
     executorNonce: prepared.executorNonce,
     transactionHash: prepared.transactionHash,
-    calldataHash: keccak256(transaction.data),
+    calldataHash: keccak256(transformedTransaction.data),
     ownerAuthorizationNonce: durableExecution.ownerAuthorizationNonce,
     rawTransaction: encryptRawTransaction(prepared.rawTransaction, durableExecution.rawTxEncryptionKey),
     at: durableExecution.now(),
@@ -390,21 +398,16 @@ export function createEthersRuntimeAdapters(config: EthersRuntimeConfig): {
 } {
   const providerRouter = createProviderRouter(config);
   const sender: TransactionSender = {
+    transformCalldata: config.celoAttributionTag
+      ? (calldata) => appendCeloAttributionTag(calldata, config.celoAttributionTag!)
+      : undefined,
     async sendTransaction(transaction, chainId) {
-      const provider = providerRouter.getProvider(chainId);
-      if (chainId !== undefined) {
-        const network = await provider.getNetwork();
-        assertExecutorRpcChain(chainId, Number(network.chainId));
-      }
+      const provider = await providerRouter.getCheckedWriteProvider(chainId);
       const wallet = new Wallet(config.executorPrivateKey, provider);
       return wallet.sendTransaction(transaction);
     },
     async prepareAndSignTransaction(transaction, chainId) {
-      const provider = providerRouter.getProvider(chainId);
-      if (chainId !== undefined) {
-        const network = await provider.getNetwork();
-        assertExecutorRpcChain(chainId, Number(network.chainId));
-      }
+      const provider = await providerRouter.getCheckedWriteProvider(chainId);
       const wallet = new Wallet(config.executorPrivateKey, provider);
       const populated = await wallet.populateTransaction({ ...transaction, chainId });
       const rawTransaction = await wallet.signTransaction(populated);
@@ -424,11 +427,7 @@ export function createEthersRuntimeAdapters(config: EthersRuntimeConfig): {
       };
     },
     async broadcastSignedTransaction(rawTransaction, chainId) {
-      const provider = providerRouter.getProvider(chainId);
-      if (chainId !== undefined) {
-        const network = await provider.getNetwork();
-        assertExecutorRpcChain(chainId, Number(network.chainId));
-      }
+      const provider = await providerRouter.getCheckedWriteProvider(chainId);
       const transaction = await provider.broadcastTransaction(rawTransaction);
       return { hash: transaction.hash };
     },
@@ -445,6 +444,15 @@ export function createEthersRuntimeAdapters(config: EthersRuntimeConfig): {
   };
 }
 
+function transformTransactionCalldata(
+  sender: TransactionSender,
+  transaction: { to: string; data: string; value: bigint },
+  chainId?: number,
+): { to: string; data: string; value: bigint } {
+  const data = sender.transformCalldata?.(transaction.data, chainId) ?? transaction.data;
+  return data === transaction.data ? transaction : { ...transaction, data };
+}
+
 export function assertExecutorRpcChain(expectedChainId: number, actualChainId: number): void {
   if (expectedChainId !== actualChainId) {
     throw new Error(`Executor RPC chain mismatch: expected ${expectedChainId}, received ${actualChainId}.`);
@@ -455,27 +463,79 @@ export function resolveRpcUrlForChain(config: Pick<EthersRuntimeConfig, "rpcUrl"
   return chainId !== undefined ? config.rpcUrls?.[chainId] ?? config.rpcUrl : config.rpcUrl;
 }
 
-function createProviderRouter(config: EthersRuntimeConfig): RpcCaller & NativeBalanceCaller & TransactionReceiptCaller & {
-  getProvider(chainId?: number): JsonRpcProvider;
-} {
-  const providers = new Map<string, JsonRpcProvider>();
+export function resolveRpcUrlsForChain(
+  config: Pick<EthersRuntimeConfig, "rpcUrl" | "rpcUrls" | "rpcFallbackUrls">,
+  chainId?: number,
+): readonly string[] {
+  const primary = resolveRpcUrlForChain(config, chainId);
+  const fallback = chainId === undefined ? undefined : config.rpcFallbackUrls?.[chainId];
+  return Object.freeze([...new Set([primary, fallback].filter((value): value is string => Boolean(value)))]);
+}
 
-  function getProvider(chainId?: number): JsonRpcProvider {
-    const rpcUrl = resolveRpcUrlForChain(config, chainId);
-    const cacheKey = `${chainId ?? "default"}:${rpcUrl}`;
+export function resolveWriteRpcUrlForChain(
+  config: Pick<EthersRuntimeConfig, "rpcUrl" | "rpcUrls">,
+  chainId?: number,
+): string {
+  return resolveRpcUrlForChain(config, chainId);
+}
+
+export function createProviderRouter(config: EthersRuntimeConfig): RpcCaller & NativeBalanceCaller & TransactionReceiptCaller & {
+  getProvider(chainId?: number): AbstractProvider;
+  getWriteProvider(chainId?: number): JsonRpcProvider;
+  getCheckedWriteProvider(chainId?: number): Promise<JsonRpcProvider>;
+} {
+  const providers = new Map<string, AbstractProvider>();
+  const writeProviders = new Map<string, JsonRpcProvider>();
+
+  function getProvider(chainId?: number): AbstractProvider {
+    const rpcUrls = resolveRpcUrlsForChain(config, chainId);
+    const cacheKey = `${chainId ?? "default"}:${rpcUrls.join("|")}`;
     const existing = providers.get(cacheKey);
 
     if (existing) {
       return existing;
     }
 
-    const provider = new JsonRpcProvider(rpcUrl);
+    const candidates = rpcUrls.map((rpcUrl) => new JsonRpcProvider(rpcUrl));
+    const provider = candidates.length === 1
+      ? candidates[0]
+      : new FallbackProvider(
+          candidates.map((candidate, index) => ({
+            provider: candidate,
+            priority: index + 1,
+            stallTimeout: 1_000,
+            weight: 1,
+          })),
+          chainId,
+          { quorum: 1 },
+        );
     providers.set(cacheKey, provider);
     return provider;
   }
 
-  async function getCheckedProvider(chainId?: number): Promise<JsonRpcProvider> {
+  function getWriteProvider(chainId?: number): JsonRpcProvider {
+    const rpcUrl = resolveWriteRpcUrlForChain(config, chainId);
+    const cacheKey = `${chainId ?? "default"}:${rpcUrl}`;
+    const existing = writeProviders.get(cacheKey);
+    if (existing) {
+      return existing;
+    }
+    const provider = new JsonRpcProvider(rpcUrl);
+    writeProviders.set(cacheKey, provider);
+    return provider;
+  }
+
+  async function getCheckedProvider(chainId?: number): Promise<AbstractProvider> {
     const provider = getProvider(chainId);
+    if (chainId !== undefined) {
+      const network = await provider.getNetwork();
+      assertExecutorRpcChain(chainId, Number(network.chainId));
+    }
+    return provider;
+  }
+
+  async function getCheckedWriteProvider(chainId?: number): Promise<JsonRpcProvider> {
+    const provider = getWriteProvider(chainId);
     if (chainId !== undefined) {
       const network = await provider.getNetwork();
       assertExecutorRpcChain(chainId, Number(network.chainId));
@@ -485,6 +545,8 @@ function createProviderRouter(config: EthersRuntimeConfig): RpcCaller & NativeBa
 
   return {
     getProvider,
+    getWriteProvider,
+    getCheckedWriteProvider,
     async call(transaction, chainId) {
       return (await getCheckedProvider(chainId)).call(transaction);
     },

@@ -2,7 +2,7 @@ import {
   getPaymentSignatureInputSchema,
   type PaymentIntentRecord,
   type GetPaymentSignatureInput,
-} from "@agentpay-ai/shared";
+} from "@agentpay-ai/shared-celo";
 
 import {
   createPaymentAuthorizationFromIntent,

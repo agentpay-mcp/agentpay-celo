@@ -26,6 +26,7 @@ export const AGENT_PAY_ACCOUNT_V2_REQUIRED_SELECTORS = [
   functionSelector(
     "executeAuthorizedRoutePayment((bytes32,bytes32,bytes32,address,address,address,uint256,uint256,address,address,uint256,address,bytes32,uint256,uint256,uint256,bytes32),bytes,bytes)",
   ),
+  functionSelector("isValidSignature(bytes32,bytes)"),
 ] as const;
 
 export interface AgentPayAccountContractFactory {

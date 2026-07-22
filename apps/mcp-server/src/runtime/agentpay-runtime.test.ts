@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import type { PaymentIntentRecord, RouteQuote, SetupIntentRecord } from "@agentpay-ai/shared";
+import type { PaymentIntentRecord, RouteQuote, SetupIntentRecord } from "@agentpay-ai/shared-celo";
 
 import {
   createAgentPayRuntime,
@@ -20,6 +20,7 @@ describe("parseAgentPayEnv", () => {
       SUPABASE_SERVICE_ROLE_KEY: " service-role-key ",
       CELO_RPC_URL: " https://rpc.celo.tech ",
       CELO_MAINNET_RPC_URL: " https://mainnet.celo.tech ",
+      CELO_MAINNET_RPC_FALLBACK_URL: " https://forno.celo.org ",
       CELO_SEPOLIA_RPC_URL: " https://testnet.celo.tech ",
       EXECUTOR_PRIVATE_KEY: ` ${validPrivateKey} `,
       LIFI_API_KEY: " lifi-key ",
@@ -32,6 +33,7 @@ describe("parseAgentPayEnv", () => {
       AGENTPAY_REVIEW_TOKEN_SECRET: " review-token-secret-012345678901234567890123 ",
       AGENTPAY_CELO_SEPOLIA_USDC_ADDRESS: " 0x1111111111111111111111111111111111111111 ",
       AGENTPAY_CELO_SEPOLIA_USDT_ADDRESS: " 0x2222222222222222222222222222222222222222 ",
+      CELO_ATTRIBUTION_TAG: " celo_agentpay ",
     });
 
     assert.deepEqual(config, {
@@ -42,6 +44,9 @@ describe("parseAgentPayEnv", () => {
         42220: "https://mainnet.celo.tech",
         11142220: "https://testnet.celo.tech",
       },
+      celoRpcFallbackUrls: {
+        42220: "https://forno.celo.org",
+      },
       executorPrivateKey: validPrivateKey,
       lifiApiKey: "lifi-key",
       lifiBaseUrl: "https://li.quest",
@@ -51,6 +56,7 @@ describe("parseAgentPayEnv", () => {
       environment: "staging",
       sessionHashKey: "session-hash-secret",
       reviewTokenSecret: "review-token-secret-012345678901234567890123",
+      celoAttributionTag: "celo_agentpay",
       stableTokenOverrides: {
         11142220: {
           USDC: {
@@ -113,6 +119,20 @@ describe("parseAgentPayEnv", () => {
     );
   });
 
+  it("rejects an invalid configured Celo attribution tag", () => {
+    assert.throws(
+      () =>
+        parseAgentPayEnv({
+          SUPABASE_URL: "https://agentpay.supabase.co",
+          SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+          CELO_RPC_URL: "https://rpc.celo.tech",
+          EXECUTOR_PRIVATE_KEY: validPrivateKey,
+          CELO_ATTRIBUTION_TAG: "celo_AgentPay",
+        }),
+      /CELO_ATTRIBUTION_TAG/,
+    );
+  });
+
   it("uses only explicit production Supabase and mainnet RPC aliases", () => {
     const config = parseAgentPayEnv({
       AGENTPAY_ENVIRONMENT: "production",
@@ -121,9 +141,12 @@ describe("parseAgentPayEnv", () => {
       SUPABASE_PRODUCTION_URL: "https://production-project.supabase.co",
       SUPABASE_PRODUCTION_SERVICE_ROLE_KEY: "production-service-key",
       CELO_MAINNET_RPC_URL: "https://rpc.celo.tech/terigon",
+      CELO_MAINNET_RPC_FALLBACK_URL: "https://forno.celo.org",
       EXECUTOR_PRIVATE_KEY: validPrivateKey,
       AGENTPAY_SESSION_HASH_KEY: "s".repeat(64),
       AGENTPAY_REVIEW_TOKEN_SECRET: "r".repeat(64),
+      AGENTPAY_PUBLIC_SETUP_URL: "https://wallet.agentpay.site/celo/setup",
+      CELO_ATTRIBUTION_TAG: "celo_agentpay",
       SETUP_WEB_URL: "https://setup.agentpay.site/review",
     });
 
@@ -132,6 +155,8 @@ describe("parseAgentPayEnv", () => {
     assert.equal(config.celoRpcUrl, "https://rpc.celo.tech/terigon");
     assert.equal(config.homeChainId, 42220);
     assert.equal(config.environment, "production");
+    assert.equal(config.productionOnboardingUrl, "https://wallet.agentpay.site/celo/setup");
+    assert.equal(config.celoAttributionTag, "celo_agentpay");
 
     assert.throws(
       () => parseAgentPayEnv({
@@ -141,9 +166,11 @@ describe("parseAgentPayEnv", () => {
         SUPABASE_PRODUCTION_URL: "https://production-project.supabase.co",
         SUPABASE_PRODUCTION_SERVICE_ROLE_KEY: "production-service-key",
         CELO_MAINNET_RPC_URL: "https://rpc.celo.tech/terigon",
+        CELO_MAINNET_RPC_FALLBACK_URL: "https://forno.celo.org",
         EXECUTOR_PRIVATE_KEY: validPrivateKey,
         AGENTPAY_SESSION_HASH_KEY: "s".repeat(64),
         AGENTPAY_REVIEW_TOKEN_SECRET: "r".repeat(64),
+        AGENTPAY_PUBLIC_SETUP_URL: "https://wallet.agentpay.site/celo/setup",
         SETUP_WEB_URL: "http://localhost:3000/review",
       }),
       /SETUP_WEB_URL/,
@@ -454,6 +481,9 @@ describe("createAgentPayRuntime", () => {
           42220: "https://mainnet.celo.tech",
           11142220: "https://testnet.celo.tech",
         },
+        celoRpcFallbackUrls: {
+          42220: "https://forno.celo.org",
+        },
         executorPrivateKey: validPrivateKey,
         lifiApiKey: "lifi-key",
         x402BazaarFacilitatorUrl: "https://facilitator.example.com",
@@ -554,6 +584,8 @@ describe("createAgentPayRuntime", () => {
       purpose: "mint access pass",
     });
 
+    assert.equal(setup.status, "PENDING");
+    if (setup.status !== "PENDING") assert.fail("Expected the staging setup intent path.");
     assert.equal(setup.setupIntentId, "setup_runtime");
     assert.equal(setup.setupUrl, "https://setup.agentpay.dev/setup?setup_intent_id=setup_runtime");
     assert.equal(createdSetups[0]?.executorAddress, "0x4444444444444444444444444444444444444444");
@@ -645,6 +677,9 @@ describe("createAgentPayRuntime", () => {
           rpcUrls: {
             42220: "https://mainnet.celo.tech",
             11142220: "https://testnet.celo.tech",
+          },
+          rpcFallbackUrls: {
+            42220: "https://forno.celo.org",
           },
           executorPrivateKey: validPrivateKey,
         },

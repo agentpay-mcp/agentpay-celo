@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { describe, it } from "node:test";
 
-import type { PaymentIntentRecord } from "@agentpay-ai/shared";
+import type { PaymentIntentRecord } from "@agentpay-ai/shared-celo";
 
 import {
   MAINNET_USDC_ADDRESS,
@@ -23,13 +23,26 @@ function productionEnv(): Record<string, string> {
     AGENTPAY_ENVIRONMENT: "production",
     AGENTPAY_HOME_CHAIN_ID: "42220",
     AGENTPAY_ACCOUNT_VERSION: "v2",
-    CELO_MAINNET_RPC_URL: "https://forno.celo.org",
+    CELO_MAINNET_RPC_URL: "https://rpc.provider.example/celo",
+    CELO_MAINNET_RPC_FALLBACK_URL: "https://forno.celo.org",
     SUPABASE_PRODUCTION_URL: "https://abcdefghijklmnopqrst.supabase.co",
     SUPABASE_PRODUCTION_SERVICE_ROLE_KEY: "service-role-key",
     DIRECT_URL_PRODUCTION: "postgresql://production.example.invalid/postgres",
     AGENTPAY_RAW_TX_ENCRYPTION_KEY: "a".repeat(64),
     AGENTPAY_SESSION_HASH_KEY: "s".repeat(64),
     AGENTPAY_REVIEW_TOKEN_SECRET: "r".repeat(64),
+    AGENTPAY_CONSUMER_MCP_URL: "https://wallet.agentpay.site/celo/mcp",
+    AGENTPAY_PAID_MCP_URL: "https://mcp.agentpay.site/celo/mcp",
+    AGENTPAY_PUBLIC_SETUP_URL: "https://wallet.agentpay.site/celo/setup",
+    AGENTPAY_PUBLIC_REVIEW_URL: "https://wallet.agentpay.site/celo/review",
+    AGENTPAY_ONBOARDING_MANIFEST_PATH: "/run/agentpay-celo/onboarding.json",
+    AGENTPAY_ONBOARDING_MANIFEST_SHA256: "a".repeat(64),
+    AGENTPAY_FACTORY_ADDRESS: "0x1111111111111111111111111111111111111111",
+    AGENTPAY_FACTORY_RUNTIME_CODE_HASH: `0x${"2".repeat(64)}`,
+    AGENTPAY_SETUP_SPONSOR_ADDRESS: "0x3333333333333333333333333333333333333333",
+    AGENTPAY_SETUP_SUPABASE_PROJECT_REF: "abcdefghijklmnopqrst",
+    AGENTPAY_SETUP_MODE: "PUBLIC",
+    CELO_ATTRIBUTION_TAG: "celo_agentpay",
   };
 }
 
@@ -90,7 +103,7 @@ function identityFor(manifest: Record<string, any>): RuntimeEnvironmentIdentity 
     x402SyncSettle: manifest.x402.syncSettle,
     x402Enabled: manifest.x402.enabled,
     payToAddress: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
-    facilitatorRef: "https://facilitator.example.com",
+    facilitatorRef: "https://api.x402.celo.org",
     executionMode: "PUBLIC",
     status: "READY",
   };
@@ -104,12 +117,13 @@ const exactPaymentConfig = {
   asset: MAINNET_USDC_ADDRESS,
   assetDecimals: 6,
   syncSettle: true,
-  facilitatorUrl: "https://facilitator.example.com",
+  facilitatorUrl: "https://api.x402.celo.org",
+  facilitatorApiKey: "test-celo-x402-api-key",
 };
 
 describe("production readiness gate", () => {
   it("pins production readiness to the atomic payment audit migration", () => {
-    assert.equal(MAINNET_MIGRATION_HEAD, "20260717120000_celo_home_chain_boundary");
+    assert.equal(MAINNET_MIGRATION_HEAD, "20260721160000_celo_x402_settlement_audit");
     assert.equal(baseManifest.database.migrationHead, MAINNET_MIGRATION_HEAD);
     assert.equal(baseManifest.release.migrationHead, MAINNET_MIGRATION_HEAD);
   });
@@ -117,6 +131,12 @@ describe("production readiness gate", () => {
   it("requires explicit production aliases and rejects generic or staging boundaries", () => {
     const valid = validateProductionEnvironment(productionEnv());
     assert.equal(valid.valid, true, valid.errors.join("; "));
+    assert.deepEqual(baseManifest.attribution, {
+      standard: "ERC-8021",
+      tagEnvRef: "CELO_ATTRIBUTION_TAG",
+      appliesTo: ["agentpay-direct-transactions"],
+      excludes: ["x402-facilitator-settlements"],
+    });
 
     const invalid = productionEnv();
     invalid.CELO_RPC_URL = "https://forno.celo-sepolia.celo-testnet.org";
@@ -126,6 +146,36 @@ describe("production readiness gate", () => {
     assert.equal(validateProductionEnvironment(invalid).valid, false);
     assert.match(validateProductionEnvironment(invalid).errors.join("; "), /CELO_RPC_URL|SUPABASE_URL|testnet/i);
 
+  });
+
+  it("requires the isolated Celo onboarding identity and canonical public routes", () => {
+    const valid = validateProductionEnvironment(productionEnv());
+    assert.equal(valid.valid, true, valid.errors.join("; "));
+
+    const missing = productionEnv();
+    delete missing.AGENTPAY_FACTORY_ADDRESS;
+    delete missing.AGENTPAY_SETUP_SPONSOR_ADDRESS;
+    delete missing.AGENTPAY_ONBOARDING_MANIFEST_SHA256;
+    delete missing.AGENTPAY_SETUP_SUPABASE_PROJECT_REF;
+    delete missing.CELO_MAINNET_RPC_FALLBACK_URL;
+    delete missing.CELO_ATTRIBUTION_TAG;
+    const missingResult = validateProductionEnvironment(missing);
+    assert.equal(missingResult.valid, false);
+    assert.match(
+      missingResult.errors.join("; "),
+      /AGENTPAY_FACTORY_ADDRESS|AGENTPAY_SETUP_SPONSOR_ADDRESS|AGENTPAY_ONBOARDING_MANIFEST_SHA256|AGENTPAY_SETUP_SUPABASE_PROJECT_REF|CELO_MAINNET_RPC_FALLBACK_URL|CELO_ATTRIBUTION_TAG/,
+    );
+
+    const drift = productionEnv();
+    drift.AGENTPAY_PUBLIC_SETUP_URL = "https://celo.agentpay.site/setup";
+    drift.AGENTPAY_CONSUMER_MCP_URL = "https://wallet.agentpay.site/mcp";
+    drift.CELO_MAINNET_RPC_URL = "http://127.0.0.1:8545";
+    drift.CELO_MAINNET_RPC_FALLBACK_URL = "https://rpc.example.com";
+    drift.AGENTPAY_SETUP_SUPABASE_PROJECT_REF = "differentprojectrefx";
+    drift.CELO_ATTRIBUTION_TAG = "agentpay";
+    const driftResult = validateProductionEnvironment(drift);
+    assert.equal(driftResult.valid, false);
+    assert.match(driftResult.errors.join("; "), /PUBLIC_SETUP_URL|CONSUMER_MCP_URL|RPC|project|attribution/i);
   });
 
   it("keeps a shadow/OFF manifest unavailable for production execution", async () => {
@@ -168,6 +218,7 @@ describe("production readiness gate", () => {
       identity: identityFor(manifest),
       accountVerification: { valid: true, errors: [], checks: { account: true } },
       paymentConfig: exactPaymentConfig,
+      onboardingReady: true,
     });
 
     assert.equal(result.ready, true, result.errors.join("; "));
@@ -182,9 +233,25 @@ describe("production readiness gate", () => {
       identity: identityFor(manifest),
       accountVerification: { valid: true, errors: [], checks: { account: true } },
       paymentConfig: exactPaymentConfig,
+      onboardingReady: true,
     });
     assert.equal(missingKeyResult.ready, false);
     assert.match(missingKeyResult.errors.join("; "), /RAW_TX_ENCRYPTION_KEY/i);
+  });
+
+  it("rejects onboarding mode drift from the effective production execution mode", async () => {
+    const manifest = readyManifest();
+    const result = await evaluateProductionReadiness({
+      env: { ...productionEnv(), AGENTPAY_SETUP_MODE: "CANARY" },
+      manifest,
+      identity: identityFor(manifest),
+      accountVerification: { valid: true, errors: [], checks: { account: true } },
+      paymentConfig: exactPaymentConfig,
+      onboardingReady: true,
+    });
+
+    assert.equal(result.ready, false);
+    assert.match(result.errors.join("; "), /onboarding mode.*production execution mode/i);
   });
 
   it("keeps CANARY fail-closed until the durable admission probe passes", async () => {
@@ -194,7 +261,7 @@ describe("production readiness gate", () => {
     identity.executionMode = "CANARY";
 
     const result = await evaluateProductionReadiness({
-      env: { ...productionEnv(), AGENTPAY_EXECUTION_MODE: "CANARY" },
+      env: { ...productionEnv(), AGENTPAY_EXECUTION_MODE: "CANARY", AGENTPAY_SETUP_MODE: "CANARY" },
       manifest,
       identity,
       accountVerification: { valid: true, errors: [], checks: { account: true } },
@@ -212,12 +279,13 @@ describe("production readiness gate", () => {
     identity.executionMode = "CANARY";
 
     const result = await evaluateProductionReadiness({
-      env: { ...productionEnv(), AGENTPAY_EXECUTION_MODE: "CANARY" },
+      env: { ...productionEnv(), AGENTPAY_EXECUTION_MODE: "CANARY", AGENTPAY_SETUP_MODE: "CANARY" },
       manifest,
       identity,
       accountVerification: { valid: true, errors: [], checks: { account: true } },
       paymentConfig: exactPaymentConfig,
       canaryAdmissionReady: true,
+      onboardingReady: true,
     });
 
     assert.equal(result.ready, true, result.errors.join("; "));
@@ -253,6 +321,26 @@ describe("production readiness gate", () => {
     );
   });
 
+  it("keeps CANARY and PUBLIC fail-closed until live onboarding readiness passes", async () => {
+    const manifest = readyManifest();
+    const input = {
+      env: productionEnv(),
+      manifest,
+      identity: identityFor(manifest),
+      accountVerification: { valid: true, errors: [], checks: {} },
+      paymentConfig: exactPaymentConfig,
+    };
+
+    const unavailable = await evaluateProductionReadiness(input);
+    assert.equal(unavailable.ready, false);
+    assert.equal(unavailable.checks.onboarding, false);
+    assert.match(unavailable.errors.join("; "), /onboarding.*readiness/i);
+
+    const available = await evaluateProductionReadiness({ ...input, onboardingReady: true });
+    assert.equal(available.ready, true, available.errors.join("; "));
+    assert.equal(available.checks.onboarding, true);
+  });
+
   it("rejects the hosted Celo facilitator when its API key is missing", async () => {
     const result = await evaluateProductionReadiness({
       env: productionEnv(),
@@ -261,11 +349,29 @@ describe("production readiness gate", () => {
       accountVerification: { valid: true, errors: [], checks: {} },
       paymentConfig: {
         ...exactPaymentConfig,
-        facilitatorUrl: "https://api.x402.celo.org",
+        facilitatorApiKey: undefined,
       },
+      onboardingReady: true,
     });
 
     assert.equal(result.ready, false);
     assert.match(result.errors.join("; "), /CELO_X402_API_KEY/i);
+  });
+
+  it("rejects facilitator URL drift from the hosted Celo mainnet service", async () => {
+    const result = await evaluateProductionReadiness({
+      env: productionEnv(),
+      manifest: readyManifest(),
+      identity: identityFor(readyManifest()),
+      accountVerification: { valid: true, errors: [], checks: {} },
+      paymentConfig: {
+        ...exactPaymentConfig,
+        facilitatorUrl: "https://facilitator.example.com",
+      },
+      onboardingReady: true,
+    });
+
+    assert.equal(result.ready, false);
+    assert.match(result.errors.join("; "), /facilitator URL must be https:\/\/api\.x402\.celo\.org/i);
   });
 });

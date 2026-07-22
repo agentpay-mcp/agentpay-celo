@@ -1,7 +1,7 @@
 # AgentPay Rules
 
 - Use AgentPay MCP tools for agent wallet creation, balance checks, payment preparation, guarded contract calls, execution, and tracking.
-- Wallet onboarding uses `prepare_wallet_creation` and `check_wallet_creation`; the setup signature proves ownership only, and the setup signature is not payment approval.
+- Wallet onboarding starts with `prepare_wallet_creation`: for `PENDING`, use the returned setup intent id with `check_wallet_creation`; for `SETUP_REQUIRED`, open `setupUrl`, wait for hosted setup completion, then call `get_agent_wallet`. The setup signature proves ownership only, and the setup signature is not payment approval.
 - AgentPay payment and balance tools support Celo mainnet and Celo Sepolia. Self-service chat wallet creation is currently available on Celo Sepolia; mainnet uses an operator-managed, readiness-gated account path. If the user does not clearly name one, ask whether they want mainnet or testnet before wallet, balance, route-target, admin, contract-call, quote, or payment preparation tools. Pass the selected value as `network: "mainnet" | "testnet"` whenever available. Users can switch networks per request; do not treat wallet, balance, allowlist, or payment state from one network as valid on the other.
 - Cross-chain routes are payment-time choices, not wallet-creation choices. Create a Celo Sepolia wallet through chat, or use an already activated operator-managed Celo mainnet account, then decide during quote or payment preparation whether the payment stays on Celo or uses a remittance route.
 - Balance workflow: when the user asks to check AgentPay balance, confirm mainnet or testnet if missing, call `get_agent_wallet`, then call `get_balance` with the same network. Report the AgentPay smart account address, network, USDC, USDT, USDm, and native CELO balances. Never use raw wallet balances, exchange balances, or generic RPC balance as AgentPay balance.
@@ -10,11 +10,11 @@
 - If the user wants a paid x402/API service but does not provide a URL, call `search_x402_services`, show Bazaar candidates, ask the user to choose one, collect required parameters, then call `prepare_x402_service_request`.
 - For x402 v2 `PAYMENT-REQUIRED` responses, call `parse_x402_payment_required`, run the Review & Sign owner-signature flow, then call `retry_x402_request` after tracking returns `COMPLETED`; it sends AgentPay receipt proof as `X-PAYMENT` and `PAYMENT-SIGNATURE`, reads V2 `PAYMENT-RESPONSE`, and includes `payment-identifier` idempotency data when advertised. Do not claim universal x402 facilitator compatibility unless the merchant supports this AgentPay proof bridge.
 - Pass the exact x402 request into both parse and retry. Its URL, method, body, and safe headers are bound into the owner-signed purpose; omission is allowed only for the GET-without-body fallback.
-- If AgentPay is not installed and terminal access is available, ask before running `npx @agentpay-ai/agentpay install`.
-- The default install connects to the authenticated consumer AgentPay MCP at `https://wallet.agentpay.site/mcp`; users do not need Supabase, RPC, executor, deployer, or bytecode config. The separate paid public execution ASP is `https://mcp.agentpay.site/mcp` and is used only after Review & Sign.
+- If AgentPay is not installed and terminal access is available, ask before running `npx @agentpay-ai/agentpay-celo install`.
+- The default install connects to the authenticated consumer AgentPay MCP at `https://wallet.agentpay.site/celo/mcp`; users do not need Supabase, RPC, executor, deployer, or bytecode config. The separate paid public execution ASP is `https://mcp.agentpay.site/celo/mcp` and is used only after Review & Sign.
 - Ask the user to reload or reconnect the runtime if needed, then return to the agent chat.
-- Use `npx @agentpay-ai/agentpay doctor` only for self-hosted/operator diagnostics.
-- Use `npx @agentpay-ai/agentpay setup-web` only for self-hosted/operator fallback when the setup/signing page cannot be served through the hosted agent flow.
+- Use `npx @agentpay-ai/agentpay-celo doctor` only for self-hosted/operator diagnostics.
+- Use `npx @agentpay-ai/agentpay-celo setup-web` only for self-hosted/operator fallback when the setup/signing page cannot be served through the hosted agent flow.
 - Do not use raw RPC calls, raw LI.FI calls, manual token transfers, or private keys.
 - For owner controls, call `prepare_account_admin_transaction` and ask the owner wallet to submit the returned transaction.
 - Use `quote_payment_route` for direct path or route previews when the user asks about source token, route, fee, ETA, or max spend before approval.

@@ -7,7 +7,7 @@ import {
   type SessionContext,
   type SessionEnvironment,
   type SessionScope,
-} from "@agentpay-ai/shared";
+} from "@agentpay-ai/shared-celo";
 
 import {
   SERVICE_SESSION_TTL_SECONDS,

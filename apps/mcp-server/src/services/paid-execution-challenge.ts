@@ -69,7 +69,23 @@ export function createInMemoryPaidExecutionChallengeStore(
       const existingId = bindings.get(key);
       if (existingId) {
         const existing = records.get(existingId)!;
-        return sameChallenge(existing, input)
+        const sameBinding = sameChallenge(existing, input);
+        const renewable =
+          sameBinding &&
+          existing.status !== "CONSUMED" &&
+          (existing.status === "EXPIRED" || Date.parse(existing.expiresAt) <= Date.parse(input.offeredAt));
+        if (renewable) {
+          const { consumedAt: _consumedAt, ...renewableRecord } = existing;
+          const renewed: PaidExecutionChallengeRecord = {
+            ...renewableRecord,
+            status: "OFFERED",
+            offeredAt: input.offeredAt,
+            expiresAt: input.expiresAt,
+          };
+          records.set(existingId, renewed);
+          return { disposition: "OFFERED", record: cloneChallenge(renewed) };
+        }
+        return sameBinding
           ? { disposition: "REPLAY", record: cloneChallenge(existing) }
           : { disposition: "CONFLICT", record: cloneChallenge(existing) };
       }
@@ -133,10 +149,12 @@ function createChallengeKey(input: PaidExecutionChallengeOfferInput): string {
 
 function sameChallenge(record: PaidExecutionChallengeRecord, input: PaidExecutionChallengeOfferInput): boolean {
   return (
+    record.environment === input.environment &&
     record.paymentIntentId === input.paymentIntentId &&
+    record.ownerAddress.toLowerCase() === input.ownerAddress.toLowerCase() &&
+    record.accountAddress.toLowerCase() === input.accountAddress.toLowerCase() &&
     record.argumentsHash === input.argumentsHash &&
-    record.paymentRequirementsHash === input.paymentRequirementsHash &&
-    record.expiresAt === input.expiresAt
+    record.paymentRequirementsHash === input.paymentRequirementsHash
   );
 }
 

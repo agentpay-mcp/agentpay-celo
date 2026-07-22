@@ -2,6 +2,7 @@ import {
   checkWalletCreationInputSchema,
   getAgentWalletInputSchema,
   getChainName,
+  MAINNET_ONBOARDING_URL,
   prepareWalletCreationInputSchema,
   resolveCeloHomeChainId,
   type CeloHomeChainId,
@@ -9,7 +10,7 @@ import {
   type GetAgentWalletInput,
   type PrepareWalletCreationInput,
   type SetupIntentRecord,
-} from "@agentpay-ai/shared";
+} from "@agentpay-ai/shared-celo";
 
 import type { AgentWalletRepository } from "./prepare-payment.ts";
 
@@ -22,6 +23,7 @@ export interface PrepareWalletCreationDependencies {
   setupIntents: SetupIntentRepository;
   executorAddress: string;
   setupWebUrl: string;
+  productionOnboardingUrl?: string;
   clock: () => Date;
   createSetupIntentId: () => string;
   homeChainId?: CeloHomeChainId;
@@ -38,7 +40,7 @@ export interface GetAgentWalletDependencies {
   homeChainId?: CeloHomeChainId;
 }
 
-export interface PrepareWalletCreationOutput {
+export interface LegacyPrepareWalletCreationOutput {
   setupIntentId: string;
   status: "PENDING";
   setupUrl: string;
@@ -47,6 +49,18 @@ export interface PrepareWalletCreationOutput {
   homeChainId: number;
   homeChain: string;
 }
+
+export interface ProductionPrepareWalletCreationOutput {
+  status: "SETUP_REQUIRED";
+  setupUrl: typeof MAINNET_ONBOARDING_URL;
+  homeChainId: 42220;
+  homeChain: "Celo";
+  instructionToAgent: string;
+}
+
+export type PrepareWalletCreationOutput =
+  | LegacyPrepareWalletCreationOutput
+  | ProductionPrepareWalletCreationOutput;
 
 export interface CheckWalletCreationOutput {
   setupIntentId: string;
@@ -75,6 +89,23 @@ export async function prepareWalletCreation(
   dependencies: PrepareWalletCreationDependencies,
 ): Promise<PrepareWalletCreationOutput> {
   const input = prepareWalletCreationInputSchema.parse(rawInput);
+  if (dependencies.productionOnboardingUrl !== undefined) {
+    const homeChainId = resolveCeloHomeChainId(input, 42220);
+    if (homeChainId !== 42220) {
+      throw new Error("Production wallet onboarding is available only on Celo mainnet.");
+    }
+    if (dependencies.productionOnboardingUrl !== MAINNET_ONBOARDING_URL) {
+      throw new Error("Production onboarding URL must match the canonical AgentPay Celo setup URL.");
+    }
+    return {
+      status: "SETUP_REQUIRED",
+      setupUrl: MAINNET_ONBOARDING_URL,
+      homeChainId,
+      homeChain: "Celo",
+      instructionToAgent:
+        "Open the secure AgentPay setup link, connect the owner wallet, and approve the setup signature. Never share a seed phrase or private key.",
+    };
+  }
   const setupIntentId = dependencies.createSetupIntentId();
   const setupTtlSeconds = dependencies.setupTtlSeconds ?? 900;
   const expiresAt = new Date(dependencies.clock().getTime() + setupTtlSeconds * 1000).toISOString();
@@ -160,7 +191,7 @@ export async function getAgentWallet(
 
 export const prepareWalletCreationTool = {
   name: "prepare_wallet_creation",
-  description: "Create an AgentPay wallet setup intent and return the signing URL.",
+  description: "Start AgentPay wallet setup and return the secure owner-signing handoff.",
   inputSchema: {
     type: "object",
     additionalProperties: false,

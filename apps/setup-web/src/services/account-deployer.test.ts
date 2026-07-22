@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { keccak256 } from "ethers";
+import { id, keccak256 } from "ethers";
 
 import {
   AGENT_PAY_ACCOUNT_V2_REQUIRED_SELECTORS,
@@ -114,6 +114,15 @@ describe("createContractFactoryAgentPayAccountDeployer", () => {
 });
 
 describe("assertAgentPayAccountV2Bytecode", () => {
+  it("requires the ERC-1271 selector used by ERC-8004 wallet proofs", () => {
+    assert.equal(
+      AGENT_PAY_ACCOUNT_V2_REQUIRED_SELECTORS.some(
+        (selector) => selector === id("isValidSignature(bytes32,bytes)").slice(0, 10),
+      ),
+      true,
+    );
+  });
+
   it("rejects a V1 or arbitrary creation bytecode before deployment", () => {
     assert.throws(() => assertAgentPayAccountV2Bytecode("0x60006000"), /missing required selector/);
   });

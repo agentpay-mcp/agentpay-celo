@@ -12,9 +12,9 @@ describe("README", () => {
     assert.match(contents, /npm run release:smoke/);
     assert.match(contents, /skills\/agentpay\/SKILL\.md/);
     assert.match(contents, /detects the target runtime/i);
-    assert.match(contents, /npx @agentpay-ai\/agentpay install/);
-    assert.match(quickStart, /https:\/\/wallet\.agentpay\.site\/mcp/);
-    assert.match(contents, /https:\/\/mcp\.agentpay\.site\/mcp/);
+    assert.match(contents, /npx @agentpay-ai\/agentpay-celo install/);
+    assert.match(quickStart, /https:\/\/wallet\.agentpay\.site\/celo\/mcp/);
+    assert.match(contents, /https:\/\/mcp\.agentpay\.site\/celo\/mcp/);
     assert.match(contents, /normal users do not need Supabase, RPC, executor, deployer, or bytecode config/i);
     assert.match(contents, /install --self-hosted/);
     assert.match(contents, /Create an AgentPay wallet/i);
@@ -29,6 +29,14 @@ describe("README", () => {
     assert.match(contents, /Celo x402|x402 seller gate/i);
     assert.match(contents, /AGENTPAY_A2MCP_PAYMENT_ENABLED/);
     assert.match(contents, /PAYMENT-REQUIRED/);
+    assert.match(contents, /ERC-8021/);
+    assert.match(contents, /CELO_ATTRIBUTION_TAG/);
+    assert.match(contents, /x402 facilitator settlements.*not tagged|does not tag x402 facilitator settlements/i);
+    assert.match(contents, /ERC-8004 Agent Identity/i);
+    assert.match(contents, /\.well-known\/agent-registration\.json/);
+    assert.match(contents, /ERC-1271/);
+    assert.match(contents, /npm run erc8004 -- verify/);
+    assert.match(contents, /CELO_MAINNET_RPC_FALLBACK_URL/);
     assert.doesNotMatch(contents, /docs\//);
     assert.doesNotMatch(contents, /AGENTPAY_CONCEPT/);
     assert.doesNotMatch(contents, /product blueprint/i);
@@ -41,10 +49,10 @@ describe("README", () => {
     const contents = await readFile("packages/cli/README.md", "utf8");
     const quickStart = contents.split("## Commands")[0] ?? contents;
 
-    assert.match(contents, /npx @agentpay-ai\/agentpay install/);
+    assert.match(contents, /npx @agentpay-ai\/agentpay-celo install/);
     assert.match(contents, /return to your agent chat/i);
-    assert.match(quickStart, /https:\/\/wallet\.agentpay\.site\/mcp/);
-    assert.match(contents, /https:\/\/mcp\.agentpay\.site\/mcp/);
+    assert.match(quickStart, /https:\/\/wallet\.agentpay\.site\/celo\/mcp/);
+    assert.match(contents, /https:\/\/mcp\.agentpay\.site\/celo\/mcp/);
     assert.match(contents, /No user secrets are required|do not manage Supabase/i);
     assert.match(contents, /install --self-hosted/);
     assert.match(contents, /create an AgentPay wallet/i);
@@ -136,6 +144,16 @@ describe("README", () => {
       assert.match(contents, /Use AgentPay MCP tools|Use AgentPay when/i, `${file} must route requests to AgentPay`);
       assert.match(contents, /prepare_wallet_creation/, `${file} must describe wallet setup`);
       assert.match(contents, /check_wallet_creation/, `${file} must describe wallet completion checks`);
+      assert.match(
+        contents,
+        /PENDING[\s\S]*check_wallet_creation/i,
+        `${file} must limit setup-intent polling to legacy PENDING responses`,
+      );
+      assert.match(
+        contents,
+        /SETUP_REQUIRED[\s\S]*setupUrl[\s\S]*get_agent_wallet/i,
+        `${file} must describe the production onboarding handoff`,
+      );
       assert.match(contents, /get_agent_wallet[\s\S]*get_balance|get_balance[\s\S]*get_agent_wallet/, `${file} must describe balance reads through AgentPay tools`);
       assert.match(contents, /Never use raw wallet balances, exchange balances, or generic RPC balance/i, `${file} must forbid non-AgentPay balance sources`);
       assert.match(contents, /quote_payment_route/, `${file} must describe route previews`);

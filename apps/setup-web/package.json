@@ -1,5 +1,5 @@
 {
-  "name": "@agentpay-ai/setup-web",
+  "name": "@agentpay-ai/setup-web-celo",
   "version": "0.1.12",
   "type": "module",
   "exports": {
@@ -11,6 +11,17 @@
     "src/runtime.ts",
     "src/server.ts",
     "src/payment-review.ts",
+    "src/onboarding/authorization.ts",
+    "src/onboarding/browser-transaction.ts",
+    "src/onboarding/page.ts",
+    "src/onboarding/runtime.ts",
+    "src/onboarding/server.ts",
+    "src/onboarding/start.ts",
+    "src/worker/runtime.ts",
+    "src/worker/setup-account-verifier.ts",
+    "src/worker/setup-deployment-worker.ts",
+    "src/worker/setup-transaction.ts",
+    "src/worker/start.ts",
     "src/services/account-deployer.ts",
     "src/services/complete-wallet-setup.ts",
     "src/start.ts"
@@ -20,13 +31,16 @@
   },
   "scripts": {
     "start": "tsx src/start.ts",
+    "start:onboarding": "tsx src/onboarding/start.ts",
+    "start:setup-worker": "tsx src/worker/start.ts",
     "test": "tsx --test \"src/**/*.test.ts\"",
     "test:e2e": "playwright test --config playwright.config.ts",
     "typecheck": "tsc -p ../../tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@agentpay-ai/mcp-server": "0.1.11",
-    "@agentpay-ai/shared": "0.1.3",
-    "ethers": "^6.17.0"
+    "@agentpay-ai/mcp-server-celo": "0.1.11",
+    "@agentpay-ai/shared-celo": "0.1.3",
+    "ethers": "^6.17.0",
+    "zod": "^4.4.3"
   }
 }

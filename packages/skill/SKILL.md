@@ -18,19 +18,19 @@ Do not bypass AgentPay with raw RPC calls, manual wallet transfers, raw LI.FI ca
 The public install command is:
 
 ```bash
-npx @agentpay-ai/agentpay install
+npx @agentpay-ai/agentpay-celo install
 ```
 
 The install command only installs/configures the MCP plugin and instructions. It must not create a wallet, deploy a smart account, sign messages, approve payments, or move funds.
 
-Default installs connect to the authenticated consumer AgentPay MCP endpoint at `https://wallet.agentpay.site/mcp`. Users do not need Supabase, RPC, executor, deployer, or bytecode config for normal chat usage. The separate paid public execution ASP is `https://mcp.agentpay.site/mcp` and is used only after Review & Sign.
+Default installs connect to the authenticated consumer AgentPay MCP endpoint at `https://wallet.agentpay.site/celo/mcp`. Users do not need Supabase, RPC, executor, deployer, or bytecode config for normal chat usage. The separate paid public execution ASP is `https://mcp.agentpay.site/celo/mcp` and is used only after Review & Sign.
 
 After installation, ask the user to reload or reconnect the agent runtime if needed. Then return to the agent chat and continue with wallet creation or payment using AgentPay MCP tools.
 
 Use this diagnostic command only when checking self-hosted/operator configuration readiness or troubleshooting:
 
 ```bash
-npx @agentpay-ai/agentpay doctor
+npx @agentpay-ai/agentpay-celo doctor
 ```
 
 This checks self-hosted MCP and setup-web readiness without starting services or printing secret values.
@@ -38,7 +38,7 @@ This checks self-hosted MCP and setup-web readiness without starting services or
 Use this fallback command only for self-hosted/operator mode when the setup/signing page needs to be served outside the hosted agent tool flow:
 
 ```bash
-npx @agentpay-ai/agentpay setup-web
+npx @agentpay-ai/agentpay-celo setup-web
 ```
 
 ## If AgentPay Is Not Installed
@@ -49,28 +49,28 @@ If the user asks for a crypto payment and AgentPay MCP tools are unavailable:
 2. If you have terminal/local command access, ask for explicit approval before installing:
 
 ```txt
-I can install AgentPay by running `npx @agentpay-ai/agentpay install`.
+I can install AgentPay by running `npx @agentpay-ai/agentpay-celo install`.
 This will modify local MCP/runtime configuration. Do you approve?
 ```
 
 3. Only after approval, run:
 
 ```bash
-npx @agentpay-ai/agentpay install
+npx @agentpay-ai/agentpay-celo install
 ```
 
 4. Ask the user to reload or reconnect the runtime if needed, then return to the agent chat. Do not ask normal users to fill local Supabase, RPC, executor, deployer, or bytecode config.
 5. If you do not have terminal/local command access, explain that AgentPay cannot be installed or checked from this session.
-6. Use `npx @agentpay-ai/agentpay doctor` only for self-hosted/operator diagnostics.
-7. Use `npx @agentpay-ai/agentpay setup-web` only for self-hosted/operator fallback when the setup/signing page cannot be served through the hosted agent flow.
-8. Continue in chat with wallet creation by calling `prepare_wallet_creation` and `check_wallet_creation`.
+6. Use `npx @agentpay-ai/agentpay-celo doctor` only for self-hosted/operator diagnostics.
+7. Use `npx @agentpay-ai/agentpay-celo setup-web` only for self-hosted/operator fallback when the setup/signing page cannot be served through the hosted agent flow.
+8. Continue in chat with wallet creation by calling `prepare_wallet_creation`. If it returns `PENDING`, use the legacy `check_wallet_creation` flow. If it returns `SETUP_REQUIRED`, open the returned `setupUrl`, wait for the user to complete hosted setup, then call `get_agent_wallet`.
 
 ## Available MCP Tools
 
 Expected AgentPay tools:
 
-- `prepare_wallet_creation`: create a setup intent and return a signing link.
-- `check_wallet_creation`: check whether the setup intent has completed and return the AgentPay smart account address.
+- `prepare_wallet_creation`: start wallet setup. A legacy `PENDING` response includes a setup intent and signing link; a production `SETUP_REQUIRED` response includes the hosted `setupUrl`.
+- `check_wallet_creation`: check whether a legacy `PENDING` setup intent has completed and return the AgentPay smart account address.
 - `get_agent_wallet`: return owner, executor, smart account address, home chain, and status.
 - `get_balance`: read Celo USDC/USDT/USDm and CELO balances.
 - `parse_invoice_payment`: parse structured invoice text into `prepare_payment` fields.
@@ -104,15 +104,12 @@ Cross-chain routes are payment-time choices, not wallet-creation choices. Create
 
 When the user asks to create an AgentPay wallet:
 
-1. Self-service wallet creation is available on Celo Sepolia. If the user asks to create a new mainnet wallet, explain that mainnet activation is operator-managed and do not call the public setup tool.
-2. Call `prepare_wallet_creation` with `network: "testnet"` for Celo Sepolia.
-3. Give the user the setup signing link.
-4. Explain that the signing page proves wallet ownership and does not approve any payment.
-5. Wait for the user to sign on the setup page.
-6. Call `check_wallet_creation`.
-7. When complete, show the AgentPay smart account address and network, then tell the user to fund it with supported Celo USDC, USDT, or USDm.
+1. Call `prepare_wallet_creation` with the selected network.
+2. If the response status is `PENDING`, give the user the setup signing link, explain that the signing page proves wallet ownership and does not approve any payment, wait for the user to sign, then call `check_wallet_creation` with the returned setup intent id.
+3. If the response status is `SETUP_REQUIRED`, open the returned `setupUrl`, explain that hosted setup proves ownership and does not approve any payment, wait for the user to complete setup, then call `get_agent_wallet` with the same network.
+4. When completion is confirmed, show the AgentPay smart account address and network, then tell the user to fund it with supported Celo USDC, USDT, or USDm.
 
-Never claim the wallet is ready until `check_wallet_creation` confirms completion.
+Never claim the wallet is ready until `check_wallet_creation` confirms a legacy `PENDING` setup intent or `get_agent_wallet` confirms a production `SETUP_REQUIRED` setup.
 
 ## Owner Admin Workflow
 
@@ -288,7 +285,7 @@ Use these responses:
 - Never ask the user to send funds to an address that was not returned by AgentPay.
 - Never modify payment details after approval.
 - Never execute payment outside AgentPay MCP tools.
-- Never run `npx @agentpay-ai/agentpay install` without explicit user approval when acting on the user's machine.
+- Never run `npx @agentpay-ai/agentpay-celo install` without explicit user approval when acting on the user's machine.
 - Never treat installation approval as payment approval.
 - Never treat setup signature as payment approval.
 - Never treat an x402 parse result as payment approval or protocol settlement; retry x402 resources only after the matching payment intent is `COMPLETED`.

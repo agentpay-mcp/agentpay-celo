@@ -1,11 +1,11 @@
-# @agentpay-ai/agentpay
+# @agentpay-ai/agentpay-celo
 
-AgentPay installs MCP tools and runtime instructions for owner-authorized Celo payments. Hosted chat mode connects to the authenticated consumer endpoint at `https://wallet.agentpay.site/mcp`; the separate paid public execution endpoint at `https://mcp.agentpay.site/mcp` is used only after Review & Sign. Normal users do not manage Supabase, RPC, executor, deployer, or bytecode configuration.
+AgentPay installs MCP tools and runtime instructions for owner-authorized Celo payments. Hosted chat mode connects to the authenticated consumer endpoint at `https://wallet.agentpay.site/celo/mcp`; the separate paid public execution endpoint at `https://mcp.agentpay.site/celo/mcp` is used only after Review & Sign. Normal users do not manage Supabase, RPC, executor, deployer, or bytecode configuration.
 
 ## Install
 
 ```bash
-npx @agentpay-ai/agentpay install
+npx @agentpay-ai/agentpay-celo install
 ```
 
 Then return to your agent chat:

@@ -11,8 +11,13 @@ export const MAINNET_USDC_DECIMALS = 6;
 export const MAINNET_USDC_CODE_HASH =
   "0x14254a76b7b2554180021c6390e814e73dee647ae91b7198da08de5145214493";
 export const MAINNET_ACCOUNT_CREATION_BYTECODE_HASH =
-  "0x41fb5a4c59d1af753553e5dcf9e9ed345506ecaa8040298d17dc9c629fbd5b49";
-export const MAINNET_MIGRATION_HEAD = "20260717120000_celo_home_chain_boundary";
+  "0x2ede9e46a03a9b3d8e8dc322905443b0fedfabd324c54c73fe1c748f10d0152a";
+export const MAINNET_MIGRATION_HEAD = "20260721160000_celo_x402_settlement_audit";
+export const MAINNET_RPC_FALLBACK_URL = "https://forno.celo.org";
+export const MAINNET_SETUP_URL = "https://wallet.agentpay.site/celo/setup";
+export const MAINNET_SETUP_READINESS_URL = "https://wallet.agentpay.site/celo/setup/readyz";
+export const MAINNET_X402_FACILITATOR_URL = "https://api.x402.celo.org";
+export const ASSIGNED_CELO_ATTRIBUTION_TAG_PATTERN = /^celo_[a-z0-9_]{1,27}$/;
 export const FORBIDDEN_PRODUCTION_RUNTIME_ENV_REFS = Object.freeze([
   "CELO_RPC_URL",
   "CELO_SEPOLIA_RPC_URL",
@@ -147,7 +152,8 @@ export function buildMainnetShadowManifest({ artifactDigests, generatedAt } = {}
       caip2: MAINNET_CAIP2,
       nativeSymbol: "CELO",
       rpcEnvRef: "CELO_MAINNET_RPC_URL",
-      expectedRpcHost: "forno.celo.org",
+      fallbackRpcEnvRef: "CELO_MAINNET_RPC_FALLBACK_URL",
+      fallbackRpcUrl: MAINNET_RPC_FALLBACK_URL,
     },
     database: {
       environment: "production",
@@ -209,12 +215,28 @@ export function buildMainnetShadowManifest({ artifactDigests, generatedAt } = {}
       syncSettle: true,
       payToEnvRef: "AGENTPAY_A2MCP_PAYMENT_PAY_TO",
       facilitatorEnvRef: "AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL",
+      facilitatorUrl: MAINNET_X402_FACILITATOR_URL,
       toolAllowlist: ["execute_payment"],
     },
     domains: {
       publicOrigin: null,
-      consumerOrigin: "https://wallet.agentpay.site/mcp",
-      siweAudience: "https://wallet.agentpay.site/mcp",
+      consumerOrigin: "https://wallet.agentpay.site/celo/mcp",
+      siweAudience: "https://wallet.agentpay.site/celo/mcp",
+    },
+    onboarding: {
+      setupMode: "OFF",
+      setupUrl: MAINNET_SETUP_URL,
+      readinessUrl: MAINNET_SETUP_READINESS_URL,
+      manifestPathEnvRef: "AGENTPAY_ONBOARDING_MANIFEST_PATH",
+      manifestSha256EnvRef: "AGENTPAY_ONBOARDING_MANIFEST_SHA256",
+      factoryAddressEnvRef: "AGENTPAY_FACTORY_ADDRESS",
+      sponsorAddressEnvRef: "AGENTPAY_SETUP_SPONSOR_ADDRESS",
+    },
+    attribution: {
+      standard: "ERC-8021",
+      tagEnvRef: "CELO_ATTRIBUTION_TAG",
+      appliesTo: ["agentpay-direct-transactions"],
+      excludes: ["x402-facilitator-settlements"],
     },
     canaryPolicy: {
       maxAcceptedLifecycles: 1,
@@ -272,7 +294,13 @@ export function validateMainnetShadowManifest(manifest, { artifactDigests } = {}
     requireEqual(chain.caip2, MAINNET_CAIP2, "chain.caip2", issues);
     requireEqual(chain.nativeSymbol, "CELO", "chain.nativeSymbol", issues);
     requireEqual(chain.rpcEnvRef, "CELO_MAINNET_RPC_URL", "chain.rpcEnvRef", issues);
-    requireEqual(chain.expectedRpcHost, "forno.celo.org", "chain.expectedRpcHost", issues);
+    requireEqual(
+      chain.fallbackRpcEnvRef,
+      "CELO_MAINNET_RPC_FALLBACK_URL",
+      "chain.fallbackRpcEnvRef",
+      issues,
+    );
+    requireEqual(chain.fallbackRpcUrl, MAINNET_RPC_FALLBACK_URL, "chain.fallbackRpcUrl", issues);
   }
 
   const database = manifest.database;
@@ -374,14 +402,64 @@ export function validateMainnetShadowManifest(manifest, { artifactDigests } = {}
     requireEqual(x402.syncSettle, true, "x402.syncSettle", issues);
     requireEqual(x402.payToEnvRef, "AGENTPAY_A2MCP_PAYMENT_PAY_TO", "x402.payToEnvRef", issues);
     requireEqual(x402.facilitatorEnvRef, "AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL", "x402.facilitatorEnvRef", issues);
+    requireEqual(x402.facilitatorUrl, MAINNET_X402_FACILITATOR_URL, "x402.facilitatorUrl", issues);
     requireArrayEqual(x402.toolAllowlist, ["execute_payment"], "x402.toolAllowlist", issues);
   }
 
   const domains = manifest.domains;
   if (requireRecord(domains, "domains", issues)) {
     requireNullableString(domains.publicOrigin, "domains.publicOrigin", issues);
-    requireEqual(domains.consumerOrigin, "https://wallet.agentpay.site/mcp", "domains.consumerOrigin", issues);
-    requireEqual(domains.siweAudience, "https://wallet.agentpay.site/mcp", "domains.siweAudience", issues);
+    requireEqual(domains.consumerOrigin, "https://wallet.agentpay.site/celo/mcp", "domains.consumerOrigin", issues);
+    requireEqual(domains.siweAudience, "https://wallet.agentpay.site/celo/mcp", "domains.siweAudience", issues);
+  }
+
+  const onboarding = manifest.onboarding;
+  if (requireRecord(onboarding, "onboarding", issues)) {
+    requireEqual(onboarding.setupMode, "OFF", "onboarding.setupMode", issues);
+    requireEqual(onboarding.setupUrl, MAINNET_SETUP_URL, "onboarding.setupUrl", issues);
+    requireEqual(onboarding.readinessUrl, MAINNET_SETUP_READINESS_URL, "onboarding.readinessUrl", issues);
+    requireEqual(
+      onboarding.manifestPathEnvRef,
+      "AGENTPAY_ONBOARDING_MANIFEST_PATH",
+      "onboarding.manifestPathEnvRef",
+      issues,
+    );
+    requireEqual(
+      onboarding.manifestSha256EnvRef,
+      "AGENTPAY_ONBOARDING_MANIFEST_SHA256",
+      "onboarding.manifestSha256EnvRef",
+      issues,
+    );
+    requireEqual(
+      onboarding.factoryAddressEnvRef,
+      "AGENTPAY_FACTORY_ADDRESS",
+      "onboarding.factoryAddressEnvRef",
+      issues,
+    );
+    requireEqual(
+      onboarding.sponsorAddressEnvRef,
+      "AGENTPAY_SETUP_SPONSOR_ADDRESS",
+      "onboarding.sponsorAddressEnvRef",
+      issues,
+    );
+  }
+
+  const attribution = manifest.attribution;
+  if (requireRecord(attribution, "attribution", issues)) {
+    requireEqual(attribution.standard, "ERC-8021", "attribution.standard", issues);
+    requireEqual(attribution.tagEnvRef, "CELO_ATTRIBUTION_TAG", "attribution.tagEnvRef", issues);
+    requireEqual(
+      JSON.stringify(attribution.appliesTo),
+      JSON.stringify(["agentpay-direct-transactions"]),
+      "attribution.appliesTo",
+      issues,
+    );
+    requireEqual(
+      JSON.stringify(attribution.excludes),
+      JSON.stringify(["x402-facilitator-settlements"]),
+      "attribution.excludes",
+      issues,
+    );
   }
 
   const canary = manifest.canaryPolicy;
@@ -471,12 +549,27 @@ export function validateProductionEnvironmentIsolation(env, { manifest } = {}) {
   } else {
     try {
       const rpcUrl = new URL(env.CELO_MAINNET_RPC_URL);
-      if (rpcUrl.protocol !== "https:" || rpcUrl.hostname !== "forno.celo.org") {
-        addIssue(issues, "CELO_MAINNET_RPC_URL", "must use the pinned mainnet RPC host over HTTPS");
+      if (
+        rpcUrl.protocol !== "https:" ||
+        ["localhost", "127.0.0.1", "::1"].includes(rpcUrl.hostname) ||
+        /test|dev|staging/i.test(rpcUrl.hostname)
+      ) {
+        addIssue(issues, "CELO_MAINNET_RPC_URL", "must be a production HTTPS RPC URL");
       }
     } catch {
       addIssue(issues, "CELO_MAINNET_RPC_URL", "must be a valid HTTPS URL");
     }
+  }
+
+  requireEqual(
+    env.CELO_MAINNET_RPC_FALLBACK_URL,
+    MAINNET_RPC_FALLBACK_URL,
+    "CELO_MAINNET_RPC_FALLBACK_URL",
+    issues,
+  );
+  requireEqual(env.AGENTPAY_PUBLIC_SETUP_URL, MAINNET_SETUP_URL, "AGENTPAY_PUBLIC_SETUP_URL", issues);
+  if (!ASSIGNED_CELO_ATTRIBUTION_TAG_PATTERN.test(String(env.CELO_ATTRIBUTION_TAG ?? ""))) {
+    addIssue(issues, "CELO_ATTRIBUTION_TAG", "must be the assigned lowercase celo_ attribution code");
   }
 
   for (const name of FORBIDDEN_PRODUCTION_RUNTIME_ENV_REFS) {

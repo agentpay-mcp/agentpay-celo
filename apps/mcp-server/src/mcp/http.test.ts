@@ -9,7 +9,11 @@ import { Wallet } from "ethers";
 import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
 import { describe, it } from "node:test";
 
-import { createSessionContext, type SessionContext } from "@agentpay-ai/shared";
+import {
+  createAgentPayErc8004Registration,
+  createSessionContext,
+  type SessionContext,
+} from "@agentpay-ai/shared-celo";
 import { createConsumerOAuthApi } from "../auth/oauth-api.ts";
 import type {
   OAuthAuthorizationRecord,
@@ -26,8 +30,11 @@ import type { RuntimeEnvironmentIdentity } from "../runtime/production-readiness
 import type { CanaryLedgerStore } from "../runtime/paid-execution-canary-ledger.ts";
 import { createInMemoryInvoiceExecutionOutboxStore } from "../services/paid-execution-outbox.ts";
 import { createInMemoryPaidExecutionLifecycleStore } from "../services/paid-execution-lifecycle.ts";
-import type { PaymentIntentRecord } from "@agentpay-ai/shared";
-import type { AgentPayMcpPaymentProcessor } from "./celo-agent-payment.ts";
+import type { PaymentIntentRecord } from "@agentpay-ai/shared-celo";
+import type {
+  AgentPayMcpPaymentProcessor,
+  ExpectedX402PaymentRequirements,
+} from "./celo-agent-payment.ts";
 import {
   resolveProductionReadiness,
   shouldVerifyMainnetAccountAtStartup,
@@ -83,6 +90,58 @@ describe("startAgentPayHttpServer", () => {
       await client.close();
 
       assert.deepEqual(tools.tools.map((tool) => tool.name), ["execute_payment"]);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("serves validated ERC-8004 domain metadata without authentication or payment", async () => {
+    const agentRegistration = createAgentPayErc8004Registration({
+      agentWalletAddress: "0x1234567890abcdef1234567890abcdef12345678",
+      agentId: 42,
+    });
+    const server = await startAgentPayHttpServer({
+      env: mcpEnv(),
+      hostname: "127.0.0.1",
+      port: 0,
+      agentRegistration,
+      createRuntime() {
+        return createRuntime();
+      },
+    });
+
+    try {
+      const response = await fetch(new URL("/.well-known/agent-registration.json", server.url));
+
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("access-control-allow-origin"), "*");
+      assert.equal(response.headers.get("cache-control"), "public, max-age=300");
+      assert.equal(response.headers.get("x-content-type-options"), "nosniff");
+      assert.deepEqual(await response.json(), agentRegistration);
+
+      const post = await fetch(new URL("/.well-known/agent-registration.json", server.url), {
+        method: "POST",
+      });
+      assert.equal(post.status, 405);
+      assert.equal(post.headers.get("allow"), "GET");
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("does not publish an ERC-8004 identity before real wallet inputs are configured", async () => {
+    const server = await startAgentPayHttpServer({
+      env: mcpEnv(),
+      hostname: "127.0.0.1",
+      port: 0,
+      createRuntime() {
+        return createRuntime();
+      },
+    });
+
+    try {
+      const response = await fetch(new URL("/.well-known/agent-registration.json", server.url));
+      assert.equal(response.status, 404);
     } finally {
       await server.close();
     }
@@ -306,6 +365,7 @@ describe("startAgentPayHttpServer", () => {
 
   it("keeps GET probes payable but rejects malformed POSTs before x402", async () => {
     let mcpServerWasCreated = false;
+    const challengeHeader = createPaymentRequiredHeader([createPaymentRequirements()]);
     const paymentProcessor = createPaymentProcessor({
       async processHTTPRequest(context) {
         assert.equal(context.path, "/mcp");
@@ -316,7 +376,7 @@ describe("startAgentPayHttpServer", () => {
             status: 402,
             headers: {
               "content-type": "application/json",
-              "PAYMENT-REQUIRED": "probe-challenge",
+              "PAYMENT-REQUIRED": challengeHeader,
             },
             body: {
               error: "Payment required.",
@@ -348,11 +408,67 @@ describe("startAgentPayHttpServer", () => {
       });
 
       assert.equal(getResponse.status, 402);
-      assert.equal(getResponse.headers.get("PAYMENT-REQUIRED"), "probe-challenge");
+      assert.equal(getResponse.headers.get("PAYMENT-REQUIRED"), challengeHeader);
       assert.deepEqual(await getResponse.json(), { error: "Payment required." });
       assert.equal(malformedPostResponse.status, 400);
       assert.equal(malformedPostResponse.headers.get("PAYMENT-REQUIRED"), null);
       assert.equal(mcpServerWasCreated, false);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("rejects a paid challenge when any advertised x402 option drifts from seller terms", async () => {
+    const expected = createPaymentRequirements();
+    const malicious = {
+      ...expected,
+      payTo: "0x0000000000000000000000000000000000000003",
+    };
+    const paymentProcessor = createPaymentProcessor({
+      async processHTTPRequest() {
+        return {
+          type: "payment-error",
+          response: {
+            status: 402,
+            headers: {
+              "PAYMENT-REQUIRED": createPaymentRequiredHeader([expected, malicious]),
+            },
+            body: { error: "Payment required." },
+          },
+        };
+      },
+    });
+    const server = await startAgentPayHttpServer({
+      env: mcpEnv(),
+      hostname: "127.0.0.1",
+      port: 0,
+      paymentProcessor,
+      createRuntime() {
+        return createRuntime();
+      },
+    });
+
+    try {
+      const response = await fetch(server.mcpUrl, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: {
+            name: "execute_payment",
+            arguments: { paymentIntentId: "pay_challenge_drift", signature: `0x${"11".repeat(65)}` },
+          },
+        }),
+      });
+
+      assert.equal(response.status, 503);
+      assert.equal(response.headers.get("PAYMENT-REQUIRED"), null);
+      assert.deepEqual(await response.json(), {
+        error: "Payment challenge does not match the configured x402 seller terms.",
+        code: "PAID_CHALLENGE_INVALID",
+      });
     } finally {
       await server.close();
     }
@@ -464,12 +580,17 @@ describe("startAgentPayHttpServer", () => {
     const calls: string[] = [];
     const policy = canaryPolicy();
     const ledger = createTestCanaryLedger(calls);
+    const permit2Requirements = {
+      ...createCanaryPaymentRequirements(),
+      extra: { assetTransferMethod: "permit2" },
+    };
     const paymentProcessor = createPaymentProcessor({
+      expectedPaymentRequirements: createExpectedPaymentRequirements("permit2", permit2Requirements),
       async processHTTPRequest() {
         return {
           type: "payment-verified",
-          paymentPayload: createPermit2PaymentPayload(policy.allowlist.payerAddress),
-          paymentRequirements: createCanaryPaymentRequirements(),
+          paymentPayload: createPermit2PaymentPayload(policy.allowlist.payerAddress, permit2Requirements),
+          paymentRequirements: permit2Requirements,
         };
       },
       async processSettlement() {
@@ -480,7 +601,7 @@ describe("startAgentPayHttpServer", () => {
           transaction: `0x${"88".repeat(32)}`,
           network: "eip155:42220",
           headers: {},
-          requirements: createCanaryPaymentRequirements(),
+          requirements: permit2Requirements,
         };
       },
     });
@@ -608,18 +729,20 @@ describe("startAgentPayHttpServer", () => {
   });
 
   it("fails closed when a verified Permit2 proof omits its payer authorization", async () => {
+    const permit2Requirements = {
+      ...createPaymentRequirements(),
+      extra: { assetTransferMethod: "permit2" },
+    };
     const paymentProcessor = createPaymentProcessor({
+      expectedPaymentRequirements: createExpectedPaymentRequirements("permit2", permit2Requirements),
       async processHTTPRequest() {
         return {
           type: "payment-verified",
           paymentPayload: {
             ...createPaymentPayload(),
-            accepted: {
-              ...createPaymentRequirements(),
-              extra: { assetTransferMethod: "permit2" },
-            },
+            accepted: permit2Requirements,
           },
-          paymentRequirements: createPaymentRequirements(),
+          paymentRequirements: permit2Requirements,
         };
       },
     });
@@ -708,6 +831,7 @@ describe("startAgentPayHttpServer", () => {
           async retryX402Request() {
             return {
               status: "RESOURCE_FETCHED",
+              proofScheme: "agentpay-receipt",
               paymentIntentId: "pay_x402",
               requestUrl: "https://api.example.com/protected",
               method: "GET",
@@ -752,6 +876,76 @@ describe("startAgentPayHttpServer", () => {
       assert.equal(calls[2], "execute");
     } finally {
       await server.close();
+    }
+  });
+
+  it("rejects verified x402 terms that drift from the configured seller terms", async () => {
+    const baseline = createPaymentRequirements();
+    const expected = createExpectedPaymentRequirements();
+    const variants: PaymentRequirements[] = [
+      { ...baseline, network: "eip155:11142220" },
+      { ...baseline, amount: "2" },
+      { ...baseline, payTo: "0x0000000000000000000000000000000000000003" },
+      { ...baseline, extra: { assetTransferMethod: "permit2" } },
+      { ...baseline, extra: {} },
+    ];
+
+    for (const paymentRequirements of variants) {
+      let settlementCalls = 0;
+      const paymentProcessor = Object.assign(
+        createPaymentProcessor({
+          async processHTTPRequest() {
+            return {
+              type: "payment-verified" as const,
+              paymentPayload: { ...createPaymentPayload(), accepted: paymentRequirements },
+              paymentRequirements,
+            };
+          },
+          async processSettlement() {
+            settlementCalls += 1;
+            throw new Error("mismatched terms must not settle");
+          },
+        }),
+        { expectedPaymentRequirements: expected },
+      );
+      const server = await startAgentPayHttpServer({
+        env: mcpEnv(),
+        hostname: "127.0.0.1",
+        port: 0,
+        paymentProcessor,
+        createRuntime() {
+          return createRuntime();
+        },
+      });
+
+      try {
+        const response = await fetch(server.mcpUrl, {
+          method: "POST",
+          headers: {
+            accept: "application/json, text/event-stream",
+            "content-type": "application/json",
+            "PAYMENT-SIGNATURE": "paid",
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: 1,
+            method: "tools/call",
+            params: {
+              name: "execute_payment",
+              arguments: { paymentIntentId: "pay_x402", signature: `0x${"11".repeat(65)}` },
+            },
+          }),
+        });
+
+        assert.equal(response.status, 503);
+        assert.deepEqual(await response.json(), {
+          error: "Verified payment terms do not match the configured x402 seller terms.",
+          code: "PAID_PAYMENT_TERMS_MISMATCH",
+        });
+        assert.equal(settlementCalls, 0);
+      } finally {
+        await server.close();
+      }
     }
   });
 
@@ -1035,7 +1229,7 @@ describe("startAgentPayHttpServer", () => {
           const pathname = new URL(request.url).pathname;
           if (pathname === "/.well-known/oauth-protected-resource/mcp") {
             return new Response(JSON.stringify({
-              resource: "https://wallet.agentpay.site/mcp",
+              resource: "https://wallet.agentpay.site/celo/mcp",
               authorization_servers: ["https://wallet.agentpay.site"],
               scopes_supported: ["wallet:read", "payment:prepare", "payment:read", "payment:review", "session:manage"],
               bearer_methods_supported: ["header"],
@@ -1063,7 +1257,7 @@ describe("startAgentPayHttpServer", () => {
       const resourceMetadata = await fetch(new URL("/.well-known/oauth-protected-resource/mcp", server.url));
       assert.equal(resourceMetadata.status, 200);
       assert.deepEqual(await resourceMetadata.json(), {
-        resource: "https://wallet.agentpay.site/mcp",
+        resource: "https://wallet.agentpay.site/celo/mcp",
         authorization_servers: ["https://wallet.agentpay.site"],
         scopes_supported: ["wallet:read", "payment:prepare", "payment:read", "payment:review", "session:manage"],
         bearer_methods_supported: ["header"],
@@ -1095,6 +1289,7 @@ describe("startAgentPayHttpServer", () => {
       hostname: "127.0.0.1",
       port: 0,
       paymentProcessor: {
+        expectedPaymentRequirements: createExpectedPaymentRequirements(),
         async processHTTPRequest() {
           throw new Error("injected production payment processor must not bypass readiness");
         },
@@ -1175,6 +1370,7 @@ describe("startAgentPayHttpServer", () => {
             verificationCalls += 1;
             return { valid: false, checks: {}, errors: ["test verifier"] };
           },
+          checkOnboardingReady: async () => true,
         },
       );
       return { readiness, verificationCalls };
@@ -1198,6 +1394,46 @@ describe("startAgentPayHttpServer", () => {
 
       const identityPublic = await resolve("PUBLIC", "OFF");
       assert.equal(identityPublic.verificationCalls, 1);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects onboarding mode drift before accepting live setup readiness", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "agentpay-onboarding-mode-test-"));
+    const manifestPath = join(directory, "activated.json");
+    const manifest = makeDeployedProductionManifest(JSON.parse(
+      await readFile(new URL("../../../../test/fixtures/celo-mainnet.shadow.json", import.meta.url), "utf8"),
+    ) as Record<string, any>);
+    manifest.status = "READY";
+    manifest.executionMode = "PUBLIC";
+    manifest.x402.enabled = true;
+    await writeFile(manifestPath, JSON.stringify(manifest));
+    let onboardingChecks = 0;
+
+    try {
+      const env = {
+        ...productionMcpEnv(),
+        AGENTPAY_MAINNET_MANIFEST_PATH: manifestPath,
+        AGENTPAY_SETUP_MODE: "CANARY",
+      };
+      const readiness = await resolveProductionReadiness(
+        parseAgentPayEnv(env),
+        env,
+        undefined,
+        {
+          loadRuntimeIdentity: async () => productionIdentityFor(manifest, "PUBLIC"),
+          verifyAccount: async () => ({ valid: true, checks: {}, errors: [] }),
+          checkOnboardingReady: async () => {
+            onboardingChecks += 1;
+            return true;
+          },
+        },
+      );
+
+      assert.equal(onboardingChecks, 0);
+      assert.equal(readiness.ready, false);
+      assert.match(readiness.errors.join("; "), /setup mode.*effective production execution mode/i);
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
@@ -1410,7 +1646,7 @@ describe("startAgentPayHttpServer", () => {
       authorizationStore: stores.authorizationStore,
       challengeStore: stores.challengeStore,
       serverSecret,
-      audience: "https://wallet.agentpay.site/mcp",
+      audience: "https://wallet.agentpay.site/celo/mcp",
       environment: "staging",
       clock: () => new Date("2026-07-12T00:00:00.000Z"),
       resolveOwner: async (ownerAddress, chainId) => ({
@@ -1435,7 +1671,7 @@ describe("startAgentPayHttpServer", () => {
             credential,
             sessionStore: stores.sessionStore,
             serverSecret,
-            audience: "https://wallet.agentpay.site/mcp",
+            audience: "https://wallet.agentpay.site/celo/mcp",
             environment: "staging",
             clock: () => new Date("2026-07-12T00:00:00.000Z"),
             currentAuthenticationEpoch: async () => 0,
@@ -1469,7 +1705,7 @@ describe("startAgentPayHttpServer", () => {
         resource: string;
         authorization_servers: string[];
       };
-      assert.equal(protectedResourceMetadata.resource, "https://wallet.agentpay.site/mcp");
+      assert.equal(protectedResourceMetadata.resource, "https://wallet.agentpay.site/celo/mcp");
 
       const authorizationServer = protectedResourceMetadata.authorization_servers[0]!;
       const authorizationMetadataResponse = await fetch(localize(`${authorizationServer}/.well-known/oauth-authorization-server`));
@@ -1565,7 +1801,7 @@ describe("startAgentPayHttpServer", () => {
       ownerAddress: "0x1111111111111111111111111111111111111111",
       accountAddress: "0x2222222222222222222222222222222222222222",
       homeChainId: 11142220,
-      audience: "https://wallet.agentpay.site/mcp",
+      audience: "https://wallet.agentpay.site/celo/mcp",
       environment: "staging",
       scopes: ["wallet:read"],
       authEpoch: 0,
@@ -1617,7 +1853,7 @@ describe("startAgentPayHttpServer", () => {
       ownerAddress: "0x1111111111111111111111111111111111111111",
       accountAddress: "0x2222222222222222222222222222222222222222",
       homeChainId: 11142220,
-      audience: "https://wallet.agentpay.site/mcp",
+      audience: "https://wallet.agentpay.site/celo/mcp",
       environment: "staging",
       scopes: ["payment:read"],
       authEpoch: 0,
@@ -1695,12 +1931,24 @@ function productionMcpEnv(): Record<string, string> {
     SUPABASE_PRODUCTION_URL: "https://abcdefghijklmnopqrst.supabase.co",
     SUPABASE_PRODUCTION_SERVICE_ROLE_KEY: "service-role-key",
     DIRECT_URL_PRODUCTION: "postgresql://production.example.invalid/postgres",
-    CELO_MAINNET_RPC_URL: "https://forno.celo.org",
+    CELO_MAINNET_RPC_URL: "https://rpc.provider.example/celo",
+    CELO_MAINNET_RPC_FALLBACK_URL: "https://forno.celo.org",
+    CELO_ATTRIBUTION_TAG: "celo_agentpay",
     EXECUTOR_PRIVATE_KEY: `0x${"1".repeat(64)}`,
-    SETUP_DEPLOYER_PRIVATE_KEY: `0x${"2".repeat(64)}`,
     AGENTPAY_SESSION_HASH_KEY: "s".repeat(64),
     AGENTPAY_REVIEW_TOKEN_SECRET: "r".repeat(64),
-    SETUP_WEB_URL: "https://setup.agentpay.site/review",
+    AGENTPAY_CONSUMER_MCP_URL: "https://wallet.agentpay.site/celo/mcp",
+    AGENTPAY_PAID_MCP_URL: "https://mcp.agentpay.site/celo/mcp",
+    AGENTPAY_PUBLIC_SETUP_URL: "https://wallet.agentpay.site/celo/setup",
+    AGENTPAY_PUBLIC_REVIEW_URL: "https://wallet.agentpay.site/celo/review",
+    AGENTPAY_ONBOARDING_MANIFEST_PATH: "/run/agentpay-celo/onboarding.json",
+    AGENTPAY_ONBOARDING_MANIFEST_SHA256: "a".repeat(64),
+    AGENTPAY_FACTORY_ADDRESS: "0x1111111111111111111111111111111111111111",
+    AGENTPAY_FACTORY_RUNTIME_CODE_HASH: `0x${"2".repeat(64)}`,
+    AGENTPAY_SETUP_SPONSOR_ADDRESS: "0x3333333333333333333333333333333333333333",
+    AGENTPAY_SETUP_SUPABASE_PROJECT_REF: "abcdefghijklmnopqrst",
+    AGENTPAY_SETUP_MODE: "PUBLIC",
+    SETUP_WEB_URL: "https://wallet.agentpay.site/celo/review",
   };
 }
 
@@ -1978,6 +2226,7 @@ function createOAuthHttpTestStores(): {
 
 function createPaymentProcessor(overrides: Partial<AgentPayMcpPaymentProcessor>) {
   return {
+    expectedPaymentRequirements: createExpectedPaymentRequirements(),
     async processHTTPRequest() {
       return {
         type: "no-payment-required",
@@ -1996,6 +2245,29 @@ function createPaymentProcessor(overrides: Partial<AgentPayMcpPaymentProcessor>)
   } satisfies AgentPayMcpPaymentProcessor;
 }
 
+function createExpectedPaymentRequirements(
+  assetTransferMethod = "eip3009",
+  requirements: PaymentRequirements = createPaymentRequirements(),
+): ExpectedX402PaymentRequirements {
+  return {
+    scheme: requirements.scheme,
+    network: requirements.network,
+    asset: requirements.asset,
+    amount: requirements.amount,
+    payTo: requirements.payTo,
+    maxTimeoutSeconds: requirements.maxTimeoutSeconds,
+    assetTransferMethod,
+  };
+}
+
+function createPaymentRequiredHeader(accepts: PaymentRequirements[]): string {
+  return Buffer.from(JSON.stringify({
+    x402Version: 2,
+    resource: { url: "/mcp", description: "AgentPay public MCP endpoint" },
+    accepts,
+  })).toString("base64");
+}
+
 function createPaymentRequirements(): PaymentRequirements {
   return {
     scheme: "exact",
@@ -2004,7 +2276,7 @@ function createPaymentRequirements(): PaymentRequirements {
     amount: "1",
     payTo: "0x0000000000000000000000000000000000000002",
     maxTimeoutSeconds: 300,
-    extra: {},
+    extra: { assetTransferMethod: "eip3009" },
   };
 }
 
@@ -2020,11 +2292,14 @@ function createPaymentPayload(payer = "0x444444444444444444444444444444444444444
   };
 }
 
-function createPermit2PaymentPayload(payer: string): PaymentPayload {
+function createPermit2PaymentPayload(
+  payer: string,
+  requirements: PaymentRequirements = createPaymentRequirements(),
+): PaymentPayload {
   return {
     x402Version: 2,
     accepted: {
-      ...createPaymentRequirements(),
+      ...requirements,
       extra: { assetTransferMethod: "permit2" },
     },
     payload: {
@@ -2044,7 +2319,7 @@ function createCanaryPaymentRequirements(): PaymentRequirements {
     amount: "10000",
     payTo: "0x0000000000000000000000000000000000000002",
     maxTimeoutSeconds: 300,
-    extra: {},
+    extra: { assetTransferMethod: "eip3009" },
   };
 }
 

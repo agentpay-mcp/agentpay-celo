@@ -12,7 +12,11 @@ import type {
   HTTPTransportContext,
 } from "@x402/core/http";
 import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
-import { AgentPayAuthError, type SessionContext } from "@agentpay-ai/shared";
+import {
+  AgentPayAuthError,
+  type AgentPayErc8004Registration,
+  type SessionContext,
+} from "@agentpay-ai/shared-celo";
 import { AGENTPAY_CONSUMER_URI } from "../auth/siwe.ts";
 import { authenticateServiceSession } from "../auth/session.ts";
 import { createConsumerSessionApi, type ConsumerSessionApi } from "../auth/consumer-session-api.ts";
@@ -47,7 +51,12 @@ import {
   createCeloAgentPaymentProcessorFromEnv,
   parseAgentPayMcpPaymentEnv,
   type AgentPayMcpPaymentProcessor,
+  type ExpectedX402PaymentRequirements,
 } from "./celo-agent-payment.ts";
+import {
+  parseAgentPayErc8004Env,
+  verifyConfiguredAgentPayErc8004Identity,
+} from "./erc8004-registration.ts";
 import {
   createInMemoryPaidExecutionLifecycleStore,
   createPaidExecutionLifecycleClaimInput,
@@ -89,6 +98,7 @@ const freeJsonRpcMethods = new Set(["initialize", "notifications/initialized", "
 const consumerAuthorizationServer = "https://wallet.agentpay.site";
 const consumerResourceMetadataPath = "/.well-known/oauth-protected-resource/mcp";
 const consumerAuthorizationMetadataPath = "/.well-known/oauth-authorization-server";
+const agentRegistrationMetadataPath = "/.well-known/agent-registration.json";
 
 export interface AgentPayHttpServer {
   url: string;
@@ -119,12 +129,15 @@ export interface StartAgentPayHttpServerOptions {
   consumerAuth?: ConsumerSessionAuthenticator;
   sessionApi?: ConsumerSessionApi;
   oauthApi?: ConsumerOAuthApi;
+  /** @internal Validated metadata seam for tests; production parses env. */
+  agentRegistration?: AgentPayErc8004Registration;
 }
 
 /** @internal Dependency seam for resolver tests; production callers use the pinned defaults. */
 export interface ResolveProductionReadinessDependencies {
   loadRuntimeIdentity?: () => Promise<RuntimeEnvironmentIdentity | null>;
   verifyAccount?: (expected: MainnetAccountVerificationExpected) => Promise<MainnetAccountVerificationResult>;
+  checkOnboardingReady?: (setupUrl: string, expectedMode: string) => Promise<boolean>;
 }
 
 /**
@@ -137,7 +150,14 @@ export function shouldVerifyMainnetAccountAtStartup(requestedMode: ExecutionMode
 }
 
 export async function startAgentPayHttpServer(options: StartAgentPayHttpServerOptions = {}): Promise<AgentPayHttpServer> {
-  const config = parseAgentPayEnv(options.env ?? process.env);
+  const runtimeEnv = options.env ?? process.env;
+  const config = parseAgentPayEnv(runtimeEnv);
+  const agentRegistration = config.environment === "production"
+    ? parseAgentPayErc8004Env(runtimeEnv)
+    : options.agentRegistration ?? parseAgentPayErc8004Env(runtimeEnv);
+  if (config.environment === "production" && agentRegistration?.registrations.length) {
+    await verifyConfiguredAgentPayErc8004Identity(agentRegistration, runtimeEnv);
+  }
   const mode = options.mode ?? config.httpMode ?? "public";
   const paymentEnabled = String((options.env ?? process.env).AGENTPAY_A2MCP_PAYMENT_ENABLED ?? "")
     .trim()
@@ -194,6 +214,15 @@ export async function startAgentPayHttpServer(options: StartAgentPayHttpServerOp
             });
           } catch {
             return withReadinessError(current, "canary admission: live Supabase ledger read failed");
+          }
+        }
+        if (current.mode === "CANARY" || current.mode === "PUBLIC") {
+          const onboardingReady = await checkProductionOnboardingReady(
+            String((options.env ?? process.env).AGENTPAY_PUBLIC_SETUP_URL ?? ""),
+            String((options.env ?? process.env).AGENTPAY_SETUP_MODE ?? ""),
+          );
+          if (!onboardingReady) {
+            return withReadinessError(current, "onboarding readiness: live rotated-token readiness check failed");
           }
         }
         return current;
@@ -328,6 +357,7 @@ export async function startAgentPayHttpServer(options: StartAgentPayHttpServerOp
       consumerAuth,
       sessionApi,
       oauthApi,
+      agentRegistration,
       legacySiweSessionApiEnabled,
       createRuntime,
       mcpPath,
@@ -390,6 +420,7 @@ interface HandleAgentPayHttpRequestOptions {
   consumerAuth?: ConsumerSessionAuthenticator;
   sessionApi?: ConsumerSessionApi;
   oauthApi?: ConsumerOAuthApi;
+  agentRegistration?: AgentPayErc8004Registration;
   legacySiweSessionApiEnabled: boolean;
   createRuntime: (config: AgentPayRuntimeConfig, tenantContext?: SessionContext) => AgentPayRuntime;
   mcpPath: string;
@@ -413,6 +444,23 @@ async function handleAgentPayHttpRequest(options: HandleAgentPayHttpRequestOptio
 
   if (options.request.method === "OPTIONS") {
     options.response.writeHead(204).end();
+    return;
+  }
+
+  if (pathname === agentRegistrationMetadataPath) {
+    if (options.request.method !== "GET") {
+      writeJson(options.response, 405, { error: "Method not allowed." }, { allow: "GET" });
+      return;
+    }
+    if (!options.agentRegistration) {
+      writeJson(options.response, 404, { error: "Not found" });
+      return;
+    }
+    writeJson(options.response, 200, options.agentRegistration, {
+      "access-control-allow-origin": "*",
+      "cache-control": "public, max-age=300",
+      "x-content-type-options": "nosniff",
+    });
     return;
   }
 
@@ -576,6 +624,17 @@ async function handleAgentPayHttpRequest(options: HandleAgentPayHttpRequestOptio
       }
 
       if (paymentResult.type === "payment-error") {
+        const challengeOptions = decodePaymentRequiredRequirements(paymentResult.response.headers);
+        if (!hasOnlyExpectedPaymentTerms(
+          challengeOptions,
+          options.paymentProcessor.expectedPaymentRequirements,
+        )) {
+          writeJson(options.response, 503, {
+            error: "Payment challenge does not match the configured x402 seller terms.",
+            code: "PAID_CHALLENGE_INVALID",
+          });
+          return;
+        }
         writeHttpInstruction(options.response, paymentResult.response);
         return;
       }
@@ -705,6 +764,21 @@ async function handleAgentPayHttpRequest(options: HandleAgentPayHttpRequestOptio
   }
 
   if (paymentResult.type === "payment-error") {
+    const challengeOptions = decodePaymentRequiredRequirements(paymentResult.response.headers);
+    const challengeRequirements = challengeOptions?.[0];
+    if (
+      requestClassification.kind === "paid" &&
+      !hasOnlyExpectedPaymentTerms(
+        challengeOptions,
+        options.paymentProcessor!.expectedPaymentRequirements,
+      )
+    ) {
+      writeJson(options.response, 503, {
+        error: "Payment challenge does not match the configured x402 seller terms.",
+        code: "PAID_CHALLENGE_INVALID",
+      });
+      return;
+    }
     if (
       options.config.executionMode === "CANARY" &&
       requestClassification.kind === "paid" &&
@@ -739,7 +813,6 @@ async function handleAgentPayHttpRequest(options: HandleAgentPayHttpRequestOptio
       }
     }
     if (requestClassification.kind === "paid" && paidExecutionBinding && paidPreflight && paidPreflight.intent.tenantId && options.paidExecutionChallenge) {
-      const challengeRequirements = decodePaymentRequiredRequirements(paymentResult.response.headers);
       if (challengeRequirements) {
         if (options.config.executionMode === "CANARY") {
           try {
@@ -757,7 +830,7 @@ async function handleAgentPayHttpRequest(options: HandleAgentPayHttpRequestOptio
         const offeredAt = new Date().toISOString();
         const expiresAt = new Date(Date.now() + challengeRequirements.maxTimeoutSeconds * 1000).toISOString();
         try {
-          await options.paidExecutionChallenge.offer({
+          const challengeOffer = await options.paidExecutionChallenge.offer({
             id: randomUUID(),
             tenantId: paidPreflight.intent.tenantId!,
             environment: options.config.environment ?? "staging",
@@ -772,11 +845,19 @@ async function handleAgentPayHttpRequest(options: HandleAgentPayHttpRequestOptio
               asset: challengeRequirements.asset,
               amount: challengeRequirements.amount,
               payTo: challengeRequirements.payTo,
+              assetTransferMethod: challengeRequirements.extra?.assetTransferMethod,
             }),
             paymentRequirementsHash: hashCanonicalJson(challengeRequirements),
             offeredAt,
             expiresAt,
           });
+          if (challengeOffer.disposition === "CONFLICT") {
+            writeJson(options.response, 409, {
+              error: "Payment challenge conflicts with an existing signed request binding.",
+              code: "PAID_CHALLENGE_CONFLICT",
+            });
+            return;
+          }
         } catch {
           writeJson(options.response, 503, { error: "Paid challenge ledger unavailable.", code: "PAID_CHALLENGE_UNAVAILABLE" });
           return;
@@ -795,6 +876,23 @@ async function handleAgentPayHttpRequest(options: HandleAgentPayHttpRequestOptio
       writeJson(options.response, 400, {
         error: "The public paid surface accepts only a preflighted execute_payment request.",
         code: "PAID_TOOL_NOT_ALLOWED",
+      });
+      return;
+    }
+
+    if (
+      !hasExpectedPaymentTerms(
+        paymentResult.paymentRequirements,
+        options.paymentProcessor!.expectedPaymentRequirements,
+      ) ||
+      !hasExpectedPaymentTerms(
+        paymentResult.paymentPayload.accepted,
+        options.paymentProcessor!.expectedPaymentRequirements,
+      )
+    ) {
+      writeJson(options.response, 503, {
+        error: "Verified payment terms do not match the configured x402 seller terms.",
+        code: "PAID_PAYMENT_TERMS_MISMATCH",
       });
       return;
     }
@@ -1579,25 +1677,51 @@ function hasAmbiguousMcpExecutionError(body: Buffer): boolean {
   return body.toString("utf8").includes("DURABLE_EXECUTION_AMBIGUOUS");
 }
 
-function decodePaymentRequiredRequirements(headers: Record<string, string>): PaymentRequirements | undefined {
+function decodePaymentRequiredRequirements(headers: Record<string, string>): PaymentRequirements[] | undefined {
   const header = Object.entries(headers).find(([name]) => name.toLowerCase() === "payment-required")?.[1];
   if (!header) return undefined;
   try {
     const decoded = JSON.parse(Buffer.from(header, "base64").toString("utf8")) as { accepts?: unknown };
-    const requirements = Array.isArray(decoded.accepts) ? decoded.accepts[0] : undefined;
-    if (!isRecordValue(requirements)) return undefined;
-    if (
-      typeof requirements.scheme !== "string" ||
-      typeof requirements.network !== "string" ||
-      typeof requirements.asset !== "string" ||
-      typeof requirements.amount !== "string" ||
-      typeof requirements.payTo !== "string" ||
-      typeof requirements.maxTimeoutSeconds !== "number"
-    ) return undefined;
-    return requirements as unknown as PaymentRequirements;
+    if (!Array.isArray(decoded.accepts) || decoded.accepts.length === 0) return undefined;
+    const requirements = decoded.accepts.map((candidate) => {
+      if (!isRecordValue(candidate)) return undefined;
+      if (
+        typeof candidate.scheme !== "string" ||
+        typeof candidate.network !== "string" ||
+        typeof candidate.asset !== "string" ||
+        typeof candidate.amount !== "string" ||
+        typeof candidate.payTo !== "string" ||
+        typeof candidate.maxTimeoutSeconds !== "number"
+      ) return undefined;
+      return candidate as unknown as PaymentRequirements;
+    });
+    if (requirements.some((candidate) => !candidate)) return undefined;
+    return requirements as PaymentRequirements[];
   } catch {
     return undefined;
   }
+}
+
+function hasOnlyExpectedPaymentTerms(
+  actual: PaymentRequirements[] | undefined,
+  expected: ExpectedX402PaymentRequirements,
+): boolean {
+  return Boolean(actual?.length && actual.every((candidate) => hasExpectedPaymentTerms(candidate, expected)));
+}
+
+function hasExpectedPaymentTerms(
+  actual: PaymentRequirements,
+  expected: ExpectedX402PaymentRequirements,
+): boolean {
+  return (
+    actual.scheme === expected.scheme &&
+    actual.network === expected.network &&
+    actual.asset.toLowerCase() === expected.asset.toLowerCase() &&
+    actual.amount === expected.amount &&
+    actual.payTo.toLowerCase() === expected.payTo.toLowerCase() &&
+    actual.maxTimeoutSeconds === expected.maxTimeoutSeconds &&
+    actual.extra?.assetTransferMethod === expected.assetTransferMethod
+  );
 }
 
 function createStatelessTransport(): StreamableHTTPServerTransport {
@@ -2174,6 +2298,28 @@ export async function resolveProductionReadiness(
     }
   }
 
+  let onboardingReady: boolean | undefined;
+  if (requestedMode === "CANARY" || requestedMode === "PUBLIC") {
+    try {
+      const setupUrl = String(env.AGENTPAY_PUBLIC_SETUP_URL ?? "").trim();
+      const setupMode = String(env.AGENTPAY_SETUP_MODE ?? "").trim();
+      if (setupMode !== requestedMode) {
+        onboardingReady = false;
+        extraErrors.push("onboarding readiness: setup mode must match the effective production execution mode");
+      } else {
+        onboardingReady = await (
+          dependencies.checkOnboardingReady ?? checkProductionOnboardingReady
+        )(setupUrl, requestedMode);
+        if (!onboardingReady) {
+          extraErrors.push("onboarding readiness: live /celo/setup/readyz verification failed");
+        }
+      }
+    } catch {
+      onboardingReady = false;
+      extraErrors.push("onboarding readiness: live /celo/setup/readyz could not be verified");
+    }
+  }
+
   const result = await evaluateProductionReadiness({
     env: Object.fromEntries(
       Object.entries(env).map(([key, value]) => {
@@ -2186,8 +2332,36 @@ export async function resolveProductionReadiness(
     accountVerification,
     paymentConfig,
     canaryAdmissionReady,
+    onboardingReady,
   });
   return extraErrors.reduce(withReadinessError, result);
+}
+
+async function checkProductionOnboardingReady(setupUrl: string, expectedMode: string): Promise<boolean> {
+  if (setupUrl !== "https://wallet.agentpay.site/celo/setup") return false;
+  if (!["CANARY", "PUBLIC"].includes(expectedMode)) return false;
+  const readinessUrl = new URL(setupUrl);
+  readinessUrl.pathname = `${readinessUrl.pathname.replace(/\/$/, "")}/readyz`;
+  readinessUrl.search = "";
+  readinessUrl.hash = "";
+  const response = await fetch(readinessUrl, {
+    method: "GET",
+    redirect: "error",
+    headers: { accept: "application/json" },
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (!response.ok) return false;
+  const contentLength = Number(response.headers.get("content-length") ?? "0");
+  if (Number.isFinite(contentLength) && contentLength > 4_096) return false;
+  const responseText = await response.text();
+  if (Buffer.byteLength(responseText) > 4_096) return false;
+  let body: { status?: unknown; mode?: unknown };
+  try {
+    body = JSON.parse(responseText) as { status?: unknown; mode?: unknown };
+  } catch {
+    return false;
+  }
+  return body.status === "ready" && body.mode === expectedMode;
 }
 
 async function loadManifestCanaryPolicy(path: string | undefined): Promise<CanaryPolicy | undefined> {

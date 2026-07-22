@@ -5,13 +5,13 @@ import {
   sessionScopeSchema,
   type SessionEnvironment,
   type SessionScope,
-} from "@agentpay-ai/shared";
+} from "@agentpay-ai/shared-celo";
 
 import { DEFAULT_SESSION_SCOPES } from "./siwe.ts";
 import type { ServiceSessionRecord } from "./session.ts";
 
 export const AGENTPAY_OAUTH_ISSUER = "https://wallet.agentpay.site";
-export const AGENTPAY_OAUTH_RESOURCE = "https://wallet.agentpay.site/mcp";
+export const AGENTPAY_OAUTH_RESOURCE = "https://wallet.agentpay.site/celo/mcp";
 export const OAUTH_AUTHORIZATION_TTL_SECONDS = 5 * 60;
 export const OAUTH_AUTHORIZATION_CODE_TTL_SECONDS = 60;
 export const OAUTH_ACCESS_TOKEN_TTL_SECONDS = 60 * 60;

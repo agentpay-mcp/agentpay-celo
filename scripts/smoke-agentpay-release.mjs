@@ -36,23 +36,23 @@ async function main() {
     run(npmCommand, ["init", "-y"], { cwd: appDir, quiet: true });
     await mkdir(join(appDir, ".codex"));
     run(npmCommand, ["install", "--ignore-scripts", ...tarballs], { cwd: appDir, quiet: true });
-    run(npxCommand, ["@agentpay-ai/agentpay", "install", "--output-dir", installDir], { cwd: appDir });
-    run(npxCommand, ["@agentpay-ai/agentpay", "install", "--self-hosted", "--output-dir", selfHostedInstallDir], {
+    run(npxCommand, ["@agentpay-ai/agentpay-celo", "install", "--output-dir", installDir], { cwd: appDir });
+    run(npxCommand, ["@agentpay-ai/agentpay-celo", "install", "--self-hosted", "--output-dir", selfHostedInstallDir], {
       cwd: appDir,
     });
-    run(npxCommand, ["@agentpay-ai/agentpay", "install", "--runtime", "claude", "--output-dir", claudeInstallDir], {
+    run(npxCommand, ["@agentpay-ai/agentpay-celo", "install", "--runtime", "claude", "--output-dir", claudeInstallDir], {
       cwd: appDir,
       env: claudeHomeEnv,
     });
-    run(npxCommand, ["@agentpay-ai/agentpay", "install", "--runtime", "cursor", "--output-dir", cursorInstallDir], {
+    run(npxCommand, ["@agentpay-ai/agentpay-celo", "install", "--runtime", "cursor", "--output-dir", cursorInstallDir], {
       cwd: appDir,
       env: cursorHomeEnv,
     });
-    run(npxCommand, ["@agentpay-ai/agentpay", "install", "--runtime", "hermes", "--output-dir", hermesInstallDir], {
+    run(npxCommand, ["@agentpay-ai/agentpay-celo", "install", "--runtime", "hermes", "--output-dir", hermesInstallDir], {
       cwd: appDir,
       env: hermesHomeEnv,
     });
-    run(npxCommand, ["@agentpay-ai/agentpay", "doctor"], {
+    run(npxCommand, ["@agentpay-ai/agentpay-celo", "doctor"], {
       cwd: appDir,
       env: {
         AGENTPAY_CONFIG: join(selfHostedInstallDir, "config.json"),
@@ -69,19 +69,19 @@ async function main() {
     await access(join(installDir, "skills", "agentpay", "SKILL.md"));
     await access(join(installDir, "skills", "agentpay", "agents", "openai.yaml"));
     const mcpConfig = JSON.parse(await readFile(join(installDir, "runtimes", "codex", "mcp.json"), "utf8"));
-    if (mcpConfig.mcpServers?.agentpay?.url !== "https://wallet.agentpay.site/mcp") {
+    if (mcpConfig.mcpServers?.agentpay?.url !== "https://wallet.agentpay.site/celo/mcp") {
       throw new Error("Default AgentPay install did not use the hosted MCP URL.");
     }
     const claudeConfig = JSON.parse(await readFile(getClaudeDesktopConfigPath(claudeHomeEnv), "utf8"));
-    if (claudeConfig.mcpServers?.agentpay?.url !== "https://wallet.agentpay.site/mcp") {
+    if (claudeConfig.mcpServers?.agentpay?.url !== "https://wallet.agentpay.site/celo/mcp") {
       throw new Error("Claude install did not register the hosted AgentPay MCP URL.");
     }
     const cursorConfig = JSON.parse(await readFile(join(cursorHomeDir, ".cursor", "mcp.json"), "utf8"));
-    if (cursorConfig.mcpServers?.agentpay?.url !== "https://wallet.agentpay.site/mcp") {
+    if (cursorConfig.mcpServers?.agentpay?.url !== "https://wallet.agentpay.site/celo/mcp") {
       throw new Error("Cursor install did not register the hosted AgentPay MCP URL.");
     }
     const hermesConfig = await readFile(join(hermesHomeDir, ".hermes", "config.yaml"), "utf8");
-    if (!/agentpay:[\s\S]*url: "https:\/\/wallet\.agentpay\.site\/mcp"/.test(hermesConfig)) {
+    if (!/agentpay:[\s\S]*url: "https:\/\/wallet\.agentpay\.site\/celo\/mcp"/.test(hermesConfig)) {
       throw new Error("Hermes install did not register the hosted AgentPay MCP URL.");
     }
     const packagedBytecode = await readFile(join(selfHostedInstallDir, "AgentPayAccount.bin"), "utf8");

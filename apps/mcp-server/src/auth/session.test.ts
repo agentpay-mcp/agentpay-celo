@@ -63,7 +63,7 @@ function createChallenge(overrides: Partial<Parameters<typeof createSiweChalleng
     challengeId: "challenge_123",
     requestId: "request_123",
     domain: "wallet.agentpay.site",
-    uri: "https://wallet.agentpay.site/mcp",
+    uri: "https://wallet.agentpay.site/celo/mcp",
     ownerAddress,
     accountAddress,
     chainId: 11142220,

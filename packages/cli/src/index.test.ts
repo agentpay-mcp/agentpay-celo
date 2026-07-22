@@ -13,7 +13,7 @@ import {
   runAgentPayDoctor,
   runAgentPayCli,
 } from "./index.ts";
-import { AGENT_PAY_ACCOUNT_V2_REQUIRED_SELECTORS } from "@agentpay-ai/setup-web";
+import { AGENT_PAY_ACCOUNT_V2_REQUIRED_SELECTORS } from "@agentpay-ai/setup-web-celo";
 
 const cliFixtureRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const v2TestBytecode = `0x${AGENT_PAY_ACCOUNT_V2_REQUIRED_SELECTORS.map((selector) => selector.slice(2)).join("")}`;
@@ -26,7 +26,7 @@ describe("parseCliArgs", () => {
       outputDir: "/tmp/agentpay",
       force: true,
       selfHosted: false,
-      mcpUrl: "https://wallet.agentpay.site/mcp",
+      mcpUrl: "https://wallet.agentpay.site/celo/mcp",
     });
   });
 
@@ -87,7 +87,7 @@ describe("installAgentPay", () => {
       assert.match(skill, /Requires a verified owner EIP-712 signature before execution/);
       assert.match(skillMetadata, /display_name: AgentPay/);
       assert.deepEqual(mcpConfig.mcpServers.agentpay, {
-        url: "https://wallet.agentpay.site/mcp",
+        url: "https://wallet.agentpay.site/celo/mcp",
       });
       assert.match(instructions, /return to the agent chat/i);
       assert.match(instructions, /consumer AgentPay MCP/i);
@@ -141,7 +141,7 @@ describe("installAgentPay", () => {
       assert.equal(config.AGENTPAY_ACCOUNT_BYTECODE_PATH, bytecodePath);
       assert.match(bytecode, /^0x[a-fA-F0-9]{200,}\n$/);
       assert.equal(mcpConfig.mcpServers.agentpay.command, "npx");
-      assert.deepEqual(mcpConfig.mcpServers.agentpay.args, ["-y", "@agentpay-ai/agentpay", "mcp"]);
+      assert.deepEqual(mcpConfig.mcpServers.agentpay.args, ["-y", "@agentpay-ai/agentpay-celo", "mcp"]);
       assert.deepEqual(mcpConfig.mcpServers.agentpay.env, {
         AGENTPAY_CONFIG: "~/.agentpay/config.json",
       });
@@ -236,7 +236,7 @@ describe("installAgentPay", () => {
       assert.match(config, /mcp_servers:/);
       assert.match(config, /roblox_studio:/);
       assert.match(config, /agentpay:/);
-      assert.match(config, /url: "https:\/\/wallet\.agentpay\.site\/mcp"/);
+      assert.match(config, /url: "https:\/\/wallet\.agentpay\.site\/celo\/mcp"/);
       assert.match(config, /enabled: true/);
       assert.ok(result.writtenFiles.includes(hermesConfigPath));
     } finally {
@@ -280,7 +280,7 @@ describe("installAgentPay", () => {
 
       assert.deepEqual(config.preferences, { theme: "dark" });
       assert.deepEqual(config.mcpServers.existing, { url: "https://example.com/mcp" });
-      assert.deepEqual(config.mcpServers.agentpay, { url: "https://wallet.agentpay.site/mcp" });
+      assert.deepEqual(config.mcpServers.agentpay, { url: "https://wallet.agentpay.site/celo/mcp" });
       assert.ok(result.writtenFiles.includes(claudeDesktopConfigPath));
     } finally {
       await rm(tempDir, { recursive: true, force: true });
@@ -323,7 +323,7 @@ describe("installAgentPay", () => {
         command: "npx",
         args: ["-y", "@modelcontextprotocol/server-filesystem"],
       });
-      assert.deepEqual(config.mcpServers.agentpay, { url: "https://wallet.agentpay.site/mcp" });
+      assert.deepEqual(config.mcpServers.agentpay, { url: "https://wallet.agentpay.site/celo/mcp" });
       assert.ok(result.writtenFiles.includes(cursorMcpConfigPath));
     } finally {
       await rm(tempDir, { recursive: true, force: true });
@@ -378,7 +378,7 @@ describe("installAgentPay", () => {
       const mcpConfig = JSON.parse(await readFile(join(outputDir, "runtimes", "generic", "mcp.json"), "utf8"));
 
       assert.deepEqual(mcpConfig.mcpServers.agentpay, {
-        url: "https://wallet.agentpay.site/mcp",
+        url: "https://wallet.agentpay.site/celo/mcp",
       });
       assert.ok(result.writtenFiles.includes(join(outputDir, "runtimes", "generic", "instructions.md")));
     } finally {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { parseX402PaymentRequired } from "@agentpay-ai/shared";
+import { parseX402PaymentRequired } from "@agentpay-ai/shared-celo";
 
 import {
   createPinnedX402HttpClient,
@@ -198,6 +198,7 @@ describe("retryX402Request", () => {
     assert.equal(requestHeaders["Access-Control-Expose-Headers"], undefined);
     assert.equal(fetchCalls[0]?.init.redirect, "manual");
     assert.equal(output.status, "RESOURCE_FETCHED");
+    assert.equal(output.proofScheme, "agentpay-receipt");
     assert.equal(output.httpStatus, 200);
     assert.equal(output.paymentResponse, "settled-v2");
     assert.equal(output.bodyText, "{\"ok\":true}");

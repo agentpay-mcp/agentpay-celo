@@ -2,7 +2,7 @@ import { Interface, JsonRpcProvider, TypedDataEncoder, keccak256, toUtf8Bytes } 
 
 import { MAINNET_CHAIN_ID, MAINNET_USDC_ADDRESS } from "../runtime/production-readiness.ts";
 export const MAINNET_ACCOUNT_CREATION_BYTECODE_HASH =
-  "0x41fb5a4c59d1af753553e5dcf9e9ed345506ecaa8040298d17dc9c629fbd5b49";
+  "0x2ede9e46a03a9b3d8e8dc322905443b0fedfabd324c54c73fe1c748f10d0152a";
 
 const accountInterface = new Interface([
   "function owner() view returns (address)",

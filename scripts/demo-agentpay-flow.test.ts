@@ -6,6 +6,8 @@ import { runLocalAgentPayDemo } from "./demo-agentpay-flow.ts";
 describe("runLocalAgentPayDemo", () => {
   it("runs wallet setup and the chat-approved payment flow with in-memory adapters", async () => {
     const result = await runLocalAgentPayDemo();
+    assert.equal(result.setup.status, "PENDING");
+    if (result.setup.status !== "PENDING") assert.fail("Expected the local setup intent path.");
 
     assert.equal(result.initialWallet.status, "NOT_CREATED");
     assert.equal(result.setup.setupIntentId, "setup_demo");

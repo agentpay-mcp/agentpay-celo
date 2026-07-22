@@ -10,7 +10,7 @@ import {
   type SessionContext,
   type SessionEnvironment,
   type SetupIntentRecord,
-} from "@agentpay-ai/shared";
+} from "@agentpay-ai/shared-celo";
 
 import type { ExecutePaymentIntentRepository } from "../tools/execute-payment.ts";
 import type {
@@ -346,6 +346,10 @@ interface PaidExecutionLifecycleRow {
   challenge_id?: string | null;
   environment?: "staging" | "production" | null;
   payer: string | null;
+  fee_network?: string | null;
+  fee_asset?: string | null;
+  fee_amount?: string | null;
+  fee_pay_to?: string | null;
   status: PaidExecutionLifecycleStatus;
   fee_status?: PaidExecutionLifecycleRecord["feeStatus"];
   execution_status?: PaidExecutionLifecycleRecord["executionStatus"];
@@ -1494,6 +1498,10 @@ function toPaidExecutionLifecycleRow(
     challenge_id: input.challengeId,
     environment: input.environment,
     payer: input.payer,
+    fee_network: input.feeNetwork,
+    fee_asset: input.feeAsset,
+    fee_amount: input.feeAmount,
+    fee_pay_to: input.feePayTo,
     status: "CLAIMED",
     fee_status: "ACCEPTED",
     execution_status: "NOT_QUEUED",
@@ -1519,6 +1527,10 @@ function toPaidExecutionLifecycleRecord(row: PaidExecutionLifecycleRow): PaidExe
     ...(row.challenge_id ? { challengeId: row.challenge_id } : {}),
     ...(row.environment ? { environment: row.environment } : {}),
     ...(row.payer ? { payer: row.payer } : {}),
+    ...(row.fee_network ? { feeNetwork: row.fee_network } : {}),
+    ...(row.fee_asset ? { feeAsset: row.fee_asset } : {}),
+    ...(row.fee_amount ? { feeAmount: row.fee_amount } : {}),
+    ...(row.fee_pay_to ? { feePayTo: row.fee_pay_to } : {}),
     status: row.status,
     feeStatus: row.fee_status ?? defaultFeeStatusForLifecycle(row.status),
     executionStatus: row.execution_status ?? defaultExecutionStatusForLifecycle(row.status),
@@ -2028,7 +2040,10 @@ function toPaidExecutionChallengeRecord(row: AspPaymentChallengeRow): PaidExecut
 }
 
 function samePaidChallenge(record: PaidExecutionChallengeRecord, input: PaidExecutionChallengeOfferInput): boolean {
-  return record.paymentIntentId === input.paymentIntentId &&
+  return record.environment === input.environment &&
+    record.paymentIntentId === input.paymentIntentId &&
+    record.ownerAddress.toLowerCase() === input.ownerAddress.toLowerCase() &&
+    record.accountAddress.toLowerCase() === input.accountAddress.toLowerCase() &&
     record.argumentsHash === input.argumentsHash &&
     record.paymentRequirementsHash === input.paymentRequirementsHash;
 }
@@ -2093,7 +2108,11 @@ function hasSameLifecycleBinding(record: PaidExecutionLifecycleRecord, input: Pa
     record.paymentIntentId === input.paymentIntentId &&
     record.argumentsHash === input.argumentsHash &&
     (record.authorizationHash ?? null) === (input.authorizationHash ?? null) &&
-    (record.challengeId ?? null) === (input.challengeId ?? null)
+    (record.challengeId ?? null) === (input.challengeId ?? null) &&
+    record.feeNetwork === input.feeNetwork &&
+    record.feeAsset?.toLowerCase() === input.feeAsset.toLowerCase() &&
+    record.feeAmount === input.feeAmount &&
+    record.feePayTo?.toLowerCase() === input.feePayTo.toLowerCase()
   );
 }
 

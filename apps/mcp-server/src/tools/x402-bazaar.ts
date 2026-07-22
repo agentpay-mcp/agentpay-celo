@@ -11,7 +11,7 @@ import {
   type X402BazaarPaymentRequirement,
   type X402BazaarPaymentRequiredObject,
   type X402BazaarResource,
-} from "@agentpay-ai/shared";
+} from "@agentpay-ai/shared-celo";
 
 export interface X402BazaarDiscoverySearchResult {
   resources: X402BazaarResource[];

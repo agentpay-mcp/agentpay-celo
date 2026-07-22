@@ -1,29 +1,32 @@
 import { randomBytes } from "node:crypto";
 
-import type { CeloHomeChainId, ExecutePaymentInput } from "@agentpay-ai/shared";
-import type { PreparePaymentInput } from "@agentpay-ai/shared";
-import type { GetPaymentSignatureInput } from "@agentpay-ai/shared";
-import type { GetBalanceInput } from "@agentpay-ai/shared";
-import type { ListPaymentEventsInput, ListTransactionsInput, TrackPaymentInput } from "@agentpay-ai/shared";
-import type { ParseInvoicePaymentInput } from "@agentpay-ai/shared";
-import type { ParseX402PaymentRequiredInput } from "@agentpay-ai/shared";
-import type { RetryX402RequestInput } from "@agentpay-ai/shared";
-import type { PrepareX402ServiceRequestInput, SearchX402ServicesInput } from "@agentpay-ai/shared";
-import type { PrepareContractCallInput } from "@agentpay-ai/shared";
-import type { PrepareAccountAdminTransactionInput } from "@agentpay-ai/shared";
-import type { QuotePaymentRouteInput } from "@agentpay-ai/shared";
-import type { SessionContext, SessionEnvironment } from "@agentpay-ai/shared";
+import type { CeloHomeChainId, ExecutePaymentInput } from "@agentpay-ai/shared-celo";
+import type { PreparePaymentInput } from "@agentpay-ai/shared-celo";
+import type { GetPaymentSignatureInput } from "@agentpay-ai/shared-celo";
+import type { GetBalanceInput } from "@agentpay-ai/shared-celo";
+import type { ListPaymentEventsInput, ListTransactionsInput, TrackPaymentInput } from "@agentpay-ai/shared-celo";
+import type { ParseInvoicePaymentInput } from "@agentpay-ai/shared-celo";
+import type { ParseX402PaymentRequiredInput } from "@agentpay-ai/shared-celo";
+import type { RetryX402RequestInput } from "@agentpay-ai/shared-celo";
+import type { PrepareX402ServiceRequestInput, SearchX402ServicesInput } from "@agentpay-ai/shared-celo";
+import type { PrepareContractCallInput } from "@agentpay-ai/shared-celo";
+import type { PrepareAccountAdminTransactionInput } from "@agentpay-ai/shared-celo";
+import type { QuotePaymentRouteInput } from "@agentpay-ai/shared-celo";
+import type { SessionContext, SessionEnvironment } from "@agentpay-ai/shared-celo";
 import type {
   CheckWalletCreationInput,
   CheckRouteTargetAllowanceInput,
   GetAgentWalletInput,
   PrepareRouteTargetAllowanceInput,
   PrepareWalletCreationInput,
-} from "@agentpay-ai/shared";
+} from "@agentpay-ai/shared-celo";
 import {
   configureStableTokenMetadataOverrides,
+  CELO_NETWORKS,
+  isAssignedCeloAttributionTag,
+  MAINNET_ONBOARDING_URL,
   type StableTokenMetadataOverrides,
-} from "@agentpay-ai/shared";
+} from "@agentpay-ai/shared-celo";
 import { Wallet } from "ethers";
 
 import { createEthersRuntimeAdapters, type EthersRuntimeConfig } from "../services/chain-executor.ts";
@@ -119,9 +122,12 @@ const REQUIRED_PRODUCTION_ENV_NAMES = [
   "SUPABASE_PRODUCTION_URL",
   "SUPABASE_PRODUCTION_SERVICE_ROLE_KEY",
   "CELO_MAINNET_RPC_URL",
+  "CELO_MAINNET_RPC_FALLBACK_URL",
+  "CELO_ATTRIBUTION_TAG",
   "EXECUTOR_PRIVATE_KEY",
   "AGENTPAY_SESSION_HASH_KEY",
   "AGENTPAY_REVIEW_TOKEN_SECRET",
+  "AGENTPAY_PUBLIC_SETUP_URL",
   "SETUP_WEB_URL",
 ];
 const PRODUCTION_FORBIDDEN_ENV_NAMES = [
@@ -149,11 +155,14 @@ export interface AgentPayRuntimeConfig {
   serviceRoleKey: string;
   celoRpcUrl: string;
   celoRpcUrls?: Partial<Record<number, string>>;
+  celoRpcFallbackUrls?: Partial<Record<number, string>>;
+  celoAttributionTag?: string;
   executorPrivateKey: string;
   lifiApiKey?: string;
   lifiBaseUrl?: string;
   x402BazaarFacilitatorUrl?: string;
   setupWebUrl?: string;
+  productionOnboardingUrl?: string;
   homeChainId?: CeloHomeChainId;
   stableTokenOverrides?: StableTokenMetadataOverrides;
   httpMode?: "public" | "consumer";
@@ -251,7 +260,7 @@ export interface AgentPayRuntime {
   canaryLedger?: CanaryLedgerStore;
   reconcileInvoiceExecutions?(): Promise<InvoiceExecutionReconciliationResult>;
   executeAuthorizedPayment(
-    input: import("@agentpay-ai/shared").ExecuteAuthorizedPaymentInput,
+    input: import("@agentpay-ai/shared-celo").ExecuteAuthorizedPaymentInput,
   ): ReturnType<ReturnType<typeof createExecuteAuthorizedPaymentHandler>>;
   trackPayment(input: TrackPaymentInput): ReturnType<ReturnType<typeof createTrackPaymentHandler>>;
   listTransactions(input: ListTransactionsInput): ReturnType<ReturnType<typeof createListTransactionsHandler>>;
@@ -264,6 +273,7 @@ export function parseAgentPayEnv(env: NodeJS.ProcessEnv | Record<string, string 
   ) as Record<string, string | undefined>;
   const homeChainId = parseOptionalHomeChainId(normalized.AGENTPAY_HOME_CHAIN_ID);
   const celoRpcUrls = parseCeloRpcUrls(normalized);
+  const celoRpcFallbackUrls = parseCeloRpcFallbackUrls(normalized);
   const stableTokenOverrides = parseStableTokenOverrides(normalized);
   const isProduction = normalized.AGENTPAY_ENVIRONMENT === "production";
   const requiredEnvNames = isProduction ? REQUIRED_PRODUCTION_ENV_NAMES : REQUIRED_LOCAL_ENV_NAMES;
@@ -284,6 +294,13 @@ export function parseAgentPayEnv(env: NodeJS.ProcessEnv | Record<string, string 
       : undefined,
     normalized.CELO_SEPOLIA_RPC_URL && !isHttpUrl(normalized.CELO_SEPOLIA_RPC_URL)
       ? "CELO_SEPOLIA_RPC_URL"
+      : undefined,
+    normalized.CELO_MAINNET_RPC_FALLBACK_URL &&
+    normalized.CELO_MAINNET_RPC_FALLBACK_URL !== "https://forno.celo.org"
+      ? "CELO_MAINNET_RPC_FALLBACK_URL"
+      : undefined,
+    normalized.CELO_ATTRIBUTION_TAG && !isAssignedCeloAttributionTag(normalized.CELO_ATTRIBUTION_TAG)
+      ? "CELO_ATTRIBUTION_TAG"
       : undefined,
     normalized.EXECUTOR_PRIVATE_KEY && !privateKeyPattern.test(normalized.EXECUTOR_PRIVATE_KEY)
       ? "EXECUTOR_PRIVATE_KEY"
@@ -309,6 +326,9 @@ export function parseAgentPayEnv(env: NodeJS.ProcessEnv | Record<string, string 
       : undefined,
     isProduction && normalized.AGENTPAY_ACCOUNT_VERSION !== "v2" ? "AGENTPAY_ACCOUNT_VERSION" : undefined,
     isProduction && normalized.AGENTPAY_HOME_CHAIN_ID !== "42220" ? "AGENTPAY_HOME_CHAIN_ID" : undefined,
+    isProduction && normalized.AGENTPAY_PUBLIC_SETUP_URL !== MAINNET_ONBOARDING_URL
+      ? "AGENTPAY_PUBLIC_SETUP_URL"
+      : undefined,
     isProduction && PRODUCTION_FORBIDDEN_ENV_NAMES.some((name) => normalized[name])
       ? "production environment isolation"
       : undefined,
@@ -324,11 +344,14 @@ export function parseAgentPayEnv(env: NodeJS.ProcessEnv | Record<string, string 
     serviceRoleKey,
     celoRpcUrl,
     celoRpcUrls,
+    celoRpcFallbackUrls,
+    celoAttributionTag: normalized.CELO_ATTRIBUTION_TAG,
     executorPrivateKey: normalized.EXECUTOR_PRIVATE_KEY,
     lifiApiKey: normalized.LIFI_API_KEY,
     lifiBaseUrl: normalized.LIFI_BASE_URL,
     x402BazaarFacilitatorUrl: normalized.X402_BAZAAR_FACILITATOR_URL,
     setupWebUrl: normalized.SETUP_WEB_URL,
+    productionOnboardingUrl: isProduction ? normalized.AGENTPAY_PUBLIC_SETUP_URL : undefined,
     homeChainId,
     stableTokenOverrides,
     httpMode: normalized.AGENTPAY_HTTP_MODE as AgentPayRuntimeConfig["httpMode"],
@@ -362,11 +385,15 @@ export function createAgentPayRuntime(config: AgentPayRuntimeConfig, options: Ag
       fetch: options.fetch,
     }) as LifiRouteQuoteProviderConfig,
   );
-  const chainAdapters = factories.createChainAdapters({
-    rpcUrl: config.celoRpcUrl,
-    rpcUrls: config.celoRpcUrls,
-    executorPrivateKey: config.executorPrivateKey,
-  });
+  const chainAdapters = factories.createChainAdapters(
+    omitUndefined({
+      rpcUrl: config.celoRpcUrl,
+      rpcUrls: config.celoRpcUrls,
+      rpcFallbackUrls: config.celoRpcFallbackUrls,
+      celoAttributionTag: config.celoAttributionTag,
+      executorPrivateKey: config.executorPrivateKey,
+    }) as EthersRuntimeConfig,
+  );
   const x402BazaarDiscovery = factories.createX402BazaarDiscovery(
     omitUndefined({
       facilitatorUrl: config.x402BazaarFacilitatorUrl,
@@ -406,6 +433,7 @@ export function createAgentPayRuntime(config: AgentPayRuntimeConfig, options: Ag
         setupIntents: repositories.setupIntents,
         executorAddress,
         setupWebUrl: config.setupWebUrl ?? DEFAULT_SETUP_WEB_URL,
+        productionOnboardingUrl: config.productionOnboardingUrl,
         clock,
         createSetupIntentId: options.createSetupIntentId ?? (() => createSetupIntentId()),
         homeChainId: effectiveHomeChainId,
@@ -615,6 +643,15 @@ function parseCeloRpcUrls(env: Record<string, string | undefined>): Partial<Reco
   }) as Partial<Record<number, string>>;
 
   return Object.keys(rpcUrls).length > 0 ? rpcUrls : undefined;
+}
+
+function parseCeloRpcFallbackUrls(
+  env: Record<string, string | undefined>,
+): Partial<Record<number, string>> | undefined {
+  if (!env.CELO_MAINNET_RPC_FALLBACK_URL) return undefined;
+  return {
+    [CELO_NETWORKS.mainnet.chainId]: env.CELO_MAINNET_RPC_FALLBACK_URL,
+  };
 }
 
 function parseStableTokenOverrides(env: Record<string, string | undefined>): StableTokenMetadataOverrides | undefined {

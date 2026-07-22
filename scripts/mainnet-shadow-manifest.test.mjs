@@ -27,7 +27,10 @@ function makeProductionEnv() {
     AGENTPAY_ENVIRONMENT: "production",
     AGENTPAY_HOME_CHAIN_ID: "42220",
     AGENTPAY_ACCOUNT_VERSION: "v2",
-    CELO_MAINNET_RPC_URL: "https://forno.celo.org",
+    CELO_MAINNET_RPC_URL: "https://rpc.provider.example/celo",
+    CELO_MAINNET_RPC_FALLBACK_URL: "https://forno.celo.org",
+    CELO_ATTRIBUTION_TAG: "celo_agentpay",
+    AGENTPAY_PUBLIC_SETUP_URL: "https://wallet.agentpay.site/celo/setup",
     SUPABASE_PRODUCTION_URL: "https://production-project.supabase.co",
     DIRECT_URL_PRODUCTION: "postgresql://production.example.invalid/postgres",
   };
@@ -38,9 +41,33 @@ describe("Celo mainnet shadow manifest", () => {
     const result = validate(makeManifest());
     assert.equal(result.valid, true, result.errors.join("; "));
     assert.deepEqual(makeManifest().contract.allowedTokens, [MAINNET_USDC_ADDRESS]);
-    assert.equal(MAINNET_MIGRATION_HEAD, "20260717120000_celo_home_chain_boundary");
+    assert.equal(MAINNET_MIGRATION_HEAD, "20260721160000_celo_x402_settlement_audit");
     assert.equal(makeManifest().database.migrationHead, MAINNET_MIGRATION_HEAD);
     assert.equal(makeManifest().release.migrationHead, MAINNET_MIGRATION_HEAD);
+    assert.deepEqual(makeManifest().chain, {
+      name: "Celo",
+      chainId: 42220,
+      caip2: "eip155:42220",
+      nativeSymbol: "CELO",
+      rpcEnvRef: "CELO_MAINNET_RPC_URL",
+      fallbackRpcEnvRef: "CELO_MAINNET_RPC_FALLBACK_URL",
+      fallbackRpcUrl: "https://forno.celo.org",
+    });
+    assert.deepEqual(makeManifest().onboarding, {
+      setupMode: "OFF",
+      setupUrl: "https://wallet.agentpay.site/celo/setup",
+      readinessUrl: "https://wallet.agentpay.site/celo/setup/readyz",
+      manifestPathEnvRef: "AGENTPAY_ONBOARDING_MANIFEST_PATH",
+      manifestSha256EnvRef: "AGENTPAY_ONBOARDING_MANIFEST_SHA256",
+      factoryAddressEnvRef: "AGENTPAY_FACTORY_ADDRESS",
+      sponsorAddressEnvRef: "AGENTPAY_SETUP_SPONSOR_ADDRESS",
+    });
+    assert.deepEqual(makeManifest().attribution, {
+      standard: "ERC-8021",
+      tagEnvRef: "CELO_ATTRIBUTION_TAG",
+      appliesTo: ["agentpay-direct-transactions"],
+      excludes: ["x402-facilitator-settlements"],
+    });
   });
 
   it("rejects a staging chain or RPC reference in a production manifest", () => {
@@ -54,11 +81,11 @@ describe("Celo mainnet shadow manifest", () => {
 
     const rpcDrift = makeManifest();
     rpcDrift.chain.rpcEnvRef = "CELO_SEPOLIA_RPC_URL";
-    rpcDrift.chain.expectedRpcHost = "forno.celo-sepolia.celo-testnet.org";
+    rpcDrift.chain.fallbackRpcUrl = "https://forno.celo-sepolia.celo-testnet.org";
     result = validate(rpcDrift);
     assert.equal(result.valid, false);
     assert.match(result.errors.join("; "), /chain\.rpcEnvRef/);
-    assert.match(result.errors.join("; "), /chain\.expectedRpcHost/);
+    assert.match(result.errors.join("; "), /chain\.fallbackRpcUrl/);
   });
 
   it("rejects paid-gate drift from the exact mainnet x402 policy", () => {
@@ -69,13 +96,25 @@ describe("Celo mainnet shadow manifest", () => {
     manifest.x402.price = "$0.02";
     manifest.x402.priceAtomic = "20000";
     manifest.x402.syncSettle = false;
+    manifest.x402.facilitatorUrl = "https://facilitator.example.com";
     manifest.x402.toolAllowlist = ["execute_payment", "prepare_payment"];
 
     const result = validate(manifest);
     assert.equal(result.valid, false);
-    for (const field of ["enabled", "network", "asset", "price", "priceAtomic", "syncSettle", "toolAllowlist"]) {
+    for (const field of ["enabled", "network", "asset", "price", "priceAtomic", "syncSettle", "facilitatorUrl", "toolAllowlist"]) {
       assert.match(result.errors.join("; "), new RegExp(`x402\\.${field}`));
     }
+  });
+
+  it("rejects ERC-8021 attribution policy drift and x402 settlement tagging", () => {
+    const manifest = makeManifest();
+    manifest.attribution.tagEnvRef = "AGENTPAY_ATTRIBUTION_TAG";
+    manifest.attribution.excludes = [];
+
+    const result = validate(manifest);
+    assert.equal(result.valid, false);
+    assert.match(result.errors.join("; "), /attribution\.tagEnvRef/);
+    assert.match(result.errors.join("; "), /attribution\.excludes/);
   });
 
   it("rejects non-USDC tokens or any route target in the production golden path", () => {
@@ -134,6 +173,32 @@ describe("Celo mainnet shadow manifest", () => {
     assert.equal(result.valid, true, result.errors.join("; "));
   });
 
+  it("rejects an unsafe primary RPC, a non-Forno fallback, setup URL drift, or attribution drift", () => {
+    const unsafePrimary = makeProductionEnv();
+    unsafePrimary.CELO_MAINNET_RPC_URL = "http://127.0.0.1:8545";
+    let result = validateProductionEnvironmentIsolation(unsafePrimary);
+    assert.equal(result.valid, false);
+    assert.match(result.errors.join("; "), /CELO_MAINNET_RPC_URL/);
+
+    const fallbackDrift = makeProductionEnv();
+    fallbackDrift.CELO_MAINNET_RPC_FALLBACK_URL = "https://rpc.example.com";
+    result = validateProductionEnvironmentIsolation(fallbackDrift);
+    assert.equal(result.valid, false);
+    assert.match(result.errors.join("; "), /CELO_MAINNET_RPC_FALLBACK_URL/);
+
+    const setupDrift = makeProductionEnv();
+    setupDrift.AGENTPAY_PUBLIC_SETUP_URL = "https://celo.agentpay.site/setup";
+    result = validateProductionEnvironmentIsolation(setupDrift);
+    assert.equal(result.valid, false);
+    assert.match(result.errors.join("; "), /AGENTPAY_PUBLIC_SETUP_URL/);
+
+    const attributionDrift = makeProductionEnv();
+    attributionDrift.CELO_ATTRIBUTION_TAG = "agentpay";
+    result = validateProductionEnvironmentIsolation(attributionDrift);
+    assert.equal(result.valid, false);
+    assert.match(result.errors.join("; "), /CELO_ATTRIBUTION_TAG/);
+  });
+
   it("rejects generic, staging, or non-OFF production environment configuration", () => {
     const env = makeProductionEnv();
     env.CELO_RPC_URL = "https://forno.celo-sepolia.celo-testnet.org";
@@ -153,13 +218,14 @@ describe("Celo mainnet shadow manifest", () => {
   it("rejects a missing mainnet boundary and wrong production identity", () => {
     const env = makeProductionEnv();
     delete env.CELO_MAINNET_RPC_URL;
+    delete env.CELO_MAINNET_RPC_FALLBACK_URL;
     env.AGENTPAY_ENVIRONMENT = "staging";
     env.AGENTPAY_HOME_CHAIN_ID = "11142220";
     env.AGENTPAY_ACCOUNT_VERSION = "v1";
 
     const result = validateProductionEnvironmentIsolation(env);
     assert.equal(result.valid, false);
-    for (const field of ["AGENTPAY_ENVIRONMENT", "AGENTPAY_HOME_CHAIN_ID", "AGENTPAY_ACCOUNT_VERSION", "CELO_MAINNET_RPC_URL"]) {
+    for (const field of ["AGENTPAY_ENVIRONMENT", "AGENTPAY_HOME_CHAIN_ID", "AGENTPAY_ACCOUNT_VERSION", "CELO_MAINNET_RPC_URL", "CELO_MAINNET_RPC_FALLBACK_URL"]) {
       assert.match(result.errors.join("; "), new RegExp(field));
     }
   });

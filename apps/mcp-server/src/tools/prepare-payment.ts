@@ -12,7 +12,7 @@ import {
   preparePaymentInputSchema,
   type RouteProvider,
   type RouteQuote,
-} from "@agentpay-ai/shared";
+} from "@agentpay-ai/shared-celo";
 import {
   createPaymentAuthorizationFromIntent,
   hashPaymentAuthorization,

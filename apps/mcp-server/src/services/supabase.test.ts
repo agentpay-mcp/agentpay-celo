@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createSessionContext, type PaymentReviewHandoffRecord } from "@agentpay-ai/shared";
+import { createSessionContext, type PaymentReviewHandoffRecord } from "@agentpay-ai/shared-celo";
 
 import {
   type AgentPaySupabaseClient,
@@ -571,7 +571,7 @@ describe("createSupabaseAgentPayRepositories", () => {
       ownerAddress: "0x2222222222222222222222222222222222222222",
       accountAddress: "0x3333333333333333333333333333333333333333",
       homeChainId: 42220,
-      audience: "https://wallet.agentpay.site/mcp",
+      audience: "https://wallet.agentpay.site/celo/mcp",
       environment: "production",
       scopes: ["payment:review"],
       authEpoch: 0,
@@ -1000,7 +1000,7 @@ describe("createSupabaseAgentPayRepositories", () => {
       ownerAddress: reviewRow.owner_address,
       accountAddress: reviewRow.account_address,
       homeChainId: 42220,
-      audience: "https://wallet.agentpay.site/mcp",
+      audience: "https://wallet.agentpay.site/celo/mcp",
       environment: "staging",
       scopes: ["payment:review"],
       authEpoch: 0,
@@ -1148,6 +1148,10 @@ describe("createSupabaseAgentPayRepositories", () => {
       argumentsHash: "d".repeat(64),
       authorizationHash: `0x${"e".repeat(64)}`,
       environment: "staging" as const,
+      feeNetwork: "eip155:42220",
+      feeAsset: "0x0000000000000000000000000000000000000001",
+      feeAmount: "10000",
+      feePayTo: "0x0000000000000000000000000000000000000002",
       createdAt: "2026-07-13T00:00:00.000Z",
     };
 
@@ -1170,6 +1174,10 @@ describe("createSupabaseAgentPayRepositories", () => {
       arguments_hash: input.argumentsHash,
       authorization_hash: input.authorizationHash,
       environment: input.environment,
+      fee_network: input.feeNetwork,
+      fee_asset: input.feeAsset,
+      fee_amount: input.feeAmount,
+      fee_pay_to: input.feePayTo,
       status: "CLAIMED",
       fee_status: "ACCEPTED",
       execution_status: "NOT_QUEUED",

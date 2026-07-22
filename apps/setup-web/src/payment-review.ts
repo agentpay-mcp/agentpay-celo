@@ -7,13 +7,13 @@ import {
   isStrictLowSSignature,
   verifyPaymentAuthorizationSignature,
   type PaymentReviewRepository,
-} from "@agentpay-ai/mcp-server";
+} from "@agentpay-ai/mcp-server-celo";
 import {
   formatNativeAmount,
   paymentReviewSignatureSchema,
   paymentReviewTokenSchema,
   type PaymentIntentRecord,
-} from "@agentpay-ai/shared";
+} from "@agentpay-ai/shared-celo";
 import { TypedDataEncoder } from "ethers";
 import { z } from "zod";
 

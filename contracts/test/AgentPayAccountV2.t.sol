@@ -183,6 +183,8 @@ contract LegacySelectorCaller {
 contract ContractOwnerStub {}
 
 contract AgentPayAccountV2Test {
+    bytes4 private constant ERC1271_MAGIC_VALUE = 0x1626ba7e;
+    bytes4 private constant ERC1271_INVALID_VALUE = 0xffffffff;
     bytes32 private constant EIP712_DOMAIN_TYPEHASH =
         keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
     bytes32 private constant DIRECT_TYPEHASH = keccak256(
@@ -258,7 +260,7 @@ contract AgentPayAccountV2Test {
         new AgentPayAccountV2(owner, owner, new address[](0), new address[](0));
     }
 
-    function testConstructorRejectsContractOwnerUntilEIP1271IsSupported() public {
+    function testConstructorRejectsContractOwnerBecauseOwnerPolicyRemainsEoaOnly() public {
         ContractOwnerStub contractOwner = new ContractOwnerStub();
 
         vm.expectRevert();
@@ -295,6 +297,40 @@ contract AgentPayAccountV2Test {
 
         AgentPayAccountV2 otherAccount = new AgentPayAccountV2(owner, executor, new address[](0), new address[](0));
         assertTrue(account.domainSeparator() != otherAccount.domainSeparator());
+    }
+
+    function testErc1271AcceptsOnlyOwnerSignatureForArbitraryDigest() public {
+        bytes32 digest = keccak256("AgentPay ERC-8004 wallet proof");
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(OWNER_PRIVATE_KEY, digest);
+        bytes memory ownerSignature = abi.encodePacked(r, s, v);
+        (v, r, s) = vm.sign(OTHER_PRIVATE_KEY, digest);
+        bytes memory otherSignature = abi.encodePacked(r, s, v);
+
+        assertEq(bytes32(account.isValidSignature(digest, ownerSignature)), bytes32(ERC1271_MAGIC_VALUE));
+        assertEq(bytes32(account.isValidSignature(digest, otherSignature)), bytes32(ERC1271_INVALID_VALUE));
+        assertEq(bytes32(account.isValidSignature(digest, hex"01")), bytes32(ERC1271_INVALID_VALUE));
+    }
+
+    function testErc1271RejectsMalleableOwnerSignatureWithoutReverting() public {
+        bytes32 digest = keccak256("AgentPay ERC-8004 malleability check");
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(OWNER_PRIVATE_KEY, digest);
+        bytes32 malleableS = bytes32(SECP256K1_N - uint256(s));
+        uint8 malleableV = v == 27 ? 28 : 27;
+
+        assertEq(
+            bytes32(account.isValidSignature(digest, abi.encodePacked(r, malleableS, malleableV))),
+            bytes32(ERC1271_INVALID_VALUE)
+        );
+    }
+
+    function testErc1271WalletProofRemainsAvailableWhilePaymentExecutionIsPaused() public {
+        bytes32 digest = keccak256("AgentPay ERC-8004 paused wallet proof");
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(OWNER_PRIVATE_KEY, digest);
+
+        vm.prank(owner);
+        account.pause();
+
+        assertEq(bytes32(account.isValidSignature(digest, abi.encodePacked(r, s, v))), bytes32(ERC1271_MAGIC_VALUE));
     }
 
     function testValidOwnerSignedDirectPaymentExecutesOnce() public {

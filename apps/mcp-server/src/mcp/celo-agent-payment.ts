@@ -30,6 +30,7 @@ const addressPattern = /^0x[a-fA-F0-9]{40}$/;
 const caip2EvmNetworkPattern = /^eip155:\d+$/;
 
 export interface AgentPayMcpPaymentProcessor {
+  expectedPaymentRequirements: ExpectedX402PaymentRequirements;
   processHTTPRequest(context: HTTPRequestContext): Promise<
     | { type: "no-payment-required" }
     | {
@@ -46,6 +47,16 @@ export interface AgentPayMcpPaymentProcessor {
     declaredExtensions?: Record<string, unknown>,
     transportContext?: Parameters<x402HTTPResourceServer["processSettlement"]>[3],
   ): Promise<ProcessSettleResultResponse>;
+}
+
+export interface ExpectedX402PaymentRequirements {
+  scheme: string;
+  network: Network;
+  asset: string;
+  amount: string;
+  payTo: string;
+  maxTimeoutSeconds: number;
+  assetTransferMethod: string;
 }
 
 export interface AgentPayMcpPaymentConfig {
@@ -198,7 +209,12 @@ export async function createCeloAgentPaymentProcessor(
 
   await paymentServer.initialize();
 
-  return paymentServer;
+  return {
+    expectedPaymentRequirements: createCeloExpectedPaymentTerms(config),
+    processHTTPRequest: (context) => paymentServer.processHTTPRequest(context),
+    processSettlement: (paymentPayload, requirements, declaredExtensions, transportContext) =>
+      paymentServer.processSettlement(paymentPayload, requirements, declaredExtensions, transportContext),
+  };
 }
 
 function createFacilitatorClient(config: AgentPayMcpPaymentConfig) {
@@ -239,6 +255,24 @@ export function createCeloPaymentOption(config: AgentPayMcpPaymentConfig): Payme
       assetTransferMethod: config.assetTransferMethod,
       decimals: config.assetDecimals,
     }),
+  };
+}
+
+export function createCeloExpectedPaymentTerms(
+  config: AgentPayMcpPaymentConfig,
+): ExpectedX402PaymentRequirements {
+  if (!config.asset) {
+    throw new Error("Celo x402 seller configuration requires an ERC-20 asset.");
+  }
+
+  return {
+    scheme: "exact",
+    network: config.network,
+    asset: config.asset,
+    amount: assetPriceToAtomic(config.price, config.assetDecimals),
+    payTo: config.payTo,
+    maxTimeoutSeconds: config.maxTimeoutSeconds,
+    assetTransferMethod: config.assetTransferMethod,
   };
 }
 

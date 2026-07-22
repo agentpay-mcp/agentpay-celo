@@ -18,10 +18,10 @@ The submission name and product brand are both **AgentPay**. The main website re
 Install AgentPay in a project:
 
 ```bash
-npx @agentpay-ai/agentpay install
+npx @agentpay-ai/agentpay-celo install
 ```
 
-The installer detects the target runtime and connects normal chat usage to the authenticated consumer MCP endpoint at `https://wallet.agentpay.site/mcp`. The separate paid public execution endpoint is `https://mcp.agentpay.site/mcp` and is used only after Review & Sign. Normal users do not need Supabase, RPC, executor, deployer, or bytecode config. Return to the agent chat and ask:
+The installer detects the target runtime and connects normal chat usage to the authenticated consumer MCP endpoint at `https://wallet.agentpay.site/celo/mcp`. The separate paid public execution endpoint is `https://mcp.agentpay.site/celo/mcp` and is used only after Review & Sign. Normal users do not need Supabase, RPC, executor, deployer, or bytecode config. Return to the agent chat and ask:
 
 ```text
 Create an AgentPay wallet for me on Celo Sepolia.
@@ -30,7 +30,7 @@ Create an AgentPay wallet for me on Celo Sepolia.
 For an operator-managed deployment, use:
 
 ```bash
-npx @agentpay-ai/agentpay install --self-hosted
+npx @agentpay-ai/agentpay-celo install --self-hosted
 ```
 
 Self-hosting generates local config and the pinned AgentPay smart-account bytecode.
@@ -70,7 +70,7 @@ Self-hosted operators expose the public MCP endpoint with `agentpay serve-http`.
 - `apps/mcp-server/` — MCP tools, OAuth/SIWE boundary, Celo RPC adapters, x402, LI.FI, Supabase repositories, and production readiness gates.
 - `apps/setup-web/` — setup and Review & Sign web flow.
 - `packages/shared/` — Celo chain/token metadata, schemas, typed authorization, invoice, and x402 helpers.
-- `packages/cli/` — the `@agentpay-ai/agentpay` installer and runtime templates.
+- `packages/cli/` — the `@agentpay-ai/agentpay-celo` installer and runtime templates.
 - `packages/skill/` — source for the installed `skills/agentpay/SKILL.md` instructions.
 - `contracts/` — non-upgradeable owner-signed smart accounts and Foundry tests.
 - `supabase/migrations/` — tenant, payment, audit, OAuth, canary, and Celo boundary migrations.
@@ -79,9 +79,39 @@ Self-hosted operators expose the public MCP endpoint with `agentpay serve-http`.
 
 Core staging/local values are `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CELO_RPC_URL`, and `EXECUTOR_PRIVATE_KEY`. Network switching uses `CELO_MAINNET_RPC_URL` and `CELO_SEPOLIA_RPC_URL`. Setup also needs `SETUP_DEPLOYER_PRIVATE_KEY` and the V2 account bytecode.
 
-Celo mainnet production is isolated and readiness-gated. Use `AGENTPAY_ENVIRONMENT=production`, `AGENTPAY_HOME_CHAIN_ID=42220`, `AGENTPAY_ACCOUNT_VERSION=v2`, `SUPABASE_PRODUCTION_URL`, `SUPABASE_PRODUCTION_SERVICE_ROLE_KEY`, `CELO_MAINNET_RPC_URL=https://forno.celo.org`, and the tracked Celo mainnet manifest. Generic or Sepolia aliases are rejected by the production surface.
+Celo mainnet production is isolated and readiness-gated. Use `AGENTPAY_ENVIRONMENT=production`, `AGENTPAY_HOME_CHAIN_ID=42220`, `AGENTPAY_ACCOUNT_VERSION=v2`, `SUPABASE_PRODUCTION_URL`, `SUPABASE_PRODUCTION_SERVICE_ROLE_KEY`, a dedicated HTTPS `CELO_MAINNET_RPC_URL`, `CELO_MAINNET_RPC_FALLBACK_URL=https://forno.celo.org`, and the tracked Celo mainnet manifest. Generic or Sepolia aliases are rejected by the production surface.
+
+Direct AgentPay transactions append the assigned `CELO_ATTRIBUTION_TAG` as an ERC-8021 calldata suffix before signing and durable outbox hashing. Production accepts only the assigned lowercase `celo_` code; it does not derive or invent one. The x402 facilitator owns its settlement transaction, so AgentPay does not tag x402 facilitator settlements or create mirror transactions for attribution. Verify the suffix on the first live Celo transaction before enabling the public mode.
 
 The bounded first canary is canonical Celo USDC only, one lifecycle, no route target, and no silent expansion to USDT or USDm. Broader token and route support is enabled only after the canary gates pass.
+
+## ERC-8004 Agent Identity
+
+AgentPay publishes its registration document at `https://wallet.agentpay.site/.well-known/agent-registration.json` only when a real Celo mainnet AgentPay wallet is configured. The document advertises the live website, authenticated MCP endpoint, x402 support, and wallet address. It intentionally makes no reputation or validation claim before those trust signals exist.
+
+The Celo mainnet Identity Registry is pinned to `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`. Registry preparation never reads a private key or broadcasts a transaction:
+
+```bash
+# 1. Deploy AgentPayAccountV2 and expose the metadata endpoint first.
+npm run erc8004 -- register
+
+# 2. After registration confirms, set AGENTPAY_ERC8004_AGENT_ID only in the
+#    operator environment and prepare the short-lived wallet proof.
+npm run erc8004 -- wallet-proof
+
+# 3. Sign the returned EIP-712 payload with the immutable account owner,
+#    then provide the exact deadline and signature. Submit the printed
+#    transaction from the ERC-8004 NFT owner.
+npm run erc8004 -- set-wallet
+
+# 4. Only after setAgentWallet confirms, restart the MCP surface with the
+#    real AGENTPAY_ERC8004_AGENT_ID so startup verification can pass.
+
+# 5. Read the registry and public metadata back before submission.
+npm run erc8004 -- verify
+```
+
+`AgentPayAccountV2` implements ERC-1271 solely as a view-only owner-signature validator, allowing ERC-8004 to verify the smart account as `agentWallet`. It does not add an unsigned execution path or turn an identity proof into payment authorization. Each generated registry transaction must still be reviewed and submitted by the owner.
 
 Contract commands:
 

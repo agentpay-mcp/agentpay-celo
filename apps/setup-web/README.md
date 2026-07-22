@@ -1,4 +1,4 @@
-# @agentpay-ai/setup-web
+# @agentpay-ai/setup-web-celo
 
 AgentPay setup-web serves wallet setup and tenant-scoped Review & Sign pages for Celo. It deploys the non-upgradeable `AgentPayAccountV2`, verifies the setup owner signature, and stores only the payment review handoff needed to return a verified EIP-712 signature.
 

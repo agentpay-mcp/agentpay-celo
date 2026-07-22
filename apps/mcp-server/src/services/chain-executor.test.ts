@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { AbiCoder, keccak256 } from "ethers";
+import { AbiCoder, FallbackProvider, JsonRpcProvider, keccak256 } from "ethers";
+import { fromDataSuffix } from "@celo/attribution-tags";
+import { appendCeloAttributionTag } from "@agentpay-ai/shared-celo";
 
 import {
   agentPayAccountInterface,
   agentPayAccountV2Interface,
   assertExecutorRpcChain,
   createEthersNativeBalanceReader,
+  createProviderRouter,
   createEthersAuthorizedPaymentExecutor,
   createEthersRouteTargetAllowanceChecker,
   createEthersRoutePaymentExecutor,
@@ -15,6 +18,8 @@ import {
   createEthersTokenBalanceReader,
   erc20Interface,
   resolveRpcUrlForChain,
+  resolveRpcUrlsForChain,
+  resolveWriteRpcUrlForChain,
 } from "./chain-executor.ts";
 import { createInMemoryInvoiceExecutionOutboxStore } from "./paid-execution-outbox.ts";
 import type { PaidExecutionLifecycleStore } from "./paid-execution-lifecycle.ts";
@@ -33,7 +38,67 @@ const directAuthorization = {
   purposeHash: `0x${"44".repeat(32)}`,
 };
 
+describe("Celo RPC provider routing", () => {
+  it("keeps signed transaction writes on the primary RPC while reads may fail over", () => {
+    const router = createProviderRouter({
+      rpcUrl: "https://rpc.primary.example/celo",
+      rpcUrls: { 42220: "https://rpc.primary.example/celo" },
+      rpcFallbackUrls: { 42220: "https://forno.celo.org" },
+      executorPrivateKey: `0x${"1".repeat(64)}`,
+    });
+
+    const readProvider = router.getProvider(42220);
+    const writeProvider = router.getWriteProvider(42220);
+
+    assert.equal(readProvider instanceof FallbackProvider, true);
+    assert.equal(writeProvider instanceof JsonRpcProvider, true);
+    assert.equal((writeProvider as JsonRpcProvider)._getConnection().url, "https://rpc.primary.example/celo");
+  });
+});
+
 describe("createEthersRoutePaymentExecutor", () => {
+  it("attributes direct and contract-call calldata exactly once before submission", async () => {
+    const submittedData: string[] = [];
+    const executor = createEthersRoutePaymentExecutor({
+      transformCalldata(calldata) {
+        return appendCeloAttributionTag(calldata, "celo_agentpay");
+      },
+      async sendTransaction(transaction) {
+        submittedData.push(transaction.data);
+        return { hash: `0x${"ab".repeat(32)}` };
+      },
+    });
+
+    await executor.executeDirectPayment({
+      accountAddress: "0x3333333333333333333333333333333333333333",
+      chainId: 42220,
+      tokenAddress: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+      tokenSymbol: "USDC",
+      recipientAddress: "0x1111111111111111111111111111111111111111",
+      amount: "1",
+      nonce: "1",
+      deadline: "2026-08-02T00:00:00.000Z",
+    });
+    await executor.executeContractCall({
+      accountAddress: "0x3333333333333333333333333333333333333333",
+      chainId: 42220,
+      target: "0x8888888888888888888888888888888888888888",
+      tokenAddress: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+      tokenSymbol: "USDC",
+      maxTokenSpend: "1",
+      callData: "0xaabbccdd",
+      callDataHash: "0x40eed0325a12c6c6af8db2ea05450bfe21d6343b6fe955bff65045b67d9d5fe6",
+      maxNativeFee: "0",
+      nonce: "2",
+      deadline: "2026-08-02T00:00:00.000Z",
+    });
+
+    assert.equal(submittedData.length, 2);
+    for (const data of submittedData) {
+      assert.deepEqual(fromDataSuffix(data as `0x${string}`)?.codes, ["celo_agentpay"]);
+    }
+  });
+
   it("encodes executeRoutePayment and submits it to the stored account address", async () => {
     const transactions: Array<{ to: string; data: string; value: bigint; chainId?: number }> = [];
     const executor = createEthersRoutePaymentExecutor({
@@ -247,7 +312,11 @@ describe("createEthersAuthorizedPaymentExecutor", () => {
     const outbox = createInMemoryInvoiceExecutionOutboxStore(() => "fence_1");
     const lifecycle = { markExecutionBroadcasted: async () => undefined } as unknown as PaidExecutionLifecycleStore;
     const executorAddress = "0x9999999999999999999999999999999999999999";
+    let signedData = "";
     const executor = createEthersAuthorizedPaymentExecutor({
+      transformCalldata(calldata) {
+        return appendCeloAttributionTag(calldata, "celo_agentpay");
+      },
       async sendTransaction() {
         throw new Error("durable path must not call Wallet.sendTransaction");
       },
@@ -255,6 +324,7 @@ describe("createEthersAuthorizedPaymentExecutor", () => {
         const record = await outbox.get("outbox_lifecycle_1");
         assert.equal(record?.status, "QUEUED");
         events.push("prepared");
+        signedData = transaction.data;
         const rawTransaction = "0xdeadbeef";
         return {
           rawTransaction,
@@ -299,6 +369,8 @@ describe("createEthersAuthorizedPaymentExecutor", () => {
     const record = await outbox.get("outbox_lifecycle_1");
     assert.equal(record?.status, "BROADCASTED");
     assert.equal(record?.transactionHash, keccak256("0xdeadbeef"));
+    assert.deepEqual(fromDataSuffix(signedData as `0x${string}`)?.codes, ["celo_agentpay"]);
+    assert.equal(record?.calldataHash, keccak256(signedData));
     assert.ok(record?.rawTransaction);
   });
 
@@ -532,6 +604,34 @@ describe("resolveRpcUrlForChain", () => {
     assert.equal(resolveRpcUrlForChain(config, 1952), "https://testnet.xlayer.example");
     assert.equal(resolveRpcUrlForChain(config, 8453), "https://fallback.xlayer.example");
     assert.equal(resolveRpcUrlForChain({ rpcUrl: "https://fallback.xlayer.example" }, 1952), "https://fallback.xlayer.example");
+  });
+
+  it("returns an ordered, de-duplicated Celo primary and Forno fallback set", () => {
+    const config = {
+      rpcUrl: "https://rpc.provider.example/celo",
+      rpcUrls: { 42220: "https://rpc.provider.example/celo" },
+      rpcFallbackUrls: { 42220: "https://forno.celo.org" },
+    };
+
+    assert.deepEqual(resolveRpcUrlsForChain(config, 42220), [
+      "https://rpc.provider.example/celo",
+      "https://forno.celo.org",
+    ]);
+    assert.deepEqual(
+      resolveRpcUrlsForChain({ ...config, rpcFallbackUrls: { 42220: config.rpcUrl } }, 42220),
+      ["https://rpc.provider.example/celo"],
+    );
+  });
+
+  it("keeps Celo fallback RPCs off transaction write paths", () => {
+    const config = {
+      rpcUrl: "https://rpc.provider.example/celo",
+      rpcUrls: { 42220: "https://rpc.provider.example/celo" },
+      rpcFallbackUrls: { 42220: "https://forno.celo.org" },
+    };
+
+    assert.equal(resolveWriteRpcUrlForChain(config, 42220), "https://rpc.provider.example/celo");
+    assert.equal(resolveWriteRpcUrlForChain(config, 11142220), "https://rpc.provider.example/celo");
   });
 });
 

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
-import { executePaymentInputSchema, type ExecutePaymentInput } from "@agentpay-ai/shared";
+import { executePaymentInputSchema, type ExecutePaymentInput } from "@agentpay-ai/shared-celo";
 
 const PAYMENT_IDENTIFIER = "payment-identifier";
 const PAYMENT_IDENTIFIER_PATTERN = /^[A-Za-z0-9_-]{16,128}$/;
@@ -57,6 +57,10 @@ export interface PaidExecutionLifecycleRecord {
   challengeId?: string;
   environment?: "staging" | "production";
   payer?: string;
+  feeNetwork?: string;
+  feeAsset?: string;
+  feeAmount?: string;
+  feePayTo?: string;
   status: PaidExecutionLifecycleStatus;
   feeStatus: PaidExecutionFeeStatus;
   executionStatus: PaidExecutionExecutionStatus;
@@ -89,6 +93,10 @@ export interface PaidExecutionLifecycleClaimInput {
   challengeId?: string;
   environment?: "staging" | "production";
   payer?: string;
+  feeNetwork: string;
+  feeAsset: string;
+  feeAmount: string;
+  feePayTo: string;
   createdAt: string;
 }
 
@@ -211,6 +219,10 @@ export function createPaidExecutionLifecycleClaimInput(input: {
     ...(input.challengeId ? { challengeId: input.challengeId } : {}),
     ...(input.environment ? { environment: input.environment } : {}),
     ...(input.payer ? { payer: input.payer } : {}),
+    feeNetwork: input.paymentRequirements.network,
+    feeAsset: input.paymentRequirements.asset,
+    feeAmount: input.paymentRequirements.amount,
+    feePayTo: input.paymentRequirements.payTo,
     createdAt: input.createdAt,
   };
 }
@@ -320,6 +332,10 @@ export function createInMemoryPaidExecutionLifecycleStore(
         ...(input.challengeId ? { challengeId: input.challengeId } : {}),
         ...(input.environment ? { environment: input.environment } : {}),
         ...(input.payer ? { payer: input.payer } : {}),
+        feeNetwork: input.feeNetwork,
+        feeAsset: input.feeAsset,
+        feeAmount: input.feeAmount,
+        feePayTo: input.feePayTo,
         status: "CLAIMED",
         feeStatus: "ACCEPTED",
         executionStatus: "NOT_QUEUED",
@@ -485,6 +501,10 @@ function hasSameBinding(existing: PaidExecutionLifecycleRecord, input: PaidExecu
     existing.argumentsHash === input.argumentsHash
     && (existing.authorizationHash ?? null) === (input.authorizationHash ?? null)
     && (existing.challengeId ?? null) === (input.challengeId ?? null)
+    && existing.feeNetwork === input.feeNetwork
+    && existing.feeAsset?.toLowerCase() === input.feeAsset.toLowerCase()
+    && existing.feeAmount === input.feeAmount
+    && existing.feePayTo?.toLowerCase() === input.feePayTo.toLowerCase()
   );
 }
 

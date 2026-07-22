@@ -15,7 +15,7 @@ import {
 
 const paymentRequirements: PaymentRequirements = {
   scheme: "exact",
-  network: "eip155:196",
+  network: "eip155:42220",
   asset: "0x0000000000000000000000000000000000000001",
   amount: "10000",
   payTo: "0x0000000000000000000000000000000000000002",
@@ -107,6 +107,21 @@ describe("paid execution lifecycle bindings", () => {
       paymentRequirements,
       createdAt: "2026-07-13T00:00:00.000Z",
     });
+
+    assert.deepEqual(
+      {
+        feeNetwork: input.feeNetwork,
+        feeAsset: input.feeAsset,
+        feeAmount: input.feeAmount,
+        feePayTo: input.feePayTo,
+      },
+      {
+        feeNetwork: "eip155:42220",
+        feeAsset: "0x0000000000000000000000000000000000000001",
+        feeAmount: "10000",
+        feePayTo: "0x0000000000000000000000000000000000000002",
+      },
+    );
 
     const claims = await Promise.all(Array.from({ length: 20 }, () => store.claim(input)));
     assert.equal(claims.filter((claim) => claim.disposition === "CLAIMED").length, 1);

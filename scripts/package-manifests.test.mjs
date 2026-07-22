@@ -13,11 +13,11 @@ const publishablePackages = [
 ];
 const publishScope = "@agentpay-ai";
 const expectedPackageNames = new Map([
-  ["packages/skill", "@agentpay-ai/skill"],
-  ["packages/shared", "@agentpay-ai/shared"],
-  ["apps/mcp-server", "@agentpay-ai/mcp-server"],
-  ["apps/setup-web", "@agentpay-ai/setup-web"],
-  ["packages/cli", "@agentpay-ai/agentpay"],
+  ["packages/skill", "@agentpay-ai/skill-celo"],
+  ["packages/shared", "@agentpay-ai/shared-celo"],
+  ["apps/mcp-server", "@agentpay-ai/mcp-server-celo"],
+  ["apps/setup-web", "@agentpay-ai/setup-web-celo"],
+  ["packages/cli", "@agentpay-ai/agentpay-celo"],
 ]);
 
 async function readPackageJson(packageDir) {
@@ -38,6 +38,8 @@ describe("publishable AgentPay package manifests", () => {
     const rootManifest = await readPackageJson(".");
 
     assert.match(rootManifest.scripts?.["contracts:deploy:celo"] ?? "", /CELO_MAINNET_RPC_URL/);
+    assert.match(rootManifest.scripts?.["contracts:deploy:celo"] ?? "", /DeployAgentPayCeloAccountFactoryV1/);
+    assert.doesNotMatch(rootManifest.scripts?.["contracts:deploy:celo"] ?? "", /DeployAgentPayAccountV2/);
     assert.match(rootManifest.scripts?.["contracts:deploy:celo:sepolia"] ?? "", /CELO_SEPOLIA_RPC_URL/);
     assert.equal(rootManifest.scripts?.["contracts:deploy:xlayer"], undefined);
   });
@@ -94,21 +96,22 @@ describe("publishable AgentPay package manifests", () => {
     const rootManifest = await readPackageJson(".");
     const skillManifest = await readPackageJson("packages/skill");
     const expectedDependencies = {
-      "@agentpay-ai/shared": {
+      "@agentpay-ai/shared-celo": {
         "@noble/hashes": rootManifest.dependencies["@noble/hashes"],
         zod: rootManifest.dependencies.zod,
       },
-      "@agentpay-ai/mcp-server": {
+      "@agentpay-ai/mcp-server-celo": {
         "@x402/core": rootManifest.dependencies["@x402/core"],
         "@x402/evm": rootManifest.dependencies["@x402/evm"],
         "@supabase/supabase-js": rootManifest.dependencies["@supabase/supabase-js"],
         ethers: rootManifest.dependencies.ethers,
       },
-      "@agentpay-ai/setup-web": {
+      "@agentpay-ai/setup-web-celo": {
         ethers: rootManifest.dependencies.ethers,
+        zod: rootManifest.dependencies.zod,
       },
-      "@agentpay-ai/agentpay": {
-        "@agentpay-ai/skill": skillManifest.version,
+      "@agentpay-ai/agentpay-celo": {
+        "@agentpay-ai/skill-celo": skillManifest.version,
       },
     };
 
@@ -170,7 +173,7 @@ describe("publishable AgentPay package manifests", () => {
       const template = JSON.parse(await readFile(templatePath, "utf8"));
 
       assert.deepEqual(template.mcpServers.agentpay, {
-        url: "https://wallet.agentpay.site/mcp",
+        url: "https://wallet.agentpay.site/celo/mcp",
       });
     }
   });
@@ -181,8 +184,30 @@ describe("publishable AgentPay package manifests", () => {
     assert.ok(manifest.files.includes("src/mcp/http.ts"));
     assert.ok(manifest.files.includes("src/mcp/celo-agent-payment.ts"));
     assert.ok(manifest.files.includes("src/runtime/paid-execution-canary-ledger.ts"));
+    assert.ok(manifest.files.includes("src/services/production-setup.ts"));
+    assert.ok(manifest.files.includes("src/services/production-setup-supabase.ts"));
     await access("apps/mcp-server/src/mcp/http.ts");
     await access("apps/mcp-server/src/mcp/celo-agent-payment.ts");
     await access("apps/mcp-server/src/runtime/paid-execution-canary-ledger.ts");
+    await access("apps/mcp-server/src/services/production-setup.ts");
+    await access("apps/mcp-server/src/services/production-setup-supabase.ts");
+  });
+
+  it("publishes the isolated Celo onboarding web and deployment worker entrypoints", async () => {
+    const manifest = await readPackageJson("apps/setup-web");
+    const requiredFiles = [
+      "src/onboarding/start.ts",
+      "src/onboarding/runtime.ts",
+      "src/worker/start.ts",
+      "src/worker/runtime.ts",
+    ];
+
+    for (const file of requiredFiles) {
+      assert.ok(manifest.files.includes(file), `apps/setup-web must publish ${file}`);
+      await access(join("apps/setup-web", file));
+    }
+
+    assert.equal(manifest.scripts?.["start:onboarding"], "tsx src/onboarding/start.ts");
+    assert.equal(manifest.scripts?.["start:setup-worker"], "tsx src/worker/start.ts");
   });
 });

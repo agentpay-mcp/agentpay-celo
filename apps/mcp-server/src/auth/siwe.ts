@@ -5,10 +5,10 @@ import {
   sessionScopeSchema,
   type CeloHomeChainId,
   type SessionScope,
-} from "@agentpay-ai/shared";
+} from "@agentpay-ai/shared-celo";
 
 export const AGENTPAY_SIWE_DOMAIN = "wallet.agentpay.site";
-export const AGENTPAY_CONSUMER_URI = "https://wallet.agentpay.site/mcp";
+export const AGENTPAY_CONSUMER_URI = "https://wallet.agentpay.site/celo/mcp";
 export const SIWE_CHALLENGE_TTL_SECONDS = 5 * 60;
 export const SERVICE_SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
 export const OAUTH_SERVICE_SESSION_TTL_SECONDS = 60 * 60;

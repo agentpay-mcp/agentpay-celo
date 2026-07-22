@@ -11,7 +11,7 @@ import {
   type PaymentIntentRecord,
   type RetryX402RequestInput,
   retryX402RequestInputSchema,
-} from "@agentpay-ai/shared";
+} from "@agentpay-ai/shared-celo";
 
 export interface ParseX402PaymentRequiredOutput extends ParsedX402PaymentRequired {
   status: "PARSED";
@@ -53,6 +53,7 @@ export interface CreatePinnedX402HttpClientOptions {
 
 export interface RetryX402RequestOutput {
   status: "RESOURCE_FETCHED";
+  proofScheme: "agentpay-receipt";
   paymentIntentId: string;
   requestUrl: string;
   method: string;
@@ -97,6 +98,7 @@ export async function retryX402Request(
 
   return {
     status: "RESOURCE_FETCHED",
+    proofScheme: "agentpay-receipt",
     paymentIntentId: paymentIntent.id,
     requestUrl,
     method: input.request.method,
