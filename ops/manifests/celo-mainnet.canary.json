@@ -30,7 +30,7 @@
     "rawTransactionEncryptionKeyEnvRef": "AGENTPAY_RAW_TX_ENCRYPTION_KEY"
   },
   "release": {
-    "commit": "309ab3e320708dbbed1031ae5920c5f0369df01c",
+    "commit": "16b284cb9b307f918cea68ce12e7b7d955b60b5c",
     "packageLockSha256": "91b857d17fb7c7e65d312135595275b72887c0b73510f935de9a8a26d09fe68e",
     "creationBytecodeKeccak256": "0x2ede9e46a03a9b3d8e8dc322905443b0fedfabd324c54c73fe1c748f10d0152a",
     "runtimeBytecodeKeccak256": "0xa1a627f011931eba8d6aeb3f16290f3d91f0f777a8fabc635f00882c457c38a3",

@@ -279,7 +279,7 @@ describe("Celo mainnet activation manifest", () => {
       recipientAddress: "0x9CEef6d89915628331C25F48360FfE97CD71B3EE",
     });
     assert.equal(first.manifest.database.projectRef, "hxnrqujmyltkumfipkuk");
-    assert.equal(first.manifest.release.commit, "309ab3e320708dbbed1031ae5920c5f0369df01c");
+    assert.equal(first.manifest.release.commit, "16b284cb9b307f918cea68ce12e7b7d955b60b5c");
     assert.equal(first.manifest.domains.publicOrigin, "https://mcp.agentpay.site");
   });
 
