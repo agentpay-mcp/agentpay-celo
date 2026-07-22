@@ -1,0 +1,111 @@
+{
+  "schemaVersion": 1,
+  "chainId": 42220,
+  "network": "celo-mainnet",
+  "asset": {
+    "symbol": "USDC",
+    "address": "0xceba9300f2b948710d2653dd7b07f33a8b32118c",
+    "decimals": 6
+  },
+  "sponsor": "0x72936d76e840ddbb18976705779b6e24834b4d93",
+  "smartAccount": "0xa495eaff5809efb32beb6ecd18a48e9469acf121",
+  "payer": "0x98802c2d45284f2bca06bf3d6bdb41221a7cc5cd",
+  "executor": "0x645d39b3943d27cfe53184a446f551a69a4b1fde",
+  "swap": {
+    "aggregator": "LI.FI",
+    "tool": "sushiswap",
+    "quoteId": "0c1cb706-ff52-4b9f-b026-1f8c957085f4:0",
+    "target": "0x1231deb6f5749ef6ce6943a275a1d3e7486f4eae",
+    "sourceAsset": {
+      "symbol": "CELO",
+      "address": "0x471ece3750da237f93b8e339c536989b8978a438",
+      "decimals": 18
+    },
+    "amountInAtomic": "2000000000000000000",
+    "amountInCelo": "2.0",
+    "slippageBps": 50,
+    "quotedOutAtomic": "146140",
+    "quotedOutUsdc": "0.14614",
+    "minOutAtomic": "145409",
+    "minOutUsdc": "0.145409",
+    "receivedAtomic": "146142",
+    "receivedUsdc": "0.146142",
+    "remainingAllowanceCelo": "0.0"
+  },
+  "distributions": [
+    {
+      "role": "smart_account",
+      "recipient": "0xa495eaff5809efb32beb6ecd18a48e9469acf121",
+      "amountAtomic": "50000",
+      "amountUsdc": "0.05",
+      "txHash": "0x2974b5d8859b6d32cacb9ed81cf44b486efb64473dbbb6ad579e431071d6acba"
+    },
+    {
+      "role": "canary_payer",
+      "recipient": "0x98802c2d45284f2bca06bf3d6bdb41221a7cc5cd",
+      "amountAtomic": "50000",
+      "amountUsdc": "0.05",
+      "txHash": "0x37ff2daad876e1369dbd1140077980a341140d654f7eb888255ebffc17961b43"
+    }
+  ],
+  "transactions": [
+    {
+      "role": "exact_approval",
+      "txHash": "0x310c3cc1c6e92f60cbcd94236e2d8d15bdc2b4f3cae255675c789b68c42c104a",
+      "blockNumber": 72857036,
+      "status": 1,
+      "nonce": 2,
+      "gasUsed": "51590",
+      "effectiveGasPriceWei": "202500000000",
+      "feeWei": "10446975000000000",
+      "confirmedAt": "2026-07-22T22:03:14.000Z"
+    },
+    {
+      "role": "swap",
+      "txHash": "0x7aa1b48259a7d847a9090eab55dac5e9004fb67743477331e748bb64e4c3dbc5",
+      "blockNumber": 72857108,
+      "status": 1,
+      "nonce": 3,
+      "gasUsed": "294977",
+      "effectiveGasPriceWei": "202500000000",
+      "feeWei": "59732842500000000",
+      "confirmedAt": "2026-07-22T22:04:26.000Z"
+    },
+    {
+      "role": "smart_account_funding",
+      "txHash": "0x2974b5d8859b6d32cacb9ed81cf44b486efb64473dbbb6ad579e431071d6acba",
+      "blockNumber": 72857169,
+      "status": 1,
+      "nonce": 4,
+      "gasUsed": "62147",
+      "effectiveGasPriceWei": "202500000000",
+      "feeWei": "12584767500000000",
+      "confirmedAt": "2026-07-22T22:05:27.000Z"
+    },
+    {
+      "role": "canary_payer_funding",
+      "txHash": "0x37ff2daad876e1369dbd1140077980a341140d654f7eb888255ebffc17961b43",
+      "blockNumber": 72857175,
+      "status": 1,
+      "nonce": 5,
+      "gasUsed": "62147",
+      "effectiveGasPriceWei": "202500000000",
+      "feeWei": "12584767500000000",
+      "confirmedAt": "2026-07-22T22:05:33.000Z"
+    }
+  ],
+  "accounting": {
+    "sponsorCeloBefore": "3.9451708175",
+    "swapInputCelo": "2.0",
+    "totalGasCelo": "0.0953493525",
+    "sponsorCeloAfter": "1.849821465"
+  },
+  "finalBalances": {
+    "sponsorCelo": "1.849821465",
+    "sponsorUsdc": "0.046142",
+    "smartAccountUsdc": "0.05",
+    "payerUsdc": "0.05",
+    "executorCelo": "2.0"
+  },
+  "verifiedAt": "2026-07-22T22:06:53.254Z"
+}
