@@ -119,6 +119,7 @@ const exactPaymentConfig = {
   syncSettle: true,
   facilitatorUrl: "https://api.x402.celo.org",
   facilitatorApiKey: "test-celo-x402-api-key",
+  resourceUrl: "https://mcp.agentpay.site/celo/mcp",
 };
 
 describe("production readiness gate", () => {
@@ -373,5 +374,22 @@ describe("production readiness gate", () => {
 
     assert.equal(result.ready, false);
     assert.match(result.errors.join("; "), /facilitator URL must be https:\/\/api\.x402\.celo\.org/i);
+  });
+
+  it("rejects paid MCP resource URL drift from the external Celo route", async () => {
+    const result = await evaluateProductionReadiness({
+      env: productionEnv(),
+      manifest: readyManifest(),
+      identity: identityFor(readyManifest()),
+      accountVerification: { valid: true, errors: [], checks: {} },
+      paymentConfig: {
+        ...exactPaymentConfig,
+        resourceUrl: "https://mcp.agentpay.site/mcp",
+      },
+      onboardingReady: true,
+    });
+
+    assert.equal(result.ready, false);
+    assert.match(result.errors.join("; "), /resource URL must be https:\/\/mcp\.agentpay\.site\/celo\/mcp/i);
   });
 });

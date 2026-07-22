@@ -28,6 +28,7 @@ describe("parseAgentPayMcpPaymentEnv", () => {
         AGENTPAY_A2MCP_PAYMENT_PAY_TO: "0x0000000000000000000000000000000000000002",
         AGENTPAY_A2MCP_PAYMENT_PRICE: "$0.01",
         AGENTPAY_A2MCP_PAYMENT_NETWORK: "eip155:42220",
+        AGENTPAY_PAID_MCP_URL: "https://mcp.agentpay.site/celo/mcp",
         AGENTPAY_A2MCP_PAYMENT_MAX_TIMEOUT_SECONDS: "120",
         AGENTPAY_A2MCP_PAYMENT_ASSET_DECIMALS: "6",
         AGENTPAY_A2MCP_PAYMENT_SYNC_SETTLE: "yes",
@@ -43,6 +44,7 @@ describe("parseAgentPayMcpPaymentEnv", () => {
         assetDecimals: 6,
         facilitatorUrl: "https://api.x402.celo.org",
         facilitatorApiKey: "test-celo-x402-api-key",
+        resourceUrl: "https://mcp.agentpay.site/celo/mcp",
         syncSettle: true,
         assetTransferMethod: "eip3009",
       },
@@ -54,6 +56,7 @@ describe("parseAgentPayMcpPaymentEnv", () => {
       AGENTPAY_A2MCP_PAYMENT_ENABLED: "true",
       AGENTPAY_A2MCP_PAYMENT_PAY_TO: "0x0000000000000000000000000000000000000002",
       AGENTPAY_A2MCP_PAYMENT_PRICE: "$0.01",
+      AGENTPAY_PAID_MCP_URL: "https://mcp.agentpay.site/celo/mcp",
       AGENTPAY_CELO_X402_API_KEY: "test-celo-x402-api-key",
       CELO_ATTRIBUTION_TAG: "celo_agentpay",
     });
@@ -94,6 +97,7 @@ describe("parseAgentPayMcpPaymentEnv", () => {
           AGENTPAY_A2MCP_PAYMENT_PRICE: "$0.01",
           AGENTPAY_A2MCP_PAYMENT_SYNC_SETTLE: "tru",
           AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL: "https://facilitator.example.com",
+          AGENTPAY_PAID_MCP_URL: "https://mcp.agentpay.site/celo/mcp",
         }),
       /AGENTPAY_A2MCP_PAYMENT_SYNC_SETTLE/i,
     );
@@ -113,6 +117,28 @@ describe("parseAgentPayMcpPaymentEnv", () => {
     );
   });
 
+  it("requires an explicit public HTTPS paid MCP resource URL", () => {
+    const base = {
+      AGENTPAY_A2MCP_PAYMENT_ENABLED: "true",
+      AGENTPAY_A2MCP_PAYMENT_PAY_TO: "0x0000000000000000000000000000000000000002",
+      AGENTPAY_A2MCP_PAYMENT_PRICE: "$0.01",
+      AGENTPAY_CELO_X402_API_KEY: "test-celo-x402-api-key",
+    };
+
+    assert.throws(() => parseAgentPayMcpPaymentEnv(base), /AGENTPAY_PAID_MCP_URL/i);
+    for (const resourceUrl of [
+      "http://127.0.0.1/mcp",
+      "https://192.168.1.10/mcp",
+      "https://localhost./mcp",
+      "https://[::ffff:127.0.0.1]/mcp",
+    ]) {
+      assert.throws(
+        () => parseAgentPayMcpPaymentEnv({ ...base, AGENTPAY_PAID_MCP_URL: resourceUrl }),
+        /AGENTPAY_PAID_MCP_URL/i,
+      );
+    }
+  });
+
   it("uses the Celo Sepolia facilitator and canonical test USDC", () => {
     assert.deepEqual(
       parseAgentPayMcpPaymentEnv({
@@ -120,6 +146,7 @@ describe("parseAgentPayMcpPaymentEnv", () => {
         AGENTPAY_A2MCP_PAYMENT_PAY_TO: "0x0000000000000000000000000000000000000002",
         AGENTPAY_A2MCP_PAYMENT_PRICE: "$0.01",
         AGENTPAY_A2MCP_PAYMENT_NETWORK: "eip155:11142220",
+        AGENTPAY_PAID_MCP_URL: "https://mcp-sepolia.agentpay.site/celo/mcp",
         AGENTPAY_CELO_X402_API_KEY: "x402_test_dummy-api-key",
       }),
       {
@@ -132,6 +159,7 @@ describe("parseAgentPayMcpPaymentEnv", () => {
         assetDecimals: 6,
         facilitatorUrl: "https://api.x402.sepolia.celo.org",
         facilitatorApiKey: "x402_test_dummy-api-key",
+        resourceUrl: "https://mcp-sepolia.agentpay.site/celo/mcp",
         assetTransferMethod: "eip3009",
       },
     );
@@ -142,6 +170,7 @@ describe("parseAgentPayMcpPaymentEnv", () => {
       AGENTPAY_A2MCP_PAYMENT_ENABLED: "true",
       AGENTPAY_A2MCP_PAYMENT_PAY_TO: "0x0000000000000000000000000000000000000002",
       AGENTPAY_A2MCP_PAYMENT_PRICE: "$0.02",
+      AGENTPAY_PAID_MCP_URL: "https://mcp.agentpay.site/celo/mcp",
       AGENTPAY_CELO_X402_API_KEY: "test-celo-x402-api-key",
     });
 
@@ -230,14 +259,17 @@ describe("parseAgentPayMcpPaymentEnv", () => {
         syncSettle: true,
         assetTransferMethod: "eip3009" as const,
         assetDecimals: 6,
+        resourceUrl: "https://mcp.agentpay.site/celo/mcp",
       };
-      const processor = await createCeloAgentPaymentProcessor(config, { mcpPath: "/celo/mcp" });
+      const processor = await createCeloAgentPaymentProcessor(config, { mcpPath: "/mcp" });
       const challenge = await processor.processHTTPRequest(createRequestContext());
       if (challenge.type !== "payment-error") throw new Error("Expected the seller to issue a payment challenge.");
       const challengeHeader = Object.entries(challenge.response.headers)
         .find(([name]) => name.toLowerCase() === "payment-required")?.[1];
       assert.ok(challengeHeader);
-      const requirements = decodePaymentRequiredHeader(challengeHeader).accepts[0]!;
+      const paymentRequired = decodePaymentRequiredHeader(challengeHeader);
+      assert.equal(paymentRequired.resource.url, "https://mcp.agentpay.site/celo/mcp");
+      const requirements = paymentRequired.accepts[0]!;
       const paymentPayload: PaymentPayload = {
         x402Version: 2,
         accepted: requirements,
@@ -280,15 +312,15 @@ describe("parseAgentPayMcpPaymentEnv", () => {
 function createRequestContext(paymentHeader?: string): HTTPRequestContext {
   return {
     method: "POST",
-    path: "/celo/mcp",
+    path: "/mcp",
     ...(paymentHeader ? { paymentHeader } : {}),
     adapter: {
       getHeader(name) {
         return name.toLowerCase() === "payment-signature" ? paymentHeader : undefined;
       },
       getMethod: () => "POST",
-      getPath: () => "/celo/mcp",
-      getUrl: () => "https://mcp.agentpay.site/celo/mcp",
+      getPath: () => "/mcp",
+      getUrl: () => "https://mcp.agentpay.site/mcp",
       getAcceptHeader: () => "application/json",
       getUserAgent: () => "agentpay-integration-test",
     },

@@ -100,6 +100,7 @@ export interface ProductionPaymentConfigSnapshot {
   syncSettle?: boolean;
   facilitatorUrl?: string;
   facilitatorApiKey?: string;
+  resourceUrl: string;
 }
 
 export const MAINNET_X402_FACILITATOR_URL = "https://api.x402.celo.org";
@@ -517,6 +518,9 @@ function validatePaymentConfig(config: ProductionPaymentConfigSnapshot | undefin
   if (!ADDRESS_PATTERN.test(config.payTo) || config.payTo.toLowerCase() === ZERO_ADDRESS) errors.push("payment config: payTo must be a non-zero EVM address");
   if (config.facilitatorUrl !== MAINNET_X402_FACILITATOR_URL) {
     errors.push(`payment config: facilitator URL must be ${MAINNET_X402_FACILITATOR_URL}`);
+  }
+  if (config.resourceUrl !== MAINNET_PAID_MCP_URL) {
+    errors.push(`payment config: resource URL must be ${MAINNET_PAID_MCP_URL}`);
   }
   if (!config.facilitatorApiKey) {
     errors.push("payment config: AGENTPAY_CELO_X402_API_KEY is required for the hosted Celo facilitator");
