@@ -125,6 +125,24 @@ describe("createReviewOnlyWebHandler", () => {
     const setupApi = await handler(new Request("https://review.agentpay.site/api/setup-intents/setup_123"));
     assert.equal(setupApi.status, 404);
   });
+
+  it("serves an isolated Celo review namespace without falling back to root routes", async () => {
+    const handler = createReviewOnlyWebHandler(createDependencies(), { basePath: "/celo" });
+
+    const review = await handler(new Request("https://wallet.agentpay.site/celo/review"));
+    const html = await review.text();
+    assert.equal(review.status, 200);
+    assert.match(html, /const reviewApiPath = "\/celo\/api\/payment-review"/);
+    assert.equal(
+      (await handler(new Request("https://wallet.agentpay.site/celo/api/payment-review"))).status,
+      404,
+    );
+    assert.equal((await handler(new Request("https://wallet.agentpay.site/review"))).status, 404);
+    assert.equal(
+      (await handler(new Request("https://wallet.agentpay.site/api/payment-review"))).status,
+      404,
+    );
+  });
 });
 
 describe("startSetupWebServer", () => {
@@ -203,6 +221,18 @@ describe("startReviewOnlyWebServer", () => {
       assert.equal(new URL(server.url).pathname, "/review");
       assert.equal((await fetch(new URL("/review", server.url))).status, 200);
       assert.equal((await fetch(new URL("/setup", server.url))).status, 404);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("reports and serves a namespaced Celo review URL", async () => {
+    const server = await startReviewOnlyWebServer(createDependencies(), { port: 0, basePath: "/celo" });
+
+    try {
+      assert.equal(new URL(server.url).pathname, "/celo/review");
+      assert.equal((await fetch(new URL("/celo/review", server.url))).status, 200);
+      assert.equal((await fetch(new URL("/review", server.url))).status, 404);
     } finally {
       await server.close();
     }

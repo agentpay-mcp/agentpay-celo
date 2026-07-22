@@ -9,6 +9,7 @@ import {
   agentPayAccountV2Interface,
   assertExecutorRpcChain,
   createEthersNativeBalanceReader,
+  createEthersRuntimeAdapters,
   createProviderRouter,
   createEthersAuthorizedPaymentExecutor,
   createEthersRouteTargetAllowanceChecker,
@@ -53,6 +54,29 @@ describe("Celo RPC provider routing", () => {
     assert.equal(readProvider instanceof FallbackProvider, true);
     assert.equal(writeProvider instanceof JsonRpcProvider, true);
     assert.equal((writeProvider as JsonRpcProvider)._getConnection().url, "https://rpc.primary.example/celo");
+  });
+});
+
+describe("createEthersRuntimeAdapters", () => {
+  it("creates read adapters but fail-closed executors when no signing key is configured", async () => {
+    const adapters = createEthersRuntimeAdapters({
+      rpcUrl: "https://rpc.primary.example/celo",
+      rpcUrls: { 42220: "https://rpc.primary.example/celo" },
+    });
+
+    await assert.rejects(
+      () => adapters.executor.executeDirectPayment({
+        accountAddress: "0x3333333333333333333333333333333333333333",
+        chainId: 42220,
+        tokenAddress: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+        tokenSymbol: "USDC",
+        recipientAddress: "0x1111111111111111111111111111111111111111",
+        amount: "1",
+        nonce: "1",
+        deadline: "2026-08-02T00:00:00.000Z",
+      }),
+      /signing is unavailable/i,
+    );
   });
 });
 

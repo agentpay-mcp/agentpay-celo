@@ -90,7 +90,7 @@ export interface EthersRuntimeConfig {
   rpcUrl: string;
   rpcUrls?: Partial<Record<number, string>>;
   rpcFallbackUrls?: Partial<Record<number, string>>;
-  executorPrivateKey: string;
+  executorPrivateKey?: string;
   celoAttributionTag?: string;
 }
 
@@ -402,11 +402,13 @@ export function createEthersRuntimeAdapters(config: EthersRuntimeConfig): {
       ? (calldata) => appendCeloAttributionTag(calldata, config.celoAttributionTag!)
       : undefined,
     async sendTransaction(transaction, chainId) {
+      if (!config.executorPrivateKey) throw new Error("Executor signing is unavailable in this runtime.");
       const provider = await providerRouter.getCheckedWriteProvider(chainId);
       const wallet = new Wallet(config.executorPrivateKey, provider);
       return wallet.sendTransaction(transaction);
     },
     async prepareAndSignTransaction(transaction, chainId) {
+      if (!config.executorPrivateKey) throw new Error("Executor signing is unavailable in this runtime.");
       const provider = await providerRouter.getCheckedWriteProvider(chainId);
       const wallet = new Wallet(config.executorPrivateKey, provider);
       const populated = await wallet.populateTransaction({ ...transaction, chainId });
@@ -427,6 +429,7 @@ export function createEthersRuntimeAdapters(config: EthersRuntimeConfig): {
       };
     },
     async broadcastSignedTransaction(rawTransaction, chainId) {
+      if (!config.executorPrivateKey) throw new Error("Executor signing is unavailable in this runtime.");
       const provider = await providerRouter.getCheckedWriteProvider(chainId);
       const transaction = await provider.broadcastTransaction(rawTransaction);
       return { hash: transaction.hash };

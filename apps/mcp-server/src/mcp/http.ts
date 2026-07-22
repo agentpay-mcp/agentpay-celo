@@ -21,6 +21,12 @@ import { AGENTPAY_CONSUMER_URI } from "../auth/siwe.ts";
 import { authenticateServiceSession } from "../auth/session.ts";
 import { createConsumerSessionApi, type ConsumerSessionApi } from "../auth/consumer-session-api.ts";
 import { createConsumerOAuthApi, type ConsumerOAuthApi } from "../auth/oauth-api.ts";
+import {
+  AGENTPAY_OAUTH_AUTHORIZATION_SERVER_METADATA_PATH,
+  AGENTPAY_OAUTH_ISSUER,
+  AGENTPAY_OAUTH_PROTECTED_RESOURCE_METADATA_PATH,
+  AGENTPAY_OAUTH_ROUTE_PREFIX,
+} from "../auth/oauth.ts";
 import { createSupabaseAgentPayRepositoriesFromConfig } from "../services/supabase.ts";
 import {
   evaluateProductionReadiness,
@@ -95,9 +101,9 @@ const defaultPort = 3001;
 const defaultMcpPath = "/mcp";
 const defaultHealthPath = "/healthz";
 const freeJsonRpcMethods = new Set(["initialize", "notifications/initialized", "ping", "tools/list"]);
-const consumerAuthorizationServer = "https://wallet.agentpay.site";
-const consumerResourceMetadataPath = "/.well-known/oauth-protected-resource/mcp";
-const consumerAuthorizationMetadataPath = "/.well-known/oauth-authorization-server";
+const consumerResourceMetadataPath = AGENTPAY_OAUTH_PROTECTED_RESOURCE_METADATA_PATH;
+const consumerAuthorizationMetadataPath = AGENTPAY_OAUTH_AUTHORIZATION_SERVER_METADATA_PATH;
+const consumerResourceMetadataUrl = new URL(consumerResourceMetadataPath, AGENTPAY_OAUTH_ISSUER).toString();
 const agentRegistrationMetadataPath = "/.well-known/agent-registration.json";
 
 export interface AgentPayHttpServer {
@@ -599,7 +605,7 @@ async function handleAgentPayHttpRequest(options: HandleAgentPayHttpRequestOptio
       writeJson(options.response, 401, { error: "Consumer authentication required." }, {
         "cache-control": "no-store",
         "www-authenticate": options.oauthApi
-          ? `Bearer resource_metadata="${consumerAuthorizationServer}${consumerResourceMetadataPath}"`
+          ? `Bearer resource_metadata="${consumerResourceMetadataUrl}"`
           : "Bearer",
       });
       return;
@@ -1781,7 +1787,7 @@ function isLoopbackAddress(address: string): boolean {
 function isConsumerOAuthPath(pathname: string): boolean {
   return pathname === consumerResourceMetadataPath ||
     pathname === consumerAuthorizationMetadataPath ||
-    pathname.startsWith("/oauth/");
+    pathname.startsWith(`${AGENTPAY_OAUTH_ROUTE_PREFIX}/`);
 }
 
 function createPaymentRequestContext(request: IncomingMessage, path: string): HTTPRequestContext {

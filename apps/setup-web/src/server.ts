@@ -61,18 +61,28 @@ export function createSetupWebHandler(dependencies: SetupWebDependencies) {
  * setup or deployment routes. The deployment operator can host this handler
  * separately while the setup UI remains disabled in production.
  */
-export function createReviewOnlyWebHandler(dependencies: PaymentReviewWebDependencies) {
+export interface ReviewOnlyWebRouteOptions {
+  basePath?: string;
+}
+
+export function createReviewOnlyWebHandler(
+  dependencies: PaymentReviewWebDependencies,
+  options: ReviewOnlyWebRouteOptions = {},
+) {
   assertReviewOnlyDependencies(dependencies);
   const paymentReviewHandler = createPaymentReviewHandler(dependencies);
+  const basePath = normalizeReviewBasePath(options.basePath);
+  const reviewPath = `${basePath}/review`;
+  const apiPath = `${basePath}/api/payment-review`;
 
   return async (request: Request): Promise<Response> => {
     const url = new URL(request.url);
 
-    if (url.pathname === "/review" && request.method === "GET") {
-      return createPaymentReviewPageResponse();
+    if (url.pathname === reviewPath && request.method === "GET") {
+      return createPaymentReviewPageResponse(apiPath);
     }
 
-    if (url.pathname === "/api/payment-review") {
+    if (url.pathname === apiPath) {
       return paymentReviewHandler(request);
     }
 
@@ -184,15 +194,16 @@ export async function startSetupWebServer(
 
 export async function startReviewOnlyWebServer(
   dependencies: PaymentReviewWebDependencies,
-  options: { port?: number; hostname?: string } = {},
+  options: { port?: number; hostname?: string; basePath?: string } = {},
 ): Promise<{ close(): Promise<void>; url: string }> {
-  return startWebServer(createReviewOnlyWebHandler(dependencies), options, "/review");
+  const basePath = normalizeReviewBasePath(options.basePath);
+  return startWebServer(createReviewOnlyWebHandler(dependencies, { basePath }), options, `${basePath}/review`);
 }
 
 async function startWebServer(
   handler: (request: Request) => Promise<Response>,
   options: { port?: number; hostname?: string },
-  urlPath: "/setup" | "/review" = "/setup",
+  urlPath = "/setup",
 ): Promise<{ close(): Promise<void>; url: string }> {
   const server = createServer(async (request, response) => {
     try {
@@ -247,6 +258,14 @@ function assertReviewOnlyDependencies(dependencies: PaymentReviewWebDependencies
   if (!dependencies.reviewTokenSecret || dependencies.reviewTokenSecret.length < 32) {
     throw new Error("Review-only web server requires a dedicated review token secret.");
   }
+}
+
+function normalizeReviewBasePath(basePath: string | undefined): string {
+  if (basePath === undefined || basePath === "") return "";
+  if (!/^\/[a-z0-9_-]+(?:\/[a-z0-9_-]+)*$/i.test(basePath)) {
+    throw new Error("Review-only base path is invalid.");
+  }
+  return basePath;
 }
 
 function resolveReviewClientId(request: IncomingMessage): string {

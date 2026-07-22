@@ -124,7 +124,6 @@ const REQUIRED_PRODUCTION_ENV_NAMES = [
   "CELO_MAINNET_RPC_URL",
   "CELO_MAINNET_RPC_FALLBACK_URL",
   "CELO_ATTRIBUTION_TAG",
-  "EXECUTOR_PRIVATE_KEY",
   "AGENTPAY_SESSION_HASH_KEY",
   "AGENTPAY_REVIEW_TOKEN_SECRET",
   "AGENTPAY_PUBLIC_SETUP_URL",
@@ -157,7 +156,8 @@ export interface AgentPayRuntimeConfig {
   celoRpcUrls?: Partial<Record<number, string>>;
   celoRpcFallbackUrls?: Partial<Record<number, string>>;
   celoAttributionTag?: string;
-  executorPrivateKey: string;
+  executorPrivateKey?: string;
+  executorAddress?: string;
   lifiApiKey?: string;
   lifiBaseUrl?: string;
   x402BazaarFacilitatorUrl?: string;
@@ -276,7 +276,13 @@ export function parseAgentPayEnv(env: NodeJS.ProcessEnv | Record<string, string 
   const celoRpcFallbackUrls = parseCeloRpcFallbackUrls(normalized);
   const stableTokenOverrides = parseStableTokenOverrides(normalized);
   const isProduction = normalized.AGENTPAY_ENVIRONMENT === "production";
-  const requiredEnvNames = isProduction ? REQUIRED_PRODUCTION_ENV_NAMES : REQUIRED_LOCAL_ENV_NAMES;
+  const isProductionConsumer = isProduction && normalized.AGENTPAY_HTTP_MODE === "consumer";
+  const requiredEnvNames = isProduction
+    ? [
+        ...REQUIRED_PRODUCTION_ENV_NAMES,
+        isProductionConsumer ? "AGENTPAY_EXECUTOR_ADDRESS" : "EXECUTOR_PRIVATE_KEY",
+      ]
+    : REQUIRED_LOCAL_ENV_NAMES;
   const supabaseUrl = isProduction ? normalized.SUPABASE_PRODUCTION_URL : normalized.SUPABASE_URL;
   const serviceRoleKey = isProduction ? normalized.SUPABASE_PRODUCTION_SERVICE_ROLE_KEY : normalized.SUPABASE_SERVICE_ROLE_KEY;
   const celoRpcUrl = isProduction ? normalized.CELO_MAINNET_RPC_URL : normalized.CELO_RPC_URL;
@@ -305,6 +311,16 @@ export function parseAgentPayEnv(env: NodeJS.ProcessEnv | Record<string, string 
     normalized.EXECUTOR_PRIVATE_KEY && !privateKeyPattern.test(normalized.EXECUTOR_PRIVATE_KEY)
       ? "EXECUTOR_PRIVATE_KEY"
       : undefined,
+    normalized.AGENTPAY_EXECUTOR_ADDRESS && !addressPattern.test(normalized.AGENTPAY_EXECUTOR_ADDRESS)
+      ? "AGENTPAY_EXECUTOR_ADDRESS"
+      : undefined,
+    normalized.EXECUTOR_PRIVATE_KEY &&
+    normalized.AGENTPAY_EXECUTOR_ADDRESS &&
+    privateKeyPattern.test(normalized.EXECUTOR_PRIVATE_KEY) &&
+    addressPattern.test(normalized.AGENTPAY_EXECUTOR_ADDRESS) &&
+    new Wallet(normalized.EXECUTOR_PRIVATE_KEY).address.toLowerCase() !== normalized.AGENTPAY_EXECUTOR_ADDRESS.toLowerCase()
+      ? "executor identity"
+      : undefined,
     normalized.LIFI_BASE_URL && !isHttpUrl(normalized.LIFI_BASE_URL) ? "LIFI_BASE_URL" : undefined,
     normalized.X402_BAZAAR_FACILITATOR_URL && !isHttpUrl(normalized.X402_BAZAAR_FACILITATOR_URL)
       ? "X402_BAZAAR_FACILITATOR_URL"
@@ -323,6 +339,9 @@ export function parseAgentPayEnv(env: NodeJS.ProcessEnv | Record<string, string 
       : undefined,
     normalized.AGENTPAY_REVIEW_TOKEN_SECRET && normalized.AGENTPAY_REVIEW_TOKEN_SECRET.length < 32
       ? "AGENTPAY_REVIEW_TOKEN_SECRET"
+      : undefined,
+    isProductionConsumer && (normalized.EXECUTOR_PRIVATE_KEY || normalized.AGENTPAY_RAW_TX_ENCRYPTION_KEY)
+      ? "consumer secret isolation"
       : undefined,
     isProduction && normalized.AGENTPAY_ACCOUNT_VERSION !== "v2" ? "AGENTPAY_ACCOUNT_VERSION" : undefined,
     isProduction && normalized.AGENTPAY_HOME_CHAIN_ID !== "42220" ? "AGENTPAY_HOME_CHAIN_ID" : undefined,
@@ -347,6 +366,7 @@ export function parseAgentPayEnv(env: NodeJS.ProcessEnv | Record<string, string 
     celoRpcFallbackUrls,
     celoAttributionTag: normalized.CELO_ATTRIBUTION_TAG,
     executorPrivateKey: normalized.EXECUTOR_PRIVATE_KEY,
+    executorAddress: normalized.AGENTPAY_EXECUTOR_ADDRESS,
     lifiApiKey: normalized.LIFI_API_KEY,
     lifiBaseUrl: normalized.LIFI_BASE_URL,
     x402BazaarFacilitatorUrl: normalized.X402_BAZAAR_FACILITATOR_URL,
@@ -400,7 +420,11 @@ export function createAgentPayRuntime(config: AgentPayRuntimeConfig, options: Ag
       fetch: options.x402BazaarFetch ?? options.fetch,
     }) as X402BazaarDiscoveryProviderConfig,
   );
-  const executorAddress = options.executorAddress ?? new Wallet(config.executorPrivateKey).address;
+  const executorAddress = options.executorAddress ?? config.executorAddress ??
+    (config.executorPrivateKey ? new Wallet(config.executorPrivateKey).address : undefined);
+  if (!executorAddress) {
+    throw new Error("AgentPay runtime requires a pinned executor address or signing key.");
+  }
   const executionPolicy = config.environment
     ? {
         environment: config.environment,

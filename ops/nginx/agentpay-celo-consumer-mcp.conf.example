@@ -1,0 +1,77 @@
+# Include inside the existing wallet.agentpay.site TLS server. These exact
+# namespaced routes keep the existing AgentPay/OKX MCP and OAuth endpoints
+# untouched while forwarding Celo consumer traffic to its isolated listener.
+
+location = /celo/mcp {
+    client_max_body_size 64k;
+    client_body_timeout 15s;
+    proxy_pass http://127.0.0.1:3102/mcp;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_read_timeout 300s;
+    proxy_send_timeout 300s;
+}
+
+location = /.well-known/oauth-protected-resource/celo/mcp {
+    limit_except GET { deny all; }
+    proxy_pass http://127.0.0.1:3102;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Connection "";
+}
+
+location = /.well-known/oauth-authorization-server/celo {
+    limit_except GET { deny all; }
+    proxy_pass http://127.0.0.1:3102;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Connection "";
+}
+
+location ^~ /celo/oauth/ {
+    client_max_body_size 16k;
+    client_body_timeout 15s;
+    proxy_pass http://127.0.0.1:3102;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_read_timeout 30s;
+    proxy_send_timeout 30s;
+}
+
+location = /celo/healthz {
+    limit_except GET { deny all; }
+    proxy_pass http://127.0.0.1:3102/healthz;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Connection "";
+}
+
+location = /celo/readyz {
+    limit_except GET { deny all; }
+    proxy_pass http://127.0.0.1:3102/readyz;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Connection "";
+}
