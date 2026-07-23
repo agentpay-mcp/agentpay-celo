@@ -37,6 +37,10 @@ describe("README", () => {
     assert.match(contents, /ERC-1271/);
     assert.match(contents, /npm run erc8004 -- verify/);
     assert.match(contents, /CELO_MAINNET_RPC_FALLBACK_URL/);
+    assert.match(contents, /npm run canary:mainnet/);
+    assert.match(contents, /--execute-mainnet-canary/);
+    assert.match(contents, /application\/json, text\/event-stream/);
+    assert.match(contents, /Never pass signatures or private keys as command-line arguments/i);
     assert.doesNotMatch(contents, /docs\//);
     assert.doesNotMatch(contents, /AGENTPAY_CONCEPT/);
     assert.doesNotMatch(contents, /product blueprint/i);

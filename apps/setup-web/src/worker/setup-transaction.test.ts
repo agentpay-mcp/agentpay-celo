@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { fromDataSuffix } from "@celo/attribution-tags";
 import { Interface, Transaction, TypedDataEncoder, keccak256 } from "ethers";
 
 import type { SetupWorkerClaim } from "@agentpay-ai/mcp-server-celo";
@@ -23,6 +24,7 @@ const executor = "0x2222222222222222222222222222222222222222";
 const factory = "0x3333333333333333333333333333333333333333";
 const deployer = "0x4444444444444444444444444444444444444444";
 const predicted = "0x5555555555555555555555555555555555555555";
+const attributionTag = "celo_agentpay";
 const hash = (digit: string) => `0x${digit.repeat(64)}`;
 
 function claim(): SetupWorkerClaim {
@@ -73,6 +75,7 @@ describe("setup deployment transaction", () => {
       gasLimit: 1_000_000n,
       maxFeePerGas: 2_000_000_000n,
       maxPriorityFeePerGas: 1_000_000_000n,
+      attributionTag,
       limits: {
         maxGasLimit: 2_000_000n,
         maxFeePerGas: 3_000_000_000n,
@@ -84,6 +87,10 @@ describe("setup deployment transaction", () => {
       { chainId: transaction.chainId, to: transaction.to, from: transaction.from, value: transaction.value,
         nonce: transaction.nonce, type: transaction.type, gasLimit: transaction.gasLimit },
       { chainId: 42220n, to: factory, from: deployer, value: 0n, nonce: 7, type: 2, gasLimit: 1_000_000n },
+    );
+    assert.deepEqual(
+      fromDataSuffix(transaction.data as `0x${string}`),
+      { codes: [attributionTag], schemaId: 0 },
     );
 
     const factoryInterface = new Interface([
@@ -102,6 +109,7 @@ describe("setup deployment transaction", () => {
     const base = {
       claim: claim(), deployerAddress: deployer, deployerNonce: 7n, gasLimit: 1_000_000n,
       maxFeePerGas: 2_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n,
+      attributionTag,
       limits: { maxGasLimit: 2_000_000n, maxFeePerGas: 3_000_000_000n,
         maxPriorityFeePerGas: 2_000_000_000n, maxNativeCostWei: 3_000_000_000_000_000n },
     } as const;
@@ -158,6 +166,7 @@ describe("setup deployment transaction", () => {
     const base = {
       claim: claim(), deployerAddress: deployer, deployerNonce: 7n, gasLimit: 1_000_000n,
       maxFeePerGas: 2_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n,
+      attributionTag,
       limits: { maxGasLimit: 2_000_000n, maxFeePerGas: 3_000_000_000n,
         maxPriorityFeePerGas: 2_000_000_000n, maxNativeCostWei: 3_000_000_000_000_000n },
     } as const;
@@ -173,6 +182,7 @@ describe("setup deployment transaction", () => {
     assert.throws(() => buildSetupDeploymentTransaction({ ...base, gasLimit: 0n }), /SETUP_GAS_CAP/);
     assert.throws(() => buildSetupDeploymentTransaction({ ...base, maxFeePerGas: 0n }), /SETUP_FEE_CAP/);
     assert.throws(() => buildSetupDeploymentTransaction({ ...base, maxPriorityFeePerGas: 0n }), /SETUP_PRIORITY_FEE_CAP/);
+    assert.throws(() => buildSetupDeploymentTransaction({ ...base, attributionTag: "agentpay" }), /Celo attribution tag/i);
     assert.throws(() => buildSetupDeploymentTransaction({
       ...base, maxFeePerGas: 1n, maxPriorityFeePerGas: 2n,
     }), /SETUP_FEE_INVALID/);

@@ -1,8 +1,18 @@
 import { Interface, JsonRpcProvider, TypedDataEncoder, keccak256, toUtf8Bytes } from "ethers";
 
+import {
+  MAINNET_SETUP_ROUTE_ALLOWLIST_HASH,
+  MAINNET_SETUP_TOKEN_ALLOWLIST_HASH,
+  MAINNET_WALLET_SETUP_TYPES,
+  mainnetWalletSetupMessageSchema,
+  type MainnetWalletSetupMessage,
+} from "@agentpay-ai/shared-celo";
+
 import { MAINNET_CHAIN_ID, MAINNET_USDC_ADDRESS } from "../runtime/production-readiness.ts";
 export const MAINNET_ACCOUNT_CREATION_BYTECODE_HASH =
   "0x2ede9e46a03a9b3d8e8dc322905443b0fedfabd324c54c73fe1c748f10d0152a";
+export const MAINNET_ACCOUNT_FACTORY_RUNTIME_CODE_HASH =
+  "0xacf158d0950bc04fe98bb801a45eced68265b81b22d820e735a69037d2dd2254";
 
 const accountInterface = new Interface([
   "function owner() view returns (address)",
@@ -12,6 +22,11 @@ const accountInterface = new Interface([
   "function allowedTokens(address token) view returns (bool)",
 ]);
 const erc20Interface = new Interface(["function decimals() view returns (uint8)"]);
+const factoryInterface = new Interface([
+  "function deployAccount((string setupIntentId,bytes32 deploymentNonce,address owner,address executor,uint256 homeChainId,string environment,uint256 deadline,address factory,bytes32 factoryRuntimeCodeHash,bytes32 deploymentSalt,address predictedAccount,bytes32 accountCreationCodeHash,bytes32 accountRuntimeCodeHash,address token,bytes32 tokenAllowlistHash,bytes32 routeAllowlistHash,bytes32 manifestSha256) authorization,bytes ownerSignature)",
+  "event AccountDeployed(address indexed owner,address indexed account,bytes32 indexed salt,bytes32 authorizationHash)",
+  "event AccountReused(address indexed owner,address indexed account,bytes32 indexed authorizationHash)",
+]);
 const tokenAllowedTopic = keccak256(toUtf8Bytes("TokenAllowedUpdated(address,bool)"));
 const routeTargetAllowedTopic = keccak256(toUtf8Bytes("RouteTargetAllowedUpdated(address,bool)"));
 
@@ -104,8 +119,20 @@ export interface MainnetAccountVerificationReader {
     status: number | bigint | null;
     blockNumber: number;
     contractAddress: string | null;
+    transactionHash?: string;
+    logs?: ReadonlyArray<{
+      address: string;
+      topics: readonly string[];
+      data: string;
+    }>;
   } | null>;
   getTransactionData(txHash: string): Promise<string | null>;
+  getTransaction?(txHash: string): Promise<{
+    to: string | null;
+    from: string;
+    data: string;
+  } | null>;
+  getCodeHash?(address: string): Promise<string | null>;
   getAccountState(accountAddress: string): Promise<{
     owner: string;
     executor: string;
@@ -127,6 +154,7 @@ export interface MainnetAccountVerificationExpected {
   runtimeBytecodeHash: string;
   ownerAddress: string;
   executorAddress: string;
+  deployerAddress: string;
   tokenAddress?: string;
   tokenCodeHash: string;
   tokenDecimals: number;
@@ -147,6 +175,167 @@ export interface MainnetAccountVerificationResult {
     tokenCodeHash?: string;
     tokenDecimals?: number;
   };
+}
+
+interface FactoryDeploymentReceipt {
+  readonly transactionHash?: string;
+  readonly logs?: ReadonlyArray<{
+    readonly address: string;
+    readonly topics: readonly string[];
+    readonly data: string;
+  }>;
+}
+
+type EthersTypedDataTypes = Record<string, Array<{ name: string; type: string }>>;
+
+function addressEquals(actual: string, expected: string): boolean {
+  return actual.toLowerCase() === expected.toLowerCase();
+}
+
+function decodeFactoryAuthorization(data: string): Readonly<{
+  authorization: MainnetWalletSetupMessage;
+  ownerSignature: string;
+}> {
+  const decoded = factoryInterface.decodeFunctionData("deployAccount", data);
+  const raw = decoded[0] as Record<string, unknown>;
+  const authorization = mainnetWalletSetupMessageSchema.parse({
+    setupIntentId: String(raw.setupIntentId),
+    deploymentNonce: String(raw.deploymentNonce),
+    owner: String(raw.owner),
+    executor: String(raw.executor),
+    homeChainId: Number(raw.homeChainId),
+    environment: String(raw.environment),
+    deadline: String(raw.deadline),
+    factory: String(raw.factory),
+    factoryRuntimeCodeHash: String(raw.factoryRuntimeCodeHash),
+    deploymentSalt: String(raw.deploymentSalt),
+    predictedAccount: String(raw.predictedAccount),
+    accountCreationCodeHash: String(raw.accountCreationCodeHash),
+    accountRuntimeCodeHash: String(raw.accountRuntimeCodeHash),
+    token: String(raw.token),
+    tokenAllowlistHash: String(raw.tokenAllowlistHash),
+    routeAllowlistHash: String(raw.routeAllowlistHash),
+    manifestSha256: String(raw.manifestSha256),
+  });
+  const ownerSignature = String(decoded[1]);
+  if (!/^0x[0-9a-fA-F]{130}$/.test(ownerSignature)) {
+    throw new Error("Factory deployment owner signature is malformed.");
+  }
+  return Object.freeze({ authorization: Object.freeze({ ...authorization }), ownerSignature });
+}
+
+function assertFactoryAuthorization(
+  authorization: MainnetWalletSetupMessage,
+  transactionFactory: string,
+  expected: MainnetAccountVerificationExpected,
+): void {
+  const bindings: ReadonlyArray<readonly [string, string, string]> = [
+    ["owner", authorization.owner, expected.ownerAddress],
+    ["executor", authorization.executor, expected.executorAddress],
+    ["factory", authorization.factory, transactionFactory],
+    ["factory runtime code hash", authorization.factoryRuntimeCodeHash, MAINNET_ACCOUNT_FACTORY_RUNTIME_CODE_HASH],
+    ["predicted account", authorization.predictedAccount, expected.accountAddress],
+    ["account creation code hash", authorization.accountCreationCodeHash, expected.creationBytecodeHash],
+    ["account runtime code hash", authorization.accountRuntimeCodeHash, expected.runtimeBytecodeHash],
+    ["token", authorization.token, MAINNET_USDC_ADDRESS],
+    ["token allowlist hash", authorization.tokenAllowlistHash, MAINNET_SETUP_TOKEN_ALLOWLIST_HASH],
+    ["route allowlist hash", authorization.routeAllowlistHash, MAINNET_SETUP_ROUTE_ALLOWLIST_HASH],
+  ];
+  for (const [name, actual, wanted] of bindings) {
+    if (!addressEquals(actual, wanted)) {
+      throw new Error(`Factory deployment authorization ${name} does not match the production manifest policy.`);
+    }
+  }
+  if (authorization.homeChainId !== MAINNET_CHAIN_ID || authorization.environment !== "production") {
+    throw new Error("Factory deployment authorization chain or environment does not match production.");
+  }
+  if ([authorization.owner, authorization.executor, authorization.factory]
+    .some((actor) => addressEquals(actor, expected.deployerAddress))) {
+    throw new Error("Factory deployment authorization actors must be distinct from the manifest deployer.");
+  }
+}
+
+function assertFactoryReceiptEvent(
+  receipt: FactoryDeploymentReceipt,
+  factoryAddress: string,
+  authorization: MainnetWalletSetupMessage,
+  authorizationHash: string,
+): void {
+  if (!Array.isArray(receipt.logs)) {
+    throw new Error("Factory deployment AccountDeployed event proof is missing from the receipt.");
+  }
+  const deployedEvents: Array<ReturnType<Interface["parseLog"]>> = [];
+  for (const log of receipt.logs) {
+    if (!log || typeof log.address !== "string" || !Array.isArray(log.topics) || typeof log.data !== "string") {
+      throw new Error("Factory deployment event is malformed.");
+    }
+    if (!addressEquals(log.address, factoryAddress)) continue;
+    let parsed: ReturnType<Interface["parseLog"]>;
+    try {
+      parsed = factoryInterface.parseLog({ topics: [...log.topics], data: log.data });
+    } catch {
+      const topic = log.topics[0]?.toLowerCase();
+      if (topic === factoryInterface.getEvent("AccountDeployed")!.topicHash.toLowerCase()
+        || topic === factoryInterface.getEvent("AccountReused")!.topicHash.toLowerCase()) {
+        throw new Error("Factory deployment event is malformed.");
+      }
+      continue;
+    }
+    if (!parsed) continue;
+    if (parsed.name === "AccountReused") {
+      throw new Error("Factory deployment receipt contains AccountReused instead of a new AccountDeployed proof.");
+    }
+    if (parsed.name === "AccountDeployed") deployedEvents.push(parsed);
+  }
+  if (deployedEvents.length !== 1) {
+    throw new Error("Factory deployment receipt must contain exactly one AccountDeployed event.");
+  }
+  const event = deployedEvents[0]!;
+  if (!addressEquals(String(event.args.owner), authorization.owner)
+    || !addressEquals(String(event.args.account), authorization.predictedAccount)
+    || !addressEquals(String(event.args.salt), authorization.deploymentSalt)
+    || !addressEquals(String(event.args.authorizationHash), authorizationHash)) {
+    throw new Error("Factory deployment AccountDeployed event does not match the authorization hash and account bindings.");
+  }
+}
+
+async function verifyFactoryDeploymentProof(
+  reader: MainnetAccountVerificationReader,
+  receipt: FactoryDeploymentReceipt,
+  expected: MainnetAccountVerificationExpected,
+): Promise<void> {
+  if (!reader.getTransaction || !reader.getCodeHash) {
+    throw new Error("Mainnet deployment receipt does not point to the manifest account and factory deployment proof is unavailable.");
+  }
+  if (!receipt.transactionHash || !addressEquals(receipt.transactionHash, expected.deploymentTxHash)) {
+    throw new Error("Factory deployment receipt transaction hash does not match the manifest.");
+  }
+  const transaction = await reader.getTransaction(expected.deploymentTxHash);
+  if (!transaction) throw new Error("Factory deployment transaction is missing.");
+  if (!transaction.to) throw new Error("Factory deployment transaction target is missing.");
+  if (!addressEquals(transaction.from, expected.deployerAddress)) {
+    throw new Error("Factory deployment transaction sender does not match the manifest deployer.");
+  }
+  const factoryRuntimeCodeHash = await reader.getCodeHash(transaction.to);
+  if (!factoryRuntimeCodeHash
+    || !addressEquals(factoryRuntimeCodeHash, MAINNET_ACCOUNT_FACTORY_RUNTIME_CODE_HASH)) {
+    throw new Error("Factory deployment target does not have the pinned AgentPayCeloAccountFactoryV1 runtime code hash.");
+  }
+
+  let decoded: ReturnType<typeof decodeFactoryAuthorization>;
+  try {
+    decoded = decodeFactoryAuthorization(transaction.data);
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Factory deployment owner signature")) throw error;
+    throw new Error("Factory deployment authorization/calldata is malformed or does not encode deployAccount.");
+  }
+  assertFactoryAuthorization(decoded.authorization, transaction.to, expected);
+  const authorizationHash = TypedDataEncoder.hash(
+    { name: "AgentPay Setup", version: "1", chainId: MAINNET_CHAIN_ID, verifyingContract: decoded.authorization.factory },
+    MAINNET_WALLET_SETUP_TYPES as unknown as EthersTypedDataTypes,
+    decoded.authorization,
+  ).toLowerCase();
+  assertFactoryReceiptEvent(receipt, transaction.to, decoded.authorization, authorizationHash);
 }
 
 export async function verifyMainnetAccount(
@@ -195,11 +384,23 @@ export async function verifyMainnetAccount(
     if (receipt) {
       deploymentBlock = receipt.blockNumber;
       check("deployment receipt status", Number(receipt.status) === 1, "Mainnet account deployment receipt did not succeed.");
-      check(
-        "deployment account",
-        typeof receipt.contractAddress === "string" && receipt.contractAddress.toLowerCase() === expected.accountAddress.toLowerCase(),
-        "Mainnet deployment receipt does not point to the manifest account.",
-      );
+      if (typeof receipt.contractAddress === "string") {
+        check(
+          "deployment account",
+          receipt.contractAddress.toLowerCase() === expected.accountAddress.toLowerCase(),
+          "Mainnet deployment receipt does not point to the manifest account.",
+        );
+      } else {
+        try {
+          await verifyFactoryDeploymentProof(reader, receipt, expected);
+          checks["deployment account"] = true;
+          checks["factory deployment proof"] = true;
+        } catch (error) {
+          checks["deployment account"] = false;
+          checks["factory deployment proof"] = false;
+          errors.push(error instanceof Error ? error.message : "Factory deployment proof could not be verified.");
+        }
+      }
     }
   } catch {
     check("deployment receipt", false, "Mainnet account deployment receipt could not be read.");
@@ -291,12 +492,28 @@ export function createEthersMainnetAccountVerificationReader(rpcUrl: string): Ma
             status: receipt.status,
             blockNumber: receipt.blockNumber,
             contractAddress: receipt.contractAddress,
+            transactionHash: receipt.hash,
+            logs: receipt.logs.map((log) => ({
+              address: log.address,
+              topics: [...log.topics],
+              data: log.data,
+            })),
           }
         : null;
     },
     async getTransactionData(txHash) {
       const transaction = await provider.getTransaction(txHash);
       return transaction?.data ?? null;
+    },
+    async getTransaction(txHash) {
+      const transaction = await provider.getTransaction(txHash);
+      return transaction
+        ? { to: transaction.to, from: transaction.from, data: transaction.data }
+        : null;
+    },
+    async getCodeHash(address) {
+      const code = await provider.getCode(address);
+      return code === "0x" ? null : keccak256(code).toLowerCase();
     },
     async getAccountState(accountAddress) {
       return {

@@ -94,6 +94,7 @@ function dependencies(admitted: SetupWorkerClaim, events: string[], extra: Recor
     verifyAccount: async () => { events.push("verify"); return { accountAddress: predicted, deploymentBlockNumber: 100, verificationBlockNumber: 305 }; },
     config: {
       workerId: "worker-1", leaseSeconds: 120, encryptionKey,
+      celoAttributionTag: "celo_agentpay",
       factoryDeploymentBlock: 1,
       receiptTimeoutSeconds: 300,
       limits: { maxGasLimit: 2_000_000n, maxFeePerGas: 3_000_000_000n,
@@ -118,6 +119,7 @@ describe("recoverable setup deployment worker", () => {
     const raw = await signer.signTransaction(buildSetupDeploymentTransaction({
       claim: initial, deployerAddress: signer.address, deployerNonce: 7n, gasLimit: 1_000_000n,
       maxFeePerGas: 2_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n,
+      attributionTag: "celo_agentpay",
       limits: { maxGasLimit: 2_000_000n, maxFeePerGas: 3_000_000_000n,
         maxPriorityFeePerGas: 2_000_000_000n, maxNativeCostWei: 3_000_000_000_000_000n },
     }));
@@ -220,6 +222,7 @@ describe("recoverable setup deployment worker", () => {
     const raw = await signer.signTransaction(buildSetupDeploymentTransaction({
       claim: initial, deployerAddress: signer.address, deployerNonce: 7n, gasLimit: 1_000_000n,
       maxFeePerGas: 2_000_000_000n, maxPriorityFeePerGas: 1_000_000_000n,
+      attributionTag: "celo_agentpay",
       limits: { maxGasLimit: 2_000_000n, maxFeePerGas: 3_000_000_000n,
         maxPriorityFeePerGas: 2_000_000_000n, maxNativeCostWei: 3_000_000_000_000_000n },
     }));

@@ -21,6 +21,12 @@ import { AGENTPAY_CONSUMER_URI } from "../auth/siwe.ts";
 import { authenticateServiceSession } from "../auth/session.ts";
 import { createConsumerSessionApi, type ConsumerSessionApi } from "../auth/consumer-session-api.ts";
 import { createConsumerOAuthApi, type ConsumerOAuthApi } from "../auth/oauth-api.ts";
+import {
+  AGENTPAY_OAUTH_AUTHORIZATION_SERVER_METADATA_PATH,
+  AGENTPAY_OAUTH_ISSUER,
+  AGENTPAY_OAUTH_PROTECTED_RESOURCE_METADATA_PATH,
+  AGENTPAY_OAUTH_ROUTE_PREFIX,
+} from "../auth/oauth.ts";
 import { createSupabaseAgentPayRepositoriesFromConfig } from "../services/supabase.ts";
 import {
   evaluateProductionReadiness,
@@ -77,6 +83,7 @@ import {
   assertCanaryUsageWithinCaps,
   CanaryPolicyError,
   DEFAULT_CANARY_CAPS,
+  decimalToAtomic18,
   decimalToAtomic6,
   type CanaryPolicy,
 } from "../runtime/paid-execution-canary.ts";
@@ -95,9 +102,9 @@ const defaultPort = 3001;
 const defaultMcpPath = "/mcp";
 const defaultHealthPath = "/healthz";
 const freeJsonRpcMethods = new Set(["initialize", "notifications/initialized", "ping", "tools/list"]);
-const consumerAuthorizationServer = "https://wallet.agentpay.site";
-const consumerResourceMetadataPath = "/.well-known/oauth-protected-resource/mcp";
-const consumerAuthorizationMetadataPath = "/.well-known/oauth-authorization-server";
+const consumerResourceMetadataPath = AGENTPAY_OAUTH_PROTECTED_RESOURCE_METADATA_PATH;
+const consumerAuthorizationMetadataPath = AGENTPAY_OAUTH_AUTHORIZATION_SERVER_METADATA_PATH;
+const consumerResourceMetadataUrl = new URL(consumerResourceMetadataPath, AGENTPAY_OAUTH_ISSUER).toString();
 const agentRegistrationMetadataPath = "/.well-known/agent-registration.json";
 
 export interface AgentPayHttpServer {
@@ -308,6 +315,10 @@ export async function startAgentPayHttpServer(options: StartAgentPayHttpServerOp
         ...config,
         executionMode: mode === "public" ? readiness.mode : ("OFF" as const),
         executionModeVerified: mode === "public" && readiness.executionAllowed,
+        executorGasMaxWei:
+          mode === "public" && readiness.mode === "CANARY"
+            ? canaryPolicy?.caps?.maxExecutorGasCostWei
+            : undefined,
       }
     : config;
   const createRuntime = options.createRuntime ?? ((runtimeConfig, tenantContext) =>
@@ -599,7 +610,7 @@ async function handleAgentPayHttpRequest(options: HandleAgentPayHttpRequestOptio
       writeJson(options.response, 401, { error: "Consumer authentication required." }, {
         "cache-control": "no-store",
         "www-authenticate": options.oauthApi
-          ? `Bearer resource_metadata="${consumerAuthorizationServer}${consumerResourceMetadataPath}"`
+          ? `Bearer resource_metadata="${consumerResourceMetadataUrl}"`
           : "Bearer",
       });
       return;
@@ -1781,7 +1792,7 @@ function isLoopbackAddress(address: string): boolean {
 function isConsumerOAuthPath(pathname: string): boolean {
   return pathname === consumerResourceMetadataPath ||
     pathname === consumerAuthorizationMetadataPath ||
-    pathname.startsWith("/oauth/");
+    pathname.startsWith(`${AGENTPAY_OAUTH_ROUTE_PREFIX}/`);
 }
 
 function createPaymentRequestContext(request: IncomingMessage, path: string): HTTPRequestContext {
@@ -2248,7 +2259,8 @@ export async function resolveProductionReadiness(
     typeof contract.deploymentTxHash === "string" &&
     typeof contract.runtimeBytecodeHash === "string" &&
     typeof contract.ownerAddress === "string" &&
-    typeof contract.executorAddress === "string"
+    typeof contract.executorAddress === "string" &&
+    typeof contract.deployerAddress === "string"
   ) {
     try {
       const expected: MainnetAccountVerificationExpected = {
@@ -2258,6 +2270,7 @@ export async function resolveProductionReadiness(
         runtimeBytecodeHash: contract.runtimeBytecodeHash,
         ownerAddress: contract.ownerAddress,
         executorAddress: contract.executorAddress,
+        deployerAddress: contract.deployerAddress,
         tokenAddress: manifest.token.address,
         tokenCodeHash: manifest.token.codeHash,
         tokenDecimals: manifest.token.decimals,
@@ -2364,7 +2377,7 @@ async function checkProductionOnboardingReady(setupUrl: string, expectedMode: st
   return body.status === "ready" && body.mode === expectedMode;
 }
 
-async function loadManifestCanaryPolicy(path: string | undefined): Promise<CanaryPolicy | undefined> {
+export async function loadManifestCanaryPolicy(path: string | undefined): Promise<CanaryPolicy | undefined> {
   try {
     const manifest = await loadProductionManifest(path) as Record<string, any>;
     const policy = manifest.canaryPolicy as Record<string, unknown> | undefined;
@@ -2385,6 +2398,7 @@ async function loadManifestCanaryPolicy(path: string | undefined): Promise<Canar
     }
     const invoiceMaxUsdc = typeof policy.invoiceMaxUsdc === "string" ? policy.invoiceMaxUsdc : "0.10";
     const maxNativeFee = typeof policy.maxNativeFee === "string" ? policy.maxNativeFee : "0";
+    if (typeof policy.executorGasMaxCelo !== "string") return undefined;
     return {
       allowlist: {
         tenantId: values[0] as string,
@@ -2398,6 +2412,7 @@ async function loadManifestCanaryPolicy(path: string | undefined): Promise<Canar
         maxAcceptedLifecycles: typeof policy.maxAcceptedLifecycles === "number" ? policy.maxAcceptedLifecycles : 1,
         maxInvoiceAtomic: decimalToAtomic6(invoiceMaxUsdc),
         maxNativeFee: BigInt(maxNativeFee),
+        maxExecutorGasCostWei: decimalToAtomic18(policy.executorGasMaxCelo),
       },
     };
   } catch {

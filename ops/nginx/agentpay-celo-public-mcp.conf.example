@@ -1,0 +1,40 @@
+# Include inside the existing mcp.agentpay.site TLS server. Exact locations
+# preserve the existing AgentPay/OKX root routes while exposing only Celo's
+# isolated public MCP liveness and OFF-gated execution surface.
+
+location = /celo/mcp {
+    client_max_body_size 64k;
+    client_body_timeout 15s;
+    proxy_pass http://127.0.0.1:3101/mcp;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_read_timeout 300s;
+    proxy_send_timeout 300s;
+}
+
+location = /celo/healthz {
+    limit_except GET { deny all; }
+    proxy_pass http://127.0.0.1:3101/healthz;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Connection "";
+}
+
+location = /celo/readyz {
+    limit_except GET { deny all; }
+    proxy_pass http://127.0.0.1:3101/readyz;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header Connection "";
+}

@@ -1,0 +1,89 @@
+{
+  "environment": "production",
+  "chainId": 42220,
+  "setupMode": "OFF",
+  "onboardingOrigin": "https://wallet.agentpay.site",
+  "factory": {
+    "address": "0x7e1d7834e57f9e16393329ba37a7c5e7a39f6735",
+    "deploymentTxHash": "0x900a9cfe473ed82ae15b343a9ca9b6a9919542fa84f83be97b3a934d32a1940f",
+    "deploymentBlock": 72849886,
+    "runtimeCodeHash": "0xacf158d0950bc04fe98bb801a45eced68265b81b22d820e735a69037d2dd2254",
+    "executor": "0x645d39b3943d27cfe53184a446f551a69a4b1fde",
+    "usdc": "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+    "policyVersion": "0x7ca42c75d0d0ce25c514495482839ca84b4d4e3e445080004653e98bdebeb16c"
+  },
+  "account": {
+    "creationCodeHash": "0x2ede9e46a03a9b3d8e8dc322905443b0fedfabd324c54c73fe1c748f10d0152a",
+    "runtimeTemplateHash": "0x9bad6acaad3ee9146e45ec3796c29d2c3b779d61543b6f80406fd78ccef7a962",
+    "immutableReferences": [
+      {
+        "start": 953,
+        "length": 20
+      },
+      {
+        "start": 1231,
+        "length": 20
+      },
+      {
+        "start": 1488,
+        "length": 20
+      },
+      {
+        "start": 1830,
+        "length": 20
+      },
+      {
+        "start": 2029,
+        "length": 20
+      },
+      {
+        "start": 2138,
+        "length": 20
+      },
+      {
+        "start": 2241,
+        "length": 20
+      },
+      {
+        "start": 2411,
+        "length": 20
+      },
+      {
+        "start": 3494,
+        "length": 20
+      },
+      {
+        "start": 3626,
+        "length": 20
+      },
+      {
+        "start": 3835,
+        "length": 20
+      },
+      {
+        "start": 4631,
+        "length": 20
+      },
+      {
+        "start": 5413,
+        "length": 20
+      },
+      {
+        "start": 6083,
+        "length": 20
+      },
+      {
+        "start": 6499,
+        "length": 20
+      }
+    ],
+    "routeTargets": []
+  },
+  "sponsor": {
+    "deployerAddress": "0x72936d76E840ddBB18976705779b6E24834B4d93",
+    "maxDeploymentsPerDay": 1,
+    "maxGasPerDeployment": 2500000,
+    "maxNativeCostPerDayWei": "5000000000000000000",
+    "maxPending": 1
+  }
+}

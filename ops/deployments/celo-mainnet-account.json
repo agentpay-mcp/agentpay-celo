@@ -1,0 +1,40 @@
+{
+  "address": "0xa495eaff5809efb32beb6ecd18a48e9469acf121",
+  "deploymentTxHash": "0x212ccf9ca2a0f8ef08a5533705e3b319bf8fe57db260b8048b2dc28c7603d8fa",
+  "deploymentBlock": 72851834,
+  "deployedAt": "2026-07-22T20:36:32.000Z",
+  "runtimeCodeHash": "0xa1a627f011931eba8d6aeb3f16290f3d91f0f777a8fabc635f00882c457c38a3",
+  "factory": "0x7e1d7834e57f9e16393329ba37a7c5e7a39f6735",
+  "owner": "0x9ceef6d89915628331c25f48360ffe97cd71b3ee",
+  "executor": "0x645d39b3943d27cfe53184a446f551a69a4b1fde",
+  "sponsor": "0x72936d76e840ddbb18976705779b6e24834b4d93",
+  "homeChainId": 42220,
+  "usdc": "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+  "authorizationHash": "0xb65cb101c08ecad149cee170cdf355daad02dc97e7950458bac8b58265676e51",
+  "deploymentSalt": "0x9c9022ad5c0b03bc69e0d0b50859d27daac953e72f95ba61ad9689b208c27c1e",
+  "manifestSha256": "0xc50a966a62f7ff9ac1ce6d498269ceef3cd8fe796f62346cf4ff9f8e81e5e7ab",
+  "receipt": {
+    "status": 1,
+    "gasLimit": "1930718",
+    "gasUsed": "1898251",
+    "effectiveGasPriceWei": "202500000000",
+    "feeWei": "384395827500000000"
+  },
+  "policy": {
+    "paused": false,
+    "canonicalUsdcAllowed": true,
+    "celoUsdtAllowed": false,
+    "routeTargets": []
+  },
+  "database": {
+    "setupIntentId": "setup_847d7cc6-13fb-4b84-ab9a-81d6ce3ab8b5",
+    "setupStatus": "COMPLETED",
+    "walletStatus": "ACTIVE"
+  },
+  "attribution": {
+    "standard": "ERC-8021",
+    "codes": [],
+    "status": "missing_on_initial_canary_deployment"
+  },
+  "verifiedAt": "2026-07-22T20:44:16Z"
+}

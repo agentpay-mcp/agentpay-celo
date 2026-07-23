@@ -9,7 +9,10 @@ import { getAddress, isAddress } from "ethers";
 
 import {
   AGENTPAY_OAUTH_ISSUER,
+  AGENTPAY_OAUTH_AUTHORIZATION_SERVER_METADATA_PATH,
+  AGENTPAY_OAUTH_PROTECTED_RESOURCE_METADATA_PATH,
   AGENTPAY_OAUTH_RESOURCE,
+  AGENTPAY_OAUTH_ROUTE_PREFIX,
   OAUTH_ACCESS_TOKEN_TTL_SECONDS,
   OAUTH_AUTHORIZATION_CODE_TTL_SECONDS,
   OAUTH_AUTHORIZATION_TTL_SECONDS,
@@ -46,7 +49,7 @@ import {
   type AuthChallengeStore,
 } from "./session.ts";
 
-const browserTransactionCookieName = "agentpay_oauth_transaction";
+const browserTransactionCookieName = "agentpay_celo_oauth_transaction";
 const maxBodyBytes = 16_384;
 const oauthAdmissionPruneIntervalMs = 5 * 60_000;
 
@@ -94,8 +97,8 @@ export function createConsumerOAuthApi(dependencies: ConsumerOAuthApiDependencie
   const preflight = async (request: Request): Promise<Response | undefined> => {
     const url = new URL(request.url);
     if (
-      (request.method === "GET" && url.pathname === "/.well-known/oauth-protected-resource/mcp") ||
-      (request.method === "GET" && url.pathname === "/.well-known/oauth-authorization-server")
+      (request.method === "GET" && url.pathname === AGENTPAY_OAUTH_PROTECTED_RESOURCE_METADATA_PATH) ||
+      (request.method === "GET" && url.pathname === AGENTPAY_OAUTH_AUTHORIZATION_SERVER_METADATA_PATH)
     ) {
       return undefined;
     }
@@ -129,29 +132,29 @@ export function createConsumerOAuthApi(dependencies: ConsumerOAuthApiDependencie
     preflight,
     async handle(request: Request, options: { admitted?: boolean } = {}): Promise<Response> {
       const url = new URL(request.url);
-      if (request.method === "GET" && url.pathname === "/.well-known/oauth-protected-resource/mcp") {
+      if (request.method === "GET" && url.pathname === AGENTPAY_OAUTH_PROTECTED_RESOURCE_METADATA_PATH) {
         return jsonResponse(protectedResourceMetadata(dependencies.audience));
       }
-      if (request.method === "GET" && url.pathname === "/.well-known/oauth-authorization-server") {
+      if (request.method === "GET" && url.pathname === AGENTPAY_OAUTH_AUTHORIZATION_SERVER_METADATA_PATH) {
         return jsonResponse(authorizationServerMetadata());
       }
       if (!options.admitted) {
         const rejected = await preflight(request);
         if (rejected) return rejected;
       }
-      if (request.method === "POST" && url.pathname === "/oauth/register") {
+      if (request.method === "POST" && url.pathname === `${AGENTPAY_OAUTH_ROUTE_PREFIX}/register`) {
         return handleRegister(request, dependencies);
       }
-      if (request.method === "GET" && url.pathname === "/oauth/authorize") {
+      if (request.method === "GET" && url.pathname === `${AGENTPAY_OAUTH_ROUTE_PREFIX}/authorize`) {
         return handleAuthorize(url, dependencies);
       }
-      if (request.method === "POST" && url.pathname === "/oauth/siwe/challenge") {
+      if (request.method === "POST" && url.pathname === `${AGENTPAY_OAUTH_ROUTE_PREFIX}/siwe/challenge`) {
         return handleSiweChallenge(request, dependencies);
       }
-      if (request.method === "POST" && url.pathname === "/oauth/siwe/verify") {
+      if (request.method === "POST" && url.pathname === `${AGENTPAY_OAUTH_ROUTE_PREFIX}/siwe/verify`) {
         return handleSiweVerify(request, dependencies);
       }
-      if (request.method === "POST" && url.pathname === "/oauth/token") {
+      if (request.method === "POST" && url.pathname === `${AGENTPAY_OAUTH_ROUTE_PREFIX}/token`) {
         return handleToken(request, dependencies);
       }
       return jsonResponse({ error: "not_found" }, 404);
@@ -272,7 +275,7 @@ async function handleAuthorize(url: URL, dependencies: ConsumerOAuthApiDependenc
       {
         "content-security-policy": consentContentSecurityPolicy(cspNonce),
         "permissions-policy": "camera=(), geolocation=(), microphone=(), payment=(), usb=()",
-        "set-cookie": `${browserTransactionCookieName}=${cookie}; Path=/oauth; HttpOnly; Secure; SameSite=Lax; Max-Age=${OAUTH_AUTHORIZATION_TTL_SECONDS}`,
+        "set-cookie": `${browserTransactionCookieName}=${cookie}; Path=${AGENTPAY_OAUTH_ROUTE_PREFIX}; HttpOnly; Secure; SameSite=Lax; Max-Age=${OAUTH_AUTHORIZATION_TTL_SECONDS}`,
       },
     );
   } catch {
@@ -408,7 +411,7 @@ async function handleSiweVerify(request: Request, dependencies: ConsumerOAuthApi
     return jsonResponse(
       { redirectUri: redirect.toString() },
       200,
-      { "set-cookie": `${browserTransactionCookieName}=; Path=/oauth; HttpOnly; Secure; SameSite=Lax; Max-Age=0` },
+      { "set-cookie": `${browserTransactionCookieName}=; Path=${AGENTPAY_OAUTH_ROUTE_PREFIX}; HttpOnly; Secure; SameSite=Lax; Max-Age=0` },
     );
   } catch {
     return oauthError("invalid_request");
@@ -687,12 +690,21 @@ function oauthError(error: "invalid_client_metadata" | "invalid_request" | "inva
 }
 
 function oauthAdmissionPolicy(pathname: string): { bucket: OAuthAdmissionBucket; windowSeconds: number; limit: number } | null {
-  if (pathname === "/oauth/register") return { bucket: "registration", windowSeconds: 60 * 60, limit: 20 };
-  if (pathname === "/oauth/authorize") return { bucket: "authorization", windowSeconds: 60, limit: 20 };
-  if (pathname === "/oauth/siwe/challenge" || pathname === "/oauth/siwe/verify") {
+  if (pathname === `${AGENTPAY_OAUTH_ROUTE_PREFIX}/register`) {
+    return { bucket: "registration", windowSeconds: 60 * 60, limit: 20 };
+  }
+  if (pathname === `${AGENTPAY_OAUTH_ROUTE_PREFIX}/authorize`) {
+    return { bucket: "authorization", windowSeconds: 60, limit: 20 };
+  }
+  if (
+    pathname === `${AGENTPAY_OAUTH_ROUTE_PREFIX}/siwe/challenge` ||
+    pathname === `${AGENTPAY_OAUTH_ROUTE_PREFIX}/siwe/verify`
+  ) {
     return { bucket: "siwe", windowSeconds: 60, limit: 20 };
   }
-  if (pathname === "/oauth/token") return { bucket: "token", windowSeconds: 60, limit: 30 };
+  if (pathname === `${AGENTPAY_OAUTH_ROUTE_PREFIX}/token`) {
+    return { bucket: "token", windowSeconds: 60, limit: 30 };
+  }
   return null;
 }
 
@@ -755,7 +767,7 @@ function renderConsentPage(input: {
           const chainId = Number.parseInt(chain, 16);
           if (chainId !== config.expectedChainId) throw new Error("Switch your wallet to the required Celo network and try again.");
           setStatus("Preparing ownership proof…");
-          const challengeResponse = await fetch("/oauth/siwe/challenge", {
+          const challengeResponse = await fetch("${AGENTPAY_OAUTH_ROUTE_PREFIX}/siwe/challenge", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ authorizationId: config.authorizationId, ownerAddress, chainId }),
@@ -764,7 +776,7 @@ function renderConsentPage(input: {
           const challenge = await challengeResponse.json();
           setStatus("Waiting for wallet signature…");
           const signature = await window.ethereum.request({ method: "personal_sign", params: [challenge.message, ownerAddress] });
-          const verifyResponse = await fetch("/oauth/siwe/verify", {
+          const verifyResponse = await fetch("${AGENTPAY_OAUTH_ROUTE_PREFIX}/siwe/verify", {
             method: "POST",
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ authorizationId: config.authorizationId, challengeId: challenge.challengeId, signature }),

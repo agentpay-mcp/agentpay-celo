@@ -3,7 +3,11 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { prepareAuthorizationCodeRequest, startAuthorization } from "@modelcontextprotocol/sdk/client/auth.js";
+import {
+  discoverOAuthServerInfo,
+  prepareAuthorizationCodeRequest,
+  startAuthorization,
+} from "@modelcontextprotocol/sdk/client/auth.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { Wallet } from "ethers";
 import type { PaymentPayload, PaymentRequirements } from "@x402/core/types";
@@ -36,6 +40,7 @@ import type {
   ExpectedX402PaymentRequirements,
 } from "./celo-agent-payment.ts";
 import {
+  loadManifestCanaryPolicy,
   resolveProductionReadiness,
   shouldVerifyMainnetAccountAtStartup,
   startAgentPayHttpServer,
@@ -1199,7 +1204,7 @@ describe("startAgentPayHttpServer", () => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "initialize", params: {} }),
       });
-      const undiscoverable = await fetch(new URL("/.well-known/oauth-protected-resource/mcp", server.url));
+      const undiscoverable = await fetch(new URL("/.well-known/oauth-protected-resource/celo/mcp", server.url));
 
       assert.equal(health.status, 200);
       assert.equal(response.status, 401);
@@ -1227,19 +1232,19 @@ describe("startAgentPayHttpServer", () => {
       oauthApi: {
         async handle(request) {
           const pathname = new URL(request.url).pathname;
-          if (pathname === "/.well-known/oauth-protected-resource/mcp") {
+          if (pathname === "/.well-known/oauth-protected-resource/celo/mcp") {
             return new Response(JSON.stringify({
               resource: "https://wallet.agentpay.site/celo/mcp",
-              authorization_servers: ["https://wallet.agentpay.site"],
+              authorization_servers: ["https://wallet.agentpay.site/celo"],
               scopes_supported: ["wallet:read", "payment:prepare", "payment:read", "payment:review", "session:manage"],
               bearer_methods_supported: ["header"],
             }), { headers: { "content-type": "application/json", "cache-control": "no-store" } });
           }
           return new Response(JSON.stringify({
-            issuer: "https://wallet.agentpay.site",
-            authorization_endpoint: "https://wallet.agentpay.site/oauth/authorize",
-            token_endpoint: "https://wallet.agentpay.site/oauth/token",
-            registration_endpoint: "https://wallet.agentpay.site/oauth/register",
+            issuer: "https://wallet.agentpay.site/celo",
+            authorization_endpoint: "https://wallet.agentpay.site/celo/oauth/authorize",
+            token_endpoint: "https://wallet.agentpay.site/celo/oauth/token",
+            registration_endpoint: "https://wallet.agentpay.site/celo/oauth/register",
             response_types_supported: ["code"],
             grant_types_supported: ["authorization_code"],
             token_endpoint_auth_methods_supported: ["none"],
@@ -1254,22 +1259,32 @@ describe("startAgentPayHttpServer", () => {
     });
 
     try {
-      const resourceMetadata = await fetch(new URL("/.well-known/oauth-protected-resource/mcp", server.url));
+      const rootResourceMetadata = await fetch(new URL("/.well-known/oauth-protected-resource/mcp", server.url));
+      const rootAuthorizationMetadata = await fetch(new URL("/.well-known/oauth-authorization-server", server.url));
+      const rootRegistration = await fetch(new URL("/oauth/register", server.url), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ redirect_uris: ["http://127.0.0.1:4567/callback"] }),
+      });
+      const resourceMetadata = await fetch(new URL("/.well-known/oauth-protected-resource/celo/mcp", server.url));
+      assert.equal(rootResourceMetadata.status, 404);
+      assert.equal(rootAuthorizationMetadata.status, 404);
+      assert.equal(rootRegistration.status, 404);
       assert.equal(resourceMetadata.status, 200);
       assert.deepEqual(await resourceMetadata.json(), {
         resource: "https://wallet.agentpay.site/celo/mcp",
-        authorization_servers: ["https://wallet.agentpay.site"],
+        authorization_servers: ["https://wallet.agentpay.site/celo"],
         scopes_supported: ["wallet:read", "payment:prepare", "payment:read", "payment:review", "session:manage"],
         bearer_methods_supported: ["header"],
       });
 
-      const authorizationMetadata = await fetch(new URL("/.well-known/oauth-authorization-server", server.url));
+      const authorizationMetadata = await fetch(new URL("/.well-known/oauth-authorization-server/celo", server.url));
       assert.equal(authorizationMetadata.status, 200);
       assert.deepEqual(await authorizationMetadata.json(), {
-        issuer: "https://wallet.agentpay.site",
-        authorization_endpoint: "https://wallet.agentpay.site/oauth/authorize",
-        token_endpoint: "https://wallet.agentpay.site/oauth/token",
-        registration_endpoint: "https://wallet.agentpay.site/oauth/register",
+        issuer: "https://wallet.agentpay.site/celo",
+        authorization_endpoint: "https://wallet.agentpay.site/celo/oauth/authorize",
+        token_endpoint: "https://wallet.agentpay.site/celo/oauth/token",
+        registration_endpoint: "https://wallet.agentpay.site/celo/oauth/register",
         response_types_supported: ["code"],
         grant_types_supported: ["authorization_code"],
         token_endpoint_auth_methods_supported: ["none"],
@@ -1340,6 +1355,41 @@ describe("startAgentPayHttpServer", () => {
     assert.equal(shouldVerifyMainnetAccountAtStartup(undefined), true);
   });
 
+  it("loads the frozen executor gas cap from the canary manifest in wei", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "agentpay-canary-gas-cap-test-"));
+    const manifestPath = join(directory, "canary.json");
+    const manifest = {
+      canaryPolicy: {
+        allowlistedTenantId: "11111111-1111-4111-8111-111111111111",
+        allowlistedOwnerAddress: "0x1111111111111111111111111111111111111111",
+        allowlistedAccountAddress: "0x2222222222222222222222222222222222222222",
+        payerAddress: "0x3333333333333333333333333333333333333333",
+        recipientAddress: "0x4444444444444444444444444444444444444444",
+        invoiceMaxUsdc: "0.05",
+        maxNativeFee: "0",
+        maxAcceptedLifecycles: 1,
+        executorGasMaxCelo: "0.05",
+      },
+    };
+
+    try {
+      await writeFile(manifestPath, JSON.stringify(manifest));
+      const policy = await loadManifestCanaryPolicy(manifestPath);
+
+      assert.equal(policy?.caps?.maxExecutorGasCostWei, 50_000_000_000_000_000n);
+
+      manifest.canaryPolicy.executorGasMaxCelo = "0.0500000000000000001";
+      await writeFile(manifestPath, JSON.stringify(manifest));
+      assert.equal(await loadManifestCanaryPolicy(manifestPath), undefined);
+
+      manifest.canaryPolicy.executorGasMaxCelo = "0.05.1";
+      await writeFile(manifestPath, JSON.stringify(manifest));
+      assert.equal(await loadManifestCanaryPolicy(manifestPath), undefined);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
   it("skips the historical account scan only when the effective production mode is OFF", async () => {
     const directory = await mkdtemp(join(tmpdir(), "agentpay-off-readiness-test-"));
     const manifestPath = join(directory, "activated.json");
@@ -1353,6 +1403,7 @@ describe("startAgentPayHttpServer", () => {
       environmentMode: "OFF" | "PUBLIC" | " OFF " | "   ",
     ) => {
       let verificationCalls = 0;
+      let verificationDeployerAddress: string | undefined;
       const env = {
         ...productionMcpEnv(),
         AGENTPAY_MAINNET_MANIFEST_PATH: manifestPath,
@@ -1366,14 +1417,15 @@ describe("startAgentPayHttpServer", () => {
           loadRuntimeIdentity: async () => identityMode
             ? productionIdentityFor(manifest, identityMode)
             : null,
-          verifyAccount: async () => {
+          verifyAccount: async (verificationExpected) => {
             verificationCalls += 1;
+            verificationDeployerAddress = (verificationExpected as { deployerAddress?: string }).deployerAddress;
             return { valid: false, checks: {}, errors: ["test verifier"] };
           },
           checkOnboardingReady: async () => true,
         },
       );
-      return { readiness, verificationCalls };
+      return { readiness, verificationCalls, verificationDeployerAddress };
     };
 
     try {
@@ -1383,6 +1435,7 @@ describe("startAgentPayHttpServer", () => {
 
       const environmentPublic = await resolve(null, "PUBLIC");
       assert.equal(environmentPublic.verificationCalls, 1);
+      assert.equal(environmentPublic.verificationDeployerAddress, manifest.contract.deployerAddress);
 
       const paddedEnvironmentOff = await resolve(null, " OFF ");
       assert.equal(paddedEnvironmentOff.verificationCalls, 0);
@@ -1620,7 +1673,7 @@ describe("startAgentPayHttpServer", () => {
     });
 
     try {
-      const response = await fetch(new URL("/oauth/register", server.url), {
+      const response = await fetch(new URL("/celo/oauth/register", server.url), {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -1631,7 +1684,7 @@ describe("startAgentPayHttpServer", () => {
       });
       assert.equal(response.status, 201);
       assert.deepEqual(await response.json(), { client_id: "client_test" });
-      assert.deepEqual(paths, ["preflight:/oauth/register", "/oauth/register"]);
+      assert.deepEqual(paths, ["preflight:/celo/oauth/register", "/celo/oauth/register"]);
     } finally {
       await server.close();
     }
@@ -1690,6 +1743,16 @@ describe("startAgentPayHttpServer", () => {
     };
 
     try {
+      const sdkDiscovery = await discoverOAuthServerInfo("https://wallet.agentpay.site/celo/mcp", {
+        fetchFn: async (input, init) => {
+          const target = input instanceof Request ? input.url : input.toString();
+          return fetch(localize(target), init as RequestInit);
+        },
+      });
+      assert.equal(sdkDiscovery.authorizationServerUrl, "https://wallet.agentpay.site/celo");
+      assert.equal(sdkDiscovery.resourceMetadata?.resource, "https://wallet.agentpay.site/celo/mcp");
+      assert.equal(sdkDiscovery.authorizationServerMetadata?.issuer, "https://wallet.agentpay.site/celo");
+
       const unauthenticated = await fetch(server.mcpUrl, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -1708,7 +1771,9 @@ describe("startAgentPayHttpServer", () => {
       assert.equal(protectedResourceMetadata.resource, "https://wallet.agentpay.site/celo/mcp");
 
       const authorizationServer = protectedResourceMetadata.authorization_servers[0]!;
-      const authorizationMetadataResponse = await fetch(localize(`${authorizationServer}/.well-known/oauth-authorization-server`));
+      const authorizationMetadataResponse = await fetch(
+        localize(new URL("/.well-known/oauth-authorization-server/celo", authorizationServer)),
+      );
       assert.equal(authorizationMetadataResponse.status, 200);
       const authorizationMetadata = await authorizationMetadataResponse.json() as Record<string, unknown>;
       const registrationResponse = await fetch(localize(authorizationMetadata.registration_endpoint as string), {
@@ -1744,14 +1809,14 @@ describe("startAgentPayHttpServer", () => {
       const authorizationId = /authorizationId":"([^"]+)"/.exec(await authorizationPage.text())?.[1];
       assert.ok(authorizationId);
 
-      const challengeResponse = await fetch(localize("https://wallet.agentpay.site/oauth/siwe/challenge"), {
+      const challengeResponse = await fetch(localize("https://wallet.agentpay.site/celo/oauth/siwe/challenge"), {
         method: "POST",
         headers: { "content-type": "application/json", cookie: browserCookie },
         body: JSON.stringify({ authorizationId, ownerAddress: owner.address, chainId: 11142220 }),
       });
       assert.equal(challengeResponse.status, 200);
       const challenge = await challengeResponse.json() as { challengeId: string; message: string };
-      const verifiedResponse = await fetch(localize("https://wallet.agentpay.site/oauth/siwe/verify"), {
+      const verifiedResponse = await fetch(localize("https://wallet.agentpay.site/celo/oauth/siwe/verify"), {
         method: "POST",
         headers: { "content-type": "application/json", cookie: browserCookie },
         body: JSON.stringify({

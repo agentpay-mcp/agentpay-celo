@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "kind": "agentpay-celo-mainnet-canary-activation-evidence",
+  "observedAt": "2026-07-22T23:52:32Z",
+  "environment": "production",
+  "chainId": 42220,
+  "mcpAndReviewRelease": {
+    "commit": "16b284cb9b307f918cea68ce12e7b7d955b60b5c",
+    "services": [
+      "agentpay-celo-mcp-public.service",
+      "agentpay-celo-mcp-consumer.service",
+      "agentpay-celo-review.service"
+    ]
+  },
+  "manifest": {
+    "canonicalSha256": "86a3546debc08603877cd2365742eb5305b94ada43a6c085f41b4495c81d4189",
+    "rawSha256": "89c59aeae01597b29226c9642b348f8cabf1b58faada9eee8ea14efb4738f247",
+    "deployedPath": "/opt/agentpay-celo/manifests/celo-mainnet.canary.86a3546d.json"
+  },
+  "readiness": {
+    "httpStatus": 200,
+    "code": "READY",
+    "mode": "CANARY",
+    "status": "READY",
+    "checks": {
+      "environment": true,
+      "manifest": true,
+      "identity": true,
+      "payment": true,
+      "rawTransactionEncryption": true,
+      "account": true,
+      "canaryAdmission": true,
+      "onboardingMode": true,
+      "onboarding": true
+    }
+  },
+  "x402Challenge": {
+    "httpStatus": 402,
+    "x402Version": 2,
+    "resourceUrl": "https://mcp.agentpay.site/celo/mcp",
+    "network": "eip155:42220",
+    "scheme": "exact",
+    "amountAtomic": "10000",
+    "asset": "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+    "payTo": "0xA495Eaff5809Efb32beb6eCd18a48e9469Acf121",
+    "maxTimeoutSeconds": 300,
+    "assetTransferMethod": "eip3009"
+  },
+  "boundaries": {
+    "healthHttpStatus": 200,
+    "consumerMcpHttpStatus": 401,
+    "reviewHttpStatus": 200,
+    "setupHttpStatus": 200,
+    "setupMode": "CANARY"
+  },
+  "services": [
+    {
+      "name": "agentpay-celo-mcp-public.service",
+      "activeState": "active",
+      "restarts": 0,
+      "workingDirectory": "/opt/agentpay-celo/releases/16b284cb9b307f918cea68ce12e7b7d955b60b5c"
+    },
+    {
+      "name": "agentpay-celo-mcp-consumer.service",
+      "activeState": "active",
+      "restarts": 0,
+      "workingDirectory": "/opt/agentpay-celo/releases/16b284cb9b307f918cea68ce12e7b7d955b60b5c"
+    },
+    {
+      "name": "agentpay-celo-review.service",
+      "activeState": "active",
+      "restarts": 0,
+      "workingDirectory": "/opt/agentpay-celo/releases/16b284cb9b307f918cea68ce12e7b7d955b60b5c"
+    }
+  ],
+  "canaryLedger": {
+    "acceptedLifecycles": 0,
+    "tenantDailyAtomic": 0,
+    "globalDailyAtomic": 0,
+    "tenantInFlight": 0
+  },
+  "verificationActions": {
+    "paymentRequestSent": false,
+    "onchainTransactionSubmitted": false
+  }
+}

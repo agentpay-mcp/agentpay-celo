@@ -68,6 +68,7 @@ describe("Celo mainnet shadow manifest", () => {
       appliesTo: ["agentpay-direct-transactions"],
       excludes: ["x402-facilitator-settlements"],
     });
+    assert.equal(makeManifest().canaryPolicy.executorGasMaxCelo, "0.05");
   });
 
   it("rejects a staging chain or RPC reference in a production manifest", () => {
@@ -104,6 +105,15 @@ describe("Celo mainnet shadow manifest", () => {
     for (const field of ["enabled", "network", "asset", "price", "priceAtomic", "syncSettle", "facilitatorUrl", "toolAllowlist"]) {
       assert.match(result.errors.join("; "), new RegExp(`x402\\.${field}`));
     }
+  });
+
+  it("rejects the stale executor gas cap after mainnet fee preflight", () => {
+    const manifest = makeManifest();
+    manifest.canaryPolicy.executorGasMaxCelo = "0.005";
+
+    const result = validate(manifest);
+    assert.equal(result.valid, false);
+    assert.match(result.errors.join("; "), /canaryPolicy\.executorGasMaxCelo/);
   });
 
   it("rejects ERC-8021 attribution policy drift and x402 settlement tagging", () => {

@@ -31,7 +31,7 @@
   },
   "release": {
     "commit": null,
-    "packageLockSha256": "126a12167b4b757ec3b4f1a035ba51f087b9a6c02a446ad2bfcef583d05d9ac9",
+    "packageLockSha256": "91b857d17fb7c7e65d312135595275b72887c0b73510f935de9a8a26d09fe68e",
     "creationBytecodeKeccak256": "0x2ede9e46a03a9b3d8e8dc322905443b0fedfabd324c54c73fe1c748f10d0152a",
     "runtimeBytecodeKeccak256": null,
     "abiSha256": null,
@@ -111,7 +111,7 @@
     "payerFeeWalletFundingMaxUsdc": "0.02",
     "aspFeeUsdc": "0.01",
     "maxNativeFee": "0",
-    "executorGasMaxCelo": "0.005",
+    "executorGasMaxCelo": "0.05",
     "allowlistedTenantId": null,
     "allowlistedOwnerAddress": null,
     "allowlistedAccountAddress": null,

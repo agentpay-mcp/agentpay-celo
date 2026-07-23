@@ -12,6 +12,7 @@ export interface CanaryCaps {
   maxGlobalDailyAtomic: bigint;
   maxInFlightPerTenant: number;
   maxNativeFee: bigint;
+  maxExecutorGasCostWei: bigint;
 }
 
 export const DEFAULT_CANARY_CAPS: CanaryCaps = {
@@ -21,6 +22,7 @@ export const DEFAULT_CANARY_CAPS: CanaryCaps = {
   maxGlobalDailyAtomic: 100_000n,
   maxInFlightPerTenant: 1,
   maxNativeFee: 0n,
+  maxExecutorGasCostWei: 50_000_000_000_000_000n,
 };
 
 export interface CanaryAllowlist {
@@ -151,11 +153,23 @@ export function assertCanaryUsageWithinCaps(
 }
 
 export function decimalToAtomic6(value: string): bigint {
-  const [whole, fraction = ""] = value.split(".");
-  if (!/^\d+$/.test(whole) || !/^\d*$/.test(fraction) || fraction.length > 6) {
-    throw new CanaryPolicyError("CANARY_AMOUNT", "Canary amount must be a non-negative six-decimal value.");
+  return decimalToAtomic(value, 6);
+}
+
+export function decimalToAtomic18(value: string): bigint {
+  return decimalToAtomic(value, 18);
+}
+
+function decimalToAtomic(value: string, decimals: number): bigint {
+  const match = new RegExp(`^(\\d+)(?:\\.(\\d{0,${decimals}}))?$`).exec(value);
+  if (!match) {
+    throw new CanaryPolicyError(
+      "CANARY_AMOUNT",
+      `Canary amount must be a non-negative value with at most ${decimals} decimals.`,
+    );
   }
-  return BigInt(`${whole}${fraction.padEnd(6, "0")}`);
+  const [, whole, fraction = ""] = match;
+  return BigInt(`${whole}${fraction.padEnd(decimals, "0")}`);
 }
 
 /**

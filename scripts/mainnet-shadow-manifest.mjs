@@ -17,6 +17,7 @@ export const MAINNET_RPC_FALLBACK_URL = "https://forno.celo.org";
 export const MAINNET_SETUP_URL = "https://wallet.agentpay.site/celo/setup";
 export const MAINNET_SETUP_READINESS_URL = "https://wallet.agentpay.site/celo/setup/readyz";
 export const MAINNET_X402_FACILITATOR_URL = "https://api.x402.celo.org";
+export const MAINNET_EXECUTOR_GAS_MAX_CELO = "0.05";
 export const ASSIGNED_CELO_ATTRIBUTION_TAG_PATTERN = /^celo_[a-z0-9_]{1,27}$/;
 export const FORBIDDEN_PRODUCTION_RUNTIME_ENV_REFS = Object.freeze([
   "CELO_RPC_URL",
@@ -245,7 +246,7 @@ export function buildMainnetShadowManifest({ artifactDigests, generatedAt } = {}
       payerFeeWalletFundingMaxUsdc: "0.02",
       aspFeeUsdc: "0.01",
       maxNativeFee: "0",
-      executorGasMaxCelo: "0.005",
+      executorGasMaxCelo: MAINNET_EXECUTOR_GAS_MAX_CELO,
       allowlistedTenantId: null,
       allowlistedOwnerAddress: null,
       allowlistedAccountAddress: null,
@@ -470,7 +471,12 @@ export function validateMainnetShadowManifest(manifest, { artifactDigests } = {}
     requireEqual(canary.payerFeeWalletFundingMaxUsdc, "0.02", "canaryPolicy.payerFeeWalletFundingMaxUsdc", issues);
     requireEqual(canary.aspFeeUsdc, "0.01", "canaryPolicy.aspFeeUsdc", issues);
     requireEqual(canary.maxNativeFee, "0", "canaryPolicy.maxNativeFee", issues);
-    requireEqual(canary.executorGasMaxCelo, "0.005", "canaryPolicy.executorGasMaxCelo", issues);
+    requireEqual(
+      canary.executorGasMaxCelo,
+      MAINNET_EXECUTOR_GAS_MAX_CELO,
+      "canaryPolicy.executorGasMaxCelo",
+      issues,
+    );
     for (const key of [
       "allowlistedTenantId",
       "allowlistedOwnerAddress",

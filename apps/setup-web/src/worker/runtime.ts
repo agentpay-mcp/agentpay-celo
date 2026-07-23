@@ -15,6 +15,7 @@ import {
   type SetupWorkerClaim,
 } from "@agentpay-ai/mcp-server-celo";
 import {
+  assertAssignedCeloAttributionTag,
   MAINNET_SETUP_CHAIN_ID,
   MAINNET_SETUP_USDC,
   toEip712Sha256Bytes32,
@@ -115,6 +116,7 @@ export interface ProductionSetupWorkerConfig {
   readonly pollIntervalMs: number;
   readonly receiptTimeoutSeconds: number;
   readonly encryptionKey: Uint8Array;
+  readonly celoAttributionTag: string;
   readonly minimumSignerBalanceWei: bigint;
   readonly maximumSignerBalanceWei: bigint;
   readonly limits: Readonly<{
@@ -144,7 +146,7 @@ export function parseProductionSetupWorkerConfig(
   for (const key of FORBIDDEN_ENV_KEYS) if (values[key]) throw new Error(`SETUP_WORKER_FORBIDDEN_ENV:${key}`);
   const required = [
     "AGENTPAY_ENVIRONMENT", "AGENTPAY_SETUP_MODE", "AGENTPAY_SETUP_WORKER_TOKEN_PATH", "SUPABASE_URL",
-    "SUPABASE_PUBLISHABLE_KEY",
+    "SUPABASE_PUBLISHABLE_KEY", "CELO_ATTRIBUTION_TAG",
     "CELO_MAINNET_RPC_URL", "AGENTPAY_ONBOARDING_MANIFEST_PATH", "AGENTPAY_ONBOARDING_MANIFEST_SHA256",
     "AGENTPAY_ACCOUNT_RUNTIME_ARTIFACT_PATH", "AGENTPAY_FACTORY_ADDRESS", "AGENTPAY_FACTORY_RUNTIME_CODE_HASH",
     "AGENTPAY_SETUP_DEPLOYER_PRIVATE_KEY", "AGENTPAY_SETUP_RAW_TX_ENCRYPTION_KEY", "AGENTPAY_SETUP_WORKER_ID",
@@ -196,6 +198,7 @@ export function parseProductionSetupWorkerConfig(
   const parsedSupabaseApiKey = publishableKeySchema.safeParse(values.SUPABASE_PUBLISHABLE_KEY);
   if (!parsedSupabaseApiKey.success) throw new Error("SETUP_WORKER_SUPABASE_API_KEY_INVALID");
   const supabaseApiKey = parsedSupabaseApiKey.data;
+  const celoAttributionTag = assertAssignedCeloAttributionTag(values.CELO_ATTRIBUTION_TAG!);
   if (!new URL(supabaseUrl).hostname.endsWith(".supabase.co")) throw new Error("SETUP_WORKER_SUPABASE_URL_INVALID");
   const mainnetRpcUrl = requireHttpsUrl(values.CELO_MAINNET_RPC_URL!, "SETUP_WORKER_RPC_URL_INVALID");
   if (/test|dev|staging/i.test(new URL(mainnetRpcUrl).hostname)) throw new Error("SETUP_WORKER_RPC_URL_INVALID");
@@ -231,7 +234,7 @@ export function parseProductionSetupWorkerConfig(
     runtimeArtifactPath: values.AGENTPAY_ACCOUNT_RUNTIME_ARTIFACT_PATH!, factoryAddress,
     factoryRuntimeCodeHash, factoryDeploymentBlock: manifest.factory.deploymentBlock,
     signerAddress, workerId, leaseSeconds, pollIntervalMs, receiptTimeoutSeconds,
-    encryptionKey: Uint8Array.from(encryptionKey),
+    encryptionKey: Uint8Array.from(encryptionKey), celoAttributionTag,
     minimumSignerBalanceWei, maximumSignerBalanceWei,
     limits: { maxGasLimit, maxFeePerGas, maxPriorityFeePerGas, maxNativeCostWei },
     manifest, runtimeArtifact,
@@ -312,6 +315,7 @@ export async function createProductionSetupWorkerRuntime(
     },
     config: {
       workerId: config.workerId, leaseSeconds: config.leaseSeconds, encryptionKey: config.encryptionKey,
+      celoAttributionTag: config.celoAttributionTag,
       factoryDeploymentBlock: config.factoryDeploymentBlock,
       receiptTimeoutSeconds: config.receiptTimeoutSeconds,
       limits: config.limits,

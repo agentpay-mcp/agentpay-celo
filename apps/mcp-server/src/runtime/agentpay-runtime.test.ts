@@ -189,6 +189,78 @@ describe("parseAgentPayEnv", () => {
       /SUPABASE_PRODUCTION_URL|CELO_MAINNET_RPC_URL|production/i,
     );
   });
+
+  it("allows a production consumer to use the pinned executor address without a signing key", () => {
+    const config = parseAgentPayEnv({
+      AGENTPAY_ENVIRONMENT: "production",
+      AGENTPAY_HTTP_MODE: "consumer",
+      AGENTPAY_HOME_CHAIN_ID: "42220",
+      AGENTPAY_ACCOUNT_VERSION: "v2",
+      SUPABASE_PRODUCTION_URL: "https://production-project.supabase.co",
+      SUPABASE_PRODUCTION_SERVICE_ROLE_KEY: "production-service-key",
+      CELO_MAINNET_RPC_URL: "https://rpc.celo.tech/terigon",
+      CELO_MAINNET_RPC_FALLBACK_URL: "https://forno.celo.org",
+      CELO_ATTRIBUTION_TAG: "celo_agentpay",
+      AGENTPAY_EXECUTOR_ADDRESS: "0x645d39b3943D27cfE53184a446f551a69a4b1FDe",
+      AGENTPAY_SESSION_HASH_KEY: "s".repeat(64),
+      AGENTPAY_REVIEW_TOKEN_SECRET: "r".repeat(64),
+      AGENTPAY_PUBLIC_SETUP_URL: "https://wallet.agentpay.site/celo/setup",
+      SETUP_WEB_URL: "https://wallet.agentpay.site/celo/review",
+    });
+
+    assert.equal(config.executorPrivateKey, undefined);
+    assert.equal(config.executorAddress, "0x645d39b3943D27cfE53184a446f551a69a4b1FDe");
+  });
+
+  it("still requires the executor signing key for the production public surface", () => {
+    assert.throws(
+      () => parseAgentPayEnv({
+        AGENTPAY_ENVIRONMENT: "production",
+        AGENTPAY_HTTP_MODE: "public",
+        AGENTPAY_HOME_CHAIN_ID: "42220",
+        AGENTPAY_ACCOUNT_VERSION: "v2",
+        SUPABASE_PRODUCTION_URL: "https://production-project.supabase.co",
+        SUPABASE_PRODUCTION_SERVICE_ROLE_KEY: "production-service-key",
+        CELO_MAINNET_RPC_URL: "https://rpc.celo.tech/terigon",
+        CELO_MAINNET_RPC_FALLBACK_URL: "https://forno.celo.org",
+        CELO_ATTRIBUTION_TAG: "celo_agentpay",
+        AGENTPAY_EXECUTOR_ADDRESS: "0x645d39b3943D27cfE53184a446f551a69a4b1FDe",
+        AGENTPAY_SESSION_HASH_KEY: "s".repeat(64),
+        AGENTPAY_REVIEW_TOKEN_SECRET: "r".repeat(64),
+        AGENTPAY_PUBLIC_SETUP_URL: "https://wallet.agentpay.site/celo/setup",
+        SETUP_WEB_URL: "https://wallet.agentpay.site/celo/review",
+      }),
+      /EXECUTOR_PRIVATE_KEY/,
+    );
+  });
+
+  it("rejects executor-grade secrets in the production consumer boundary", () => {
+    const consumerEnv = {
+      AGENTPAY_ENVIRONMENT: "production",
+      AGENTPAY_HTTP_MODE: "consumer",
+      AGENTPAY_HOME_CHAIN_ID: "42220",
+      AGENTPAY_ACCOUNT_VERSION: "v2",
+      SUPABASE_PRODUCTION_URL: "https://production-project.supabase.co",
+      SUPABASE_PRODUCTION_SERVICE_ROLE_KEY: "production-service-key",
+      CELO_MAINNET_RPC_URL: "https://rpc.celo.tech/terigon",
+      CELO_MAINNET_RPC_FALLBACK_URL: "https://forno.celo.org",
+      CELO_ATTRIBUTION_TAG: "celo_agentpay",
+      AGENTPAY_EXECUTOR_ADDRESS: "0x645d39b3943D27cfE53184a446f551a69a4b1FDe",
+      AGENTPAY_SESSION_HASH_KEY: "s".repeat(64),
+      AGENTPAY_REVIEW_TOKEN_SECRET: "r".repeat(64),
+      AGENTPAY_PUBLIC_SETUP_URL: "https://wallet.agentpay.site/celo/setup",
+      SETUP_WEB_URL: "https://wallet.agentpay.site/celo/review",
+    };
+
+    assert.throws(
+      () => parseAgentPayEnv({ ...consumerEnv, EXECUTOR_PRIVATE_KEY: validPrivateKey }),
+      /consumer secret isolation/,
+    );
+    assert.throws(
+      () => parseAgentPayEnv({ ...consumerEnv, AGENTPAY_RAW_TX_ENCRYPTION_KEY: "a".repeat(64) }),
+      /consumer secret isolation/,
+    );
+  });
 });
 
 describe("runtime identifiers", () => {
@@ -484,6 +556,7 @@ describe("createAgentPayRuntime", () => {
         celoRpcFallbackUrls: {
           42220: "https://forno.celo.org",
         },
+        executorGasMaxWei: 50_000_000_000_000_000n,
         executorPrivateKey: validPrivateKey,
         lifiApiKey: "lifi-key",
         x402BazaarFacilitatorUrl: "https://facilitator.example.com",
@@ -681,6 +754,7 @@ describe("createAgentPayRuntime", () => {
           rpcFallbackUrls: {
             42220: "https://forno.celo.org",
           },
+          executorGasMaxWei: 50_000_000_000_000_000n,
           executorPrivateKey: validPrivateKey,
         },
       ],

@@ -3,7 +3,13 @@ import { describe, it } from "node:test";
 
 import { createDirectPaymentRouteQuote } from "@agentpay-ai/shared-celo";
 import { MAINNET_USDC_ADDRESS } from "./production-readiness.ts";
-import { assertCanaryRequestAllowed, createCanaryUsageStore, DEFAULT_CANARY_CAPS } from "./paid-execution-canary.ts";
+import {
+  assertCanaryRequestAllowed,
+  createCanaryUsageStore,
+  decimalToAtomic18,
+  decimalToAtomic6,
+  DEFAULT_CANARY_CAPS,
+} from "./paid-execution-canary.ts";
 
 const intent = {
   id: "pay_canary",
@@ -40,6 +46,11 @@ const allowlist = {
 };
 
 describe("mainnet canary caps", () => {
+  it("rejects malformed decimal values instead of ignoring extra separators", () => {
+    assert.throws(() => decimalToAtomic6("1..9"), /at most 6 decimals/i);
+    assert.throws(() => decimalToAtomic18("0.05.1"), /at most 18 decimals/i);
+  });
+
   it("allows exactly the first bounded direct payment and auto-stops the second", () => {
     const usage = createCanaryUsageStore();
     assertCanaryRequestAllowed(intent, allowlist, usage.snapshot(), allowlist.payerAddress, DEFAULT_CANARY_CAPS, new Date("2026-07-13T00:00:00.000Z"));
@@ -54,6 +65,7 @@ describe("mainnet canary caps", () => {
     assert.throws(() => assertCanaryRequestAllowed({ ...intent, sourceTokenAddress: "0x5555555555555555555555555555555555555555" }, allowlist, usage.snapshot(), allowlist.payerAddress, DEFAULT_CANARY_CAPS, now), /USDC/i);
     assert.throws(() => assertCanaryRequestAllowed({ ...intent, amountOut: "0.100001" }, allowlist, usage.snapshot(), allowlist.payerAddress, DEFAULT_CANARY_CAPS, now), /cap/i);
     assert.equal(DEFAULT_CANARY_CAPS.maxAcceptedLifecycles, 1);
+    assert.equal(DEFAULT_CANARY_CAPS.maxExecutorGasCostWei, 50_000_000_000_000_000n);
   });
 
   it("makes a repeated lifecycle reservation idempotent", () => {
@@ -64,5 +76,29 @@ describe("mainnet canary caps", () => {
     assert.throws(() => usage.reserve("lifecycle_2", "tenant_1", intent.amountOut), /OFF|cap/i);
     usage.complete("lifecycle_1");
     assert.equal(usage.snapshot().tenantInFlight, 0);
+  });
+
+  it("permits exactly one audited retry when the manifest cap is two", () => {
+    const retryCaps = {
+      ...DEFAULT_CANARY_CAPS,
+      maxAcceptedLifecycles: 2,
+    };
+    const usage = createCanaryUsageStore(retryCaps);
+
+    usage.reserve("rejected_lifecycle", "tenant_1", "0.05");
+    usage.complete("rejected_lifecycle");
+    usage.reserve("retry_lifecycle", "tenant_1", "0.05");
+    usage.complete("retry_lifecycle");
+
+    assert.deepEqual(usage.snapshot(), {
+      acceptedLifecycles: 2,
+      tenantDailyAtomic: 100_000n,
+      globalDailyAtomic: 100_000n,
+      tenantInFlight: 0,
+    });
+    assert.throws(
+      () => usage.reserve("third_lifecycle", "tenant_1", "0.000001"),
+      /OFF|auto-stop|accepted lifecycle/i,
+    );
   });
 });

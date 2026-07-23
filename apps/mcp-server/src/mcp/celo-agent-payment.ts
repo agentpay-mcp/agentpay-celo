@@ -1,3 +1,5 @@
+import { isIP } from "node:net";
+
 import {
   HTTPFacilitatorClient,
   x402HTTPResourceServer,
@@ -68,6 +70,7 @@ export interface AgentPayMcpPaymentConfig {
   maxTimeoutSeconds: number;
   facilitatorUrl?: string;
   facilitatorApiKey?: string;
+  resourceUrl: string;
   syncSettle?: boolean;
   assetTransferMethod: "eip3009";
   assetDecimals: number;
@@ -104,6 +107,7 @@ export function parseAgentPayMcpPaymentEnv(
   const missing = [
     normalized.AGENTPAY_A2MCP_PAYMENT_PAY_TO ? undefined : "AGENTPAY_A2MCP_PAYMENT_PAY_TO",
     normalized.AGENTPAY_A2MCP_PAYMENT_PRICE ? undefined : "AGENTPAY_A2MCP_PAYMENT_PRICE",
+    normalized.AGENTPAY_PAID_MCP_URL ? undefined : "AGENTPAY_PAID_MCP_URL",
   ].filter((name): name is string => Boolean(name));
   if (!facilitatorUrl) missing.push("AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL");
   if (!normalized.AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL && !normalized.AGENTPAY_CELO_X402_API_KEY) {
@@ -138,6 +142,9 @@ export function parseAgentPayMcpPaymentEnv(
     facilitatorUrl && !isHttpUrl(facilitatorUrl)
       ? "AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL"
       : undefined,
+    normalized.AGENTPAY_PAID_MCP_URL && !isPublicHttpsResourceUrl(normalized.AGENTPAY_PAID_MCP_URL)
+      ? "AGENTPAY_PAID_MCP_URL"
+      : undefined,
     normalized.AGENTPAY_A2MCP_PAYMENT_ASSET_TRANSFER_METHOD &&
     normalized.AGENTPAY_A2MCP_PAYMENT_ASSET_TRANSFER_METHOD !== "eip3009"
       ? "AGENTPAY_A2MCP_PAYMENT_ASSET_TRANSFER_METHOD"
@@ -158,6 +165,7 @@ export function parseAgentPayMcpPaymentEnv(
     assetDecimals,
     facilitatorUrl,
     facilitatorApiKey: normalized.AGENTPAY_CELO_X402_API_KEY,
+    resourceUrl: normalized.AGENTPAY_PAID_MCP_URL,
     syncSettle: parseOptionalBoolean(normalized.AGENTPAY_A2MCP_PAYMENT_SYNC_SETTLE, "AGENTPAY_A2MCP_PAYMENT_SYNC_SETTLE"),
     assetTransferMethod: "eip3009" as const,
   }) as AgentPayMcpPaymentConfig;
@@ -181,6 +189,7 @@ export async function createCeloAgentPaymentProcessor(
 
   const resourceConfig = {
     accepts: createCeloPaymentOption(config),
+    resource: config.resourceUrl,
     description: "AgentPay public MCP endpoint",
     mimeType: "application/json",
     unpaidResponseBody() {
@@ -352,6 +361,27 @@ function isHttpUrl(value: string): boolean {
   try {
     const url = new URL(value);
     return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function isPublicHttpsResourceUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname
+      .replace(/^\[|\]$/g, "")
+      .replace(/\.+$/, "")
+      .toLowerCase();
+    const blockedHostname = hostname === "localhost"
+      || [".localhost", ".local", ".internal", ".home", ".lan", ".test", ".invalid"]
+        .some((suffix) => hostname.endsWith(suffix));
+    return url.protocol === "https:"
+      && url.username === ""
+      && url.password === ""
+      && url.hash === ""
+      && !blockedHostname
+      && isIP(hostname) === 0;
   } catch {
     return false;
   }

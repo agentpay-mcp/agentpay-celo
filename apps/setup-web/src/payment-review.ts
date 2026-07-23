@@ -102,9 +102,12 @@ interface LoadedPaymentReview {
   expiresAt: number;
 }
 
-export function createPaymentReviewPageResponse(): Response {
+export function createPaymentReviewPageResponse(apiPath = "/api/payment-review"): Response {
+  if (!/^\/[a-z0-9/_-]+$/i.test(apiPath)) {
+    throw new Error("Payment review API path is invalid.");
+  }
   const nonce = Buffer.from(randomBytes(18)).toString("base64");
-  return new Response(renderPaymentReviewPage(nonce), {
+  return new Response(renderPaymentReviewPage(nonce, apiPath), {
     status: 200,
     headers: reviewHeaders({
       "content-type": "text/html; charset=utf-8",
@@ -412,7 +415,7 @@ function reviewHeaders(headers: Record<string, string>): HeadersInit {
   };
 }
 
-function renderPaymentReviewPage(nonce: string): string {
+function renderPaymentReviewPage(nonce: string, apiPath: string): string {
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -459,6 +462,7 @@ function renderPaymentReviewPage(nonce: string): string {
     </main>
     <script nonce="${nonce}">
       (() => {
+        const reviewApiPath = ${JSON.stringify(apiPath)};
         const state = { token: new URLSearchParams(window.location.hash.slice(1)).get("review_token") || "", payload: null };
         const notice = document.getElementById("notice");
         const review = document.getElementById("review");
@@ -563,7 +567,7 @@ function renderPaymentReviewPage(nonce: string): string {
             const accounts = await ethereum.request({ method: "eth_accounts" });
             if (!state.payload.walletAuthorization) throw new Error("Review unavailable.");
             const signature = await ethereum.request({ method: "eth_signTypedData_v4", params: [accounts[0], JSON.stringify(state.payload.walletAuthorization)] });
-            const response = await fetch("/api/payment-review", { method: "POST", headers: { "content-type": "application/json", "x-agentpay-review-token": state.token }, body: JSON.stringify({ signature }) });
+            const response = await fetch(reviewApiPath, { method: "POST", headers: { "content-type": "application/json", "x-agentpay-review-token": state.token }, body: JSON.stringify({ signature }) });
             const body = await response.json();
             if (!response.ok) throw new Error(body.error || "Signature handoff failed.");
             state.token = "";
@@ -577,7 +581,7 @@ function renderPaymentReviewPage(nonce: string): string {
         const load = async () => {
           if (!state.token) { setNotice("This review link is incomplete or expired.", "error"); return; }
           try {
-            const response = await fetch("/api/payment-review", { headers: { "x-agentpay-review-token": state.token } });
+            const response = await fetch(reviewApiPath, { headers: { "x-agentpay-review-token": state.token } });
             const body = await response.json();
             if (!response.ok) throw new Error(body.error || "Review unavailable.");
             state.payload = body;

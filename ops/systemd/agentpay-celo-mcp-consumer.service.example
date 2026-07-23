@@ -1,0 +1,40 @@
+[Unit]
+Description=AgentPay Celo authenticated consumer MCP server (production OFF)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=agentpay-celo-consumer
+Group=agentpay-celo-consumer
+WorkingDirectory=/opt/agentpay-celo/releases/@RELEASE_COMMIT@
+Environment=NODE_ENV=production
+EnvironmentFile=/opt/agentpay-celo/private/mcp-consumer/runtime.env
+Environment=AGENTPAY_HTTP_MODE=consumer
+ExecStart=/opt/agentpay-celo/releases/@RELEASE_COMMIT@/packages/cli/dist/index.js serve-http --host 127.0.0.1 --port 3102
+Restart=always
+RestartSec=5
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectClock=true
+ProtectHostname=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SocketBindDeny=any
+SocketBindAllow=tcp:3102
+LockPersonality=true
+RestrictSUIDSGID=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+ReadOnlyPaths=/opt/agentpay-celo/releases/@RELEASE_COMMIT@ /opt/agentpay-celo/private/mcp-consumer /opt/agentpay-celo/manifests
+InaccessiblePaths=/opt/agentpay-celo/private/mcp-public /opt/agentpay-celo/private/review /opt/agentpay-celo/private/web /opt/agentpay-celo/private/worker /opt/agentpay-celo/private/rotator.env
+
+[Install]
+WantedBy=multi-user.target
