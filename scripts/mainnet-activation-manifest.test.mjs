@@ -208,6 +208,7 @@ describe("Celo mainnet activation manifest", () => {
     assert.equal(canary.x402.enabled, true);
     assert.equal(canary.activation.executionEnabled, true);
     assert.equal(canary.onboarding.setupMode, "CANARY");
+    assert.equal(canary.canaryPolicy.maxAcceptedLifecycles, 2);
     assert.equal(canary.canaryPolicy.invoiceMaxUsdc, "0.05");
     assert.equal(canary.canaryPolicy.accountFundingUsdc, "0.05");
     assert.equal(canary.canaryPolicy.payerFeeWalletFundingMaxUsdc, "0.05");
@@ -269,6 +270,7 @@ describe("Celo mainnet activation manifest", () => {
     assert.notEqual(first.outputPath, MAINNET_ACTIVATED_MANIFEST_PATH);
     assert.deepEqual(first.manifest.canaryPolicy, {
       ...deployedMainnetManifest.canaryPolicy,
+      maxAcceptedLifecycles: 2,
       invoiceMaxUsdc: "0.05",
       accountFundingUsdc: "0.05",
       payerFeeWalletFundingMaxUsdc: "0.05",
@@ -283,6 +285,33 @@ describe("Celo mainnet activation manifest", () => {
     assert.equal(first.manifest.database.projectRef, "hxnrqujmyltkumfipkuk");
     assert.equal(first.manifest.release.commit, "725bab9a446364dbf4086263c9f679d1869ea416");
     assert.equal(first.manifest.domains.publicOrigin, "https://mcp.agentpay.site");
+    assert.equal(deployedMainnetManifest.canaryPolicy.maxAcceptedLifecycles, 1);
+  });
+
+  it("fails closed if the second-attempt canary lifecycle cap drifts", () => {
+    const canary = makeProductionCanaryManifest();
+    const staleLimit = {
+      ...canary,
+      canaryPolicy: {
+        ...canary.canaryPolicy,
+        maxAcceptedLifecycles: 1,
+      },
+    };
+    const expandedLimit = {
+      ...canary,
+      canaryPolicy: {
+        ...canary.canaryPolicy,
+        maxAcceptedLifecycles: 3,
+      },
+    };
+
+    const staleResult = validateMainnetCanaryManifest(staleLimit, { artifactDigests });
+    const expandedResult = validateMainnetCanaryManifest(expandedLimit, { artifactDigests });
+
+    assert.equal(staleResult.valid, false);
+    assert.match(staleResult.errors.join("; "), /canaryPolicy\.maxAcceptedLifecycles/);
+    assert.equal(expandedResult.valid, false);
+    assert.match(expandedResult.errors.join("; "), /canaryPolicy\.maxAcceptedLifecycles/);
   });
 
   it("refuses to use the DEPLOYED/OFF source path as canary output", async () => {

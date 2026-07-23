@@ -105,7 +105,7 @@
     ]
   },
   "canaryPolicy": {
-    "maxAcceptedLifecycles": 1,
+    "maxAcceptedLifecycles": 2,
     "invoiceMaxUsdc": "0.05",
     "accountFundingUsdc": "0.05",
     "payerFeeWalletFundingMaxUsdc": "0.05",

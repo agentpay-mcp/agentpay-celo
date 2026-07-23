@@ -22,6 +22,7 @@ export const MAINNET_ACTIVATED_MANIFEST_PATH = fileURLToPath(
 export const MAINNET_CANARY_MANIFEST_PATH = fileURLToPath(
   new URL("../ops/manifests/celo-mainnet.canary.json", import.meta.url),
 );
+export const MAINNET_CANARY_MAX_ACCEPTED_LIFECYCLES = 2;
 export const MAINNET_CANARY_BINDING = Object.freeze({
   tenantId: "3cf8d1e5-3b17-4069-b2ec-7db81752e415",
   payerAddress: "0x98802C2d45284F2bcA06BF3d6bdb41221a7Cc5cD",
@@ -41,6 +42,7 @@ export const MAINNET_CANARY_BINDING = Object.freeze({
   x402PayToEnvRef: "AGENTPAY_A2MCP_PAYMENT_PAY_TO",
   x402FacilitatorEnvRef: "AGENTPAY_A2MCP_PAYMENT_FACILITATOR_URL",
   policy: Object.freeze({
+    maxAcceptedLifecycles: MAINNET_CANARY_MAX_ACCEPTED_LIFECYCLES,
     invoiceMaxUsdc: "0.05",
     accountFundingUsdc: "0.05",
     payerFeeWalletFundingMaxUsdc: "0.05",
@@ -582,7 +584,6 @@ export function validateMainnetCanaryManifest(manifest, { artifactDigests } = {}
     add("canaryPolicy", "must be an object");
   } else {
     const exactPolicy = {
-      maxAcceptedLifecycles: 1,
       ...binding.policy,
       maxNativeFee: "0",
       executorGasMaxCelo: MAINNET_EXECUTOR_GAS_MAX_CELO,

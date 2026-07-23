@@ -77,4 +77,28 @@ describe("mainnet canary caps", () => {
     usage.complete("lifecycle_1");
     assert.equal(usage.snapshot().tenantInFlight, 0);
   });
+
+  it("permits exactly one audited retry when the manifest cap is two", () => {
+    const retryCaps = {
+      ...DEFAULT_CANARY_CAPS,
+      maxAcceptedLifecycles: 2,
+    };
+    const usage = createCanaryUsageStore(retryCaps);
+
+    usage.reserve("rejected_lifecycle", "tenant_1", "0.05");
+    usage.complete("rejected_lifecycle");
+    usage.reserve("retry_lifecycle", "tenant_1", "0.05");
+    usage.complete("retry_lifecycle");
+
+    assert.deepEqual(usage.snapshot(), {
+      acceptedLifecycles: 2,
+      tenantDailyAtomic: 100_000n,
+      globalDailyAtomic: 100_000n,
+      tenantInFlight: 0,
+    });
+    assert.throws(
+      () => usage.reserve("third_lifecycle", "tenant_1", "0.000001"),
+      /OFF|auto-stop|accepted lifecycle/i,
+    );
+  });
 });
