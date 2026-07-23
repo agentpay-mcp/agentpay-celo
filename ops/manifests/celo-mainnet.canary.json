@@ -111,7 +111,7 @@
     "payerFeeWalletFundingMaxUsdc": "0.05",
     "aspFeeUsdc": "0.01",
     "maxNativeFee": "0",
-    "executorGasMaxCelo": "0.005",
+    "executorGasMaxCelo": "0.05",
     "allowlistedTenantId": "3cf8d1e5-3b17-4069-b2ec-7db81752e415",
     "allowlistedOwnerAddress": "0x9CEef6d89915628331C25F48360FfE97CD71B3EE",
     "allowlistedAccountAddress": "0xA495Eaff5809Efb32beb6eCd18a48e9469Acf121",

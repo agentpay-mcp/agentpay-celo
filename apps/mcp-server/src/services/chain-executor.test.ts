@@ -7,6 +7,7 @@ import { appendCeloAttributionTag } from "@agentpay-ai/shared-celo";
 import {
   agentPayAccountInterface,
   agentPayAccountV2Interface,
+  assertExecutorGasCostWithinCap,
   assertExecutorRpcChain,
   createEthersNativeBalanceReader,
   createEthersRuntimeAdapters,
@@ -76,6 +77,38 @@ describe("createEthersRuntimeAdapters", () => {
         deadline: "2026-08-02T00:00:00.000Z",
       }),
       /signing is unavailable/i,
+    );
+  });
+});
+
+describe("executor gas spend cap", () => {
+  it("accepts a populated transaction below 0.05 CELO and rejects one above it", () => {
+    const capWei = 50_000_000_000_000_000n;
+
+    assert.doesNotThrow(() => assertExecutorGasCostWithinCap({
+      gasLimit: 119_244n,
+      maxFeePerGas: 402_500_000_000n,
+    }, capWei));
+    assert.doesNotThrow(() => assertExecutorGasCostWithinCap({
+      gasLimit: 100_000n,
+      gasPrice: 200_000_000_000n,
+    }, capWei));
+    assert.throws(() => assertExecutorGasCostWithinCap({
+      gasLimit: 125_000n,
+      maxFeePerGas: 402_500_000_000n,
+    }, capWei), /executor gas cost exceeds/i);
+  });
+
+  it("fails closed when a capped transaction has no populated gas limit or fee", () => {
+    const capWei = 50_000_000_000_000_000n;
+
+    assert.throws(
+      () => assertExecutorGasCostWithinCap({ maxFeePerGas: 402_500_000_000n }, capWei),
+      /gas limit and fee must be populated/i,
+    );
+    assert.throws(
+      () => assertExecutorGasCostWithinCap({ gasLimit: 119_244n }, capWei),
+      /gas limit and fee must be populated/i,
     );
   });
 });

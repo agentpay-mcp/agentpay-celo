@@ -156,6 +156,7 @@ export interface AgentPayRuntimeConfig {
   celoRpcUrls?: Partial<Record<number, string>>;
   celoRpcFallbackUrls?: Partial<Record<number, string>>;
   celoAttributionTag?: string;
+  executorGasMaxWei?: bigint;
   executorPrivateKey?: string;
   executorAddress?: string;
   lifiApiKey?: string;
@@ -411,6 +412,7 @@ export function createAgentPayRuntime(config: AgentPayRuntimeConfig, options: Ag
       rpcUrls: config.celoRpcUrls,
       rpcFallbackUrls: config.celoRpcFallbackUrls,
       celoAttributionTag: config.celoAttributionTag,
+      executorGasMaxWei: config.executorGasMaxWei,
       executorPrivateKey: config.executorPrivateKey,
     }) as EthersRuntimeConfig,
   );

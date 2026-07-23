@@ -1,5 +1,5 @@
 import { AbiCoder, FallbackProvider, Interface, JsonRpcProvider, Wallet, keccak256 } from "ethers";
-import type { AbstractProvider } from "ethers";
+import type { AbstractProvider, BigNumberish } from "ethers";
 import {
   appendCeloAttributionTag,
   getStableTokenDecimalsForChain,
@@ -91,7 +91,28 @@ export interface EthersRuntimeConfig {
   rpcUrls?: Partial<Record<number, string>>;
   rpcFallbackUrls?: Partial<Record<number, string>>;
   executorPrivateKey?: string;
+  executorGasMaxWei?: bigint;
   celoAttributionTag?: string;
+}
+
+export interface PopulatedExecutorGasFields {
+  gasLimit?: BigNumberish | null;
+  gasPrice?: BigNumberish | null;
+  maxFeePerGas?: BigNumberish | null;
+}
+
+export function assertExecutorGasCostWithinCap(
+  transaction: PopulatedExecutorGasFields,
+  maxCostWei: bigint | undefined,
+): void {
+  if (maxCostWei === undefined) return;
+  const feePerGas = transaction.maxFeePerGas ?? transaction.gasPrice;
+  if (transaction.gasLimit === undefined || transaction.gasLimit === null || feePerGas === undefined || feePerGas === null) {
+    throw new Error("Executor gas limit and fee must be populated before signing.");
+  }
+  if (BigInt(transaction.gasLimit) * BigInt(feePerGas) > maxCostWei) {
+    throw new Error("Executor gas cost exceeds the configured canary cap.");
+  }
 }
 
 export function createEthersRoutePaymentExecutor(sender: TransactionSender): PaymentExecutor {
@@ -405,13 +426,17 @@ export function createEthersRuntimeAdapters(config: EthersRuntimeConfig): {
       if (!config.executorPrivateKey) throw new Error("Executor signing is unavailable in this runtime.");
       const provider = await providerRouter.getCheckedWriteProvider(chainId);
       const wallet = new Wallet(config.executorPrivateKey, provider);
-      return wallet.sendTransaction(transaction);
+      const populated = await wallet.populateTransaction({ ...transaction, chainId });
+      assertExecutorGasCostWithinCap(populated, config.executorGasMaxWei);
+      const rawTransaction = await wallet.signTransaction(populated);
+      return provider.broadcastTransaction(rawTransaction);
     },
     async prepareAndSignTransaction(transaction, chainId) {
       if (!config.executorPrivateKey) throw new Error("Executor signing is unavailable in this runtime.");
       const provider = await providerRouter.getCheckedWriteProvider(chainId);
       const wallet = new Wallet(config.executorPrivateKey, provider);
       const populated = await wallet.populateTransaction({ ...transaction, chainId });
+      assertExecutorGasCostWithinCap(populated, config.executorGasMaxWei);
       const rawTransaction = await wallet.signTransaction(populated);
       if (populated.nonce === undefined) throw new Error("Signed transaction nonce was not populated.");
       if (populated.to === null || populated.to === undefined || populated.data === null || populated.data === undefined || populated.value === undefined) {

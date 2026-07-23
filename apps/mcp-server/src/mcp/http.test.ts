@@ -40,6 +40,7 @@ import type {
   ExpectedX402PaymentRequirements,
 } from "./celo-agent-payment.ts";
 import {
+  loadManifestCanaryPolicy,
   resolveProductionReadiness,
   shouldVerifyMainnetAccountAtStartup,
   startAgentPayHttpServer,
@@ -1352,6 +1353,41 @@ describe("startAgentPayHttpServer", () => {
     assert.equal(shouldVerifyMainnetAccountAtStartup("PUBLIC"), true);
     assert.equal(shouldVerifyMainnetAccountAtStartup("DRAIN"), true);
     assert.equal(shouldVerifyMainnetAccountAtStartup(undefined), true);
+  });
+
+  it("loads the frozen executor gas cap from the canary manifest in wei", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "agentpay-canary-gas-cap-test-"));
+    const manifestPath = join(directory, "canary.json");
+    const manifest = {
+      canaryPolicy: {
+        allowlistedTenantId: "11111111-1111-4111-8111-111111111111",
+        allowlistedOwnerAddress: "0x1111111111111111111111111111111111111111",
+        allowlistedAccountAddress: "0x2222222222222222222222222222222222222222",
+        payerAddress: "0x3333333333333333333333333333333333333333",
+        recipientAddress: "0x4444444444444444444444444444444444444444",
+        invoiceMaxUsdc: "0.05",
+        maxNativeFee: "0",
+        maxAcceptedLifecycles: 1,
+        executorGasMaxCelo: "0.05",
+      },
+    };
+
+    try {
+      await writeFile(manifestPath, JSON.stringify(manifest));
+      const policy = await loadManifestCanaryPolicy(manifestPath);
+
+      assert.equal(policy?.caps?.maxExecutorGasCostWei, 50_000_000_000_000_000n);
+
+      manifest.canaryPolicy.executorGasMaxCelo = "0.0500000000000000001";
+      await writeFile(manifestPath, JSON.stringify(manifest));
+      assert.equal(await loadManifestCanaryPolicy(manifestPath), undefined);
+
+      manifest.canaryPolicy.executorGasMaxCelo = "0.05.1";
+      await writeFile(manifestPath, JSON.stringify(manifest));
+      assert.equal(await loadManifestCanaryPolicy(manifestPath), undefined);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   it("skips the historical account scan only when the effective production mode is OFF", async () => {

@@ -83,6 +83,7 @@ import {
   assertCanaryUsageWithinCaps,
   CanaryPolicyError,
   DEFAULT_CANARY_CAPS,
+  decimalToAtomic18,
   decimalToAtomic6,
   type CanaryPolicy,
 } from "../runtime/paid-execution-canary.ts";
@@ -314,6 +315,10 @@ export async function startAgentPayHttpServer(options: StartAgentPayHttpServerOp
         ...config,
         executionMode: mode === "public" ? readiness.mode : ("OFF" as const),
         executionModeVerified: mode === "public" && readiness.executionAllowed,
+        executorGasMaxWei:
+          mode === "public" && readiness.mode === "CANARY"
+            ? canaryPolicy?.caps?.maxExecutorGasCostWei
+            : undefined,
       }
     : config;
   const createRuntime = options.createRuntime ?? ((runtimeConfig, tenantContext) =>
@@ -2372,7 +2377,7 @@ async function checkProductionOnboardingReady(setupUrl: string, expectedMode: st
   return body.status === "ready" && body.mode === expectedMode;
 }
 
-async function loadManifestCanaryPolicy(path: string | undefined): Promise<CanaryPolicy | undefined> {
+export async function loadManifestCanaryPolicy(path: string | undefined): Promise<CanaryPolicy | undefined> {
   try {
     const manifest = await loadProductionManifest(path) as Record<string, any>;
     const policy = manifest.canaryPolicy as Record<string, unknown> | undefined;
@@ -2393,6 +2398,7 @@ async function loadManifestCanaryPolicy(path: string | undefined): Promise<Canar
     }
     const invoiceMaxUsdc = typeof policy.invoiceMaxUsdc === "string" ? policy.invoiceMaxUsdc : "0.10";
     const maxNativeFee = typeof policy.maxNativeFee === "string" ? policy.maxNativeFee : "0";
+    if (typeof policy.executorGasMaxCelo !== "string") return undefined;
     return {
       allowlist: {
         tenantId: values[0] as string,
@@ -2406,6 +2412,7 @@ async function loadManifestCanaryPolicy(path: string | undefined): Promise<Canar
         maxAcceptedLifecycles: typeof policy.maxAcceptedLifecycles === "number" ? policy.maxAcceptedLifecycles : 1,
         maxInvoiceAtomic: decimalToAtomic6(invoiceMaxUsdc),
         maxNativeFee: BigInt(maxNativeFee),
+        maxExecutorGasCostWei: decimalToAtomic18(policy.executorGasMaxCelo),
       },
     };
   } catch {

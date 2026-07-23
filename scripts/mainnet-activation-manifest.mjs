@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   MAINNET_CAIP2,
   MAINNET_CHAIN_ID,
+  MAINNET_EXECUTOR_GAS_MAX_CELO,
   MAINNET_SHADOW_MANIFEST_PATH,
   MAINNET_USDC_ADDRESS,
   MAINNET_USDC_CODE_HASH,
@@ -44,6 +45,7 @@ export const MAINNET_CANARY_BINDING = Object.freeze({
     accountFundingUsdc: "0.05",
     payerFeeWalletFundingMaxUsdc: "0.05",
     aspFeeUsdc: "0.01",
+    executorGasMaxCelo: MAINNET_EXECUTOR_GAS_MAX_CELO,
   }),
   secretRefs: Object.freeze({
     namespace: "agentpay-celo/production",
@@ -583,7 +585,7 @@ export function validateMainnetCanaryManifest(manifest, { artifactDigests } = {}
       maxAcceptedLifecycles: 1,
       ...binding.policy,
       maxNativeFee: "0",
-      executorGasMaxCelo: "0.005",
+      executorGasMaxCelo: MAINNET_EXECUTOR_GAS_MAX_CELO,
       allowlistedTenantId: binding.tenantId,
       allowlistedOwnerAddress: binding.ownerAddress,
       allowlistedAccountAddress: binding.accountAddress,

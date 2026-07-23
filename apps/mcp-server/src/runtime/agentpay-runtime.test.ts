@@ -556,6 +556,7 @@ describe("createAgentPayRuntime", () => {
         celoRpcFallbackUrls: {
           42220: "https://forno.celo.org",
         },
+        executorGasMaxWei: 50_000_000_000_000_000n,
         executorPrivateKey: validPrivateKey,
         lifiApiKey: "lifi-key",
         x402BazaarFacilitatorUrl: "https://facilitator.example.com",
@@ -753,6 +754,7 @@ describe("createAgentPayRuntime", () => {
           rpcFallbackUrls: {
             42220: "https://forno.celo.org",
           },
+          executorGasMaxWei: 50_000_000_000_000_000n,
           executorPrivateKey: validPrivateKey,
         },
       ],

@@ -212,6 +212,7 @@ describe("Celo mainnet activation manifest", () => {
     assert.equal(canary.canaryPolicy.accountFundingUsdc, "0.05");
     assert.equal(canary.canaryPolicy.payerFeeWalletFundingMaxUsdc, "0.05");
     assert.equal(canary.canaryPolicy.aspFeeUsdc, "0.01");
+    assert.equal(canary.canaryPolicy.executorGasMaxCelo, "0.05");
     assert.equal(
       canary.secretRefs.setupDeployerPrivateKeyEnvRef,
       "AGENTPAY_SETUP_DEPLOYER_PRIVATE_KEY",
@@ -272,6 +273,7 @@ describe("Celo mainnet activation manifest", () => {
       accountFundingUsdc: "0.05",
       payerFeeWalletFundingMaxUsdc: "0.05",
       aspFeeUsdc: "0.01",
+      executorGasMaxCelo: "0.05",
       allowlistedTenantId: "3cf8d1e5-3b17-4069-b2ec-7db81752e415",
       allowlistedOwnerAddress: deployedMainnetManifest.contract.ownerAddress,
       allowlistedAccountAddress: deployedMainnetManifest.contract.address,
@@ -460,6 +462,7 @@ describe("Celo mainnet activation manifest", () => {
       accountFundingUsdc: "0.05",
       payerFeeWalletFundingMaxUsdc: "0.05",
       aspFeeUsdc: "0.01",
+      executorGasMaxCelo: "0.05",
     };
 
     for (const [key, value] of Object.entries(expectedPolicy)) {
@@ -473,12 +476,18 @@ describe("Celo mainnet activation manifest", () => {
         invoiceMaxUsdc: "0.10",
         accountFundingUsdc: "0.10",
         payerFeeWalletFundingMaxUsdc: "0.02",
+        executorGasMaxCelo: "0.005",
       },
     };
     const result = validateMainnetCanaryManifest(stalePolicy, { artifactDigests });
 
     assert.equal(result.valid, false);
-    for (const path of ["invoiceMaxUsdc", "accountFundingUsdc", "payerFeeWalletFundingMaxUsdc"]) {
+    for (const path of [
+      "invoiceMaxUsdc",
+      "accountFundingUsdc",
+      "payerFeeWalletFundingMaxUsdc",
+      "executorGasMaxCelo",
+    ]) {
       assert.match(result.errors.join("; "), new RegExp(`canaryPolicy\\.${path}`));
     }
   });
