@@ -44,6 +44,7 @@ import {
   resolveProductionReadiness,
   shouldVerifyMainnetAccountAtStartup,
   startAgentPayHttpServer,
+  toConsumerProductionReadiness,
 } from "./http.ts";
 import type { ConnectableAgentPayMcpServer } from "./stdio.ts";
 
@@ -1216,6 +1217,125 @@ describe("startAgentPayHttpServer", () => {
     } finally {
       await server.close();
     }
+  });
+
+  it("reports an isolated production consumer as ready without granting execution", () => {
+    const readiness = toConsumerProductionReadiness(
+      {
+        ready: false,
+        executionAllowed: false,
+        publicPaymentAllowed: false,
+        mode: "PUBLIC",
+        status: "READY",
+        errors: [
+          "payment config: public mode requires enabled x402 payment",
+          "raw transaction encryption: AGENTPAY_RAW_TX_ENCRYPTION_KEY must be a 32-byte hex key",
+          "execution mode: environment value does not match the database identity",
+        ],
+        checks: {
+          environment: true,
+          manifest: true,
+          identity: true,
+          payment: false,
+          rawTransactionEncryption: false,
+          account: true,
+          canaryAdmission: true,
+          onboardingMode: true,
+          onboarding: true,
+        },
+        identityFingerprint: "consumer-fingerprint",
+      },
+      {
+        AGENTPAY_EXECUTION_MODE: "OFF",
+        AGENTPAY_A2MCP_PAYMENT_ENABLED: "false",
+      },
+    );
+
+    assert.equal(readiness.ready, true);
+    assert.equal(readiness.executionAllowed, false);
+    assert.equal(readiness.publicPaymentAllowed, false);
+    assert.equal(readiness.mode, "PUBLIC");
+    assert.equal(readiness.status, "READY");
+    assert.equal(readiness.identityFingerprint, "consumer-fingerprint");
+    assert.deepEqual(readiness.errors, []);
+    assert.deepEqual(readiness.checks, {
+      environment: true,
+      manifest: true,
+      identity: true,
+      account: true,
+      canaryAdmission: true,
+      onboardingMode: true,
+      onboarding: true,
+      consumerIsolation: true,
+    });
+  });
+
+  it("keeps production consumer readiness fail-closed on secrets or identity drift", () => {
+    const baseReadiness = {
+      ready: false,
+      executionAllowed: false,
+      publicPaymentAllowed: false,
+      mode: "PUBLIC" as const,
+      status: "READY" as const,
+      errors: [
+        "payment config: public mode requires enabled x402 payment",
+        "raw transaction encryption: AGENTPAY_RAW_TX_ENCRYPTION_KEY must be a 32-byte hex key",
+        "execution mode: environment value does not match the database identity",
+      ],
+      checks: {
+        environment: true,
+        manifest: true,
+        identity: true,
+        payment: false,
+        rawTransactionEncryption: false,
+        account: true,
+        canaryAdmission: true,
+        onboardingMode: true,
+        onboarding: true,
+      },
+    };
+
+    for (const env of [
+      {
+        AGENTPAY_EXECUTION_MODE: "PUBLIC",
+        AGENTPAY_A2MCP_PAYMENT_ENABLED: "false",
+      },
+      {
+        AGENTPAY_EXECUTION_MODE: "OFF",
+        AGENTPAY_A2MCP_PAYMENT_ENABLED: "true",
+      },
+      {
+        AGENTPAY_EXECUTION_MODE: "OFF",
+        AGENTPAY_A2MCP_PAYMENT_ENABLED: "false",
+        EXECUTOR_PRIVATE_KEY: "must-not-enter-consumer",
+      },
+      {
+        AGENTPAY_EXECUTION_MODE: "OFF",
+        AGENTPAY_A2MCP_PAYMENT_ENABLED: "false",
+        AGENTPAY_RAW_TX_ENCRYPTION_KEY: "must-not-enter-consumer",
+      },
+    ]) {
+      const result = toConsumerProductionReadiness(baseReadiness, env);
+      assert.equal(result.ready, false);
+      assert.equal(result.executionAllowed, false);
+      assert.equal(result.publicPaymentAllowed, false);
+      assert.equal(result.checks.consumerIsolation, false);
+    }
+
+    const identityDrift = toConsumerProductionReadiness(
+      {
+        ...baseReadiness,
+        errors: [...baseReadiness.errors, "runtime identity: manifest digest does not match"],
+        checks: { ...baseReadiness.checks, identity: false },
+      },
+      {
+        AGENTPAY_EXECUTION_MODE: "OFF",
+        AGENTPAY_A2MCP_PAYMENT_ENABLED: "false",
+      },
+    );
+    assert.equal(identityDrift.ready, false);
+    assert.equal(identityDrift.checks.consumerIsolation, true);
+    assert.match(identityDrift.errors.join("; "), /manifest digest/i);
   });
 
   it("advertises consumer protected-resource and authorization-server metadata", async () => {

@@ -196,6 +196,9 @@ export async function startAgentPayHttpServer(options: StartAgentPayHttpServerOp
       canaryLedger,
       canaryPolicy,
     });
+    if (mode === "consumer") {
+      readiness = toConsumerProductionReadiness(readiness, runtimeEnv);
+    }
     refreshReadiness = async (current) => {
       try {
         const identity = await identityRepository.runtimeEnvironment.getIdentity();
@@ -2108,6 +2111,71 @@ function createNonProductionReadiness(): ProductionReadinessResult {
     status: "READY",
     errors: [],
     checks: { environment: true, manifest: true, identity: true, account: true, payment: true },
+  };
+}
+
+const consumerOnlyReadinessErrors = new Set([
+  "payment config: public mode requires enabled x402 payment",
+  "raw transaction encryption: AGENTPAY_RAW_TX_ENCRYPTION_KEY must be a 32-byte hex key",
+  "execution mode: environment value does not match the database identity",
+]);
+
+const consumerForbiddenSecretKeys = [
+  "EXECUTOR_PRIVATE_KEY",
+  "AGENTPAY_RAW_TX_ENCRYPTION_KEY",
+  "AGENTPAY_CELO_X402_API_KEY",
+  "AGENTPAY_SETUP_DEPLOYER_PRIVATE_KEY",
+  "AGENTPAY_SETUP_RAW_TX_ENCRYPTION_KEY",
+] as const;
+
+export function toConsumerProductionReadiness(
+  readiness: ProductionReadinessResult,
+  env: NodeJS.ProcessEnv | Record<string, string | undefined>,
+): ProductionReadinessResult {
+  const consumerIsolation =
+    env.AGENTPAY_EXECUTION_MODE === "OFF" &&
+    !isEnabledFlag(env.AGENTPAY_A2MCP_PAYMENT_ENABLED) &&
+    consumerForbiddenSecretKeys.every((name) => String(env[name] ?? "").trim() === "");
+  const requiredChecks = [
+    readiness.checks.environment,
+    readiness.checks.manifest,
+    readiness.checks.identity,
+    readiness.checks.account,
+    readiness.checks.onboardingMode,
+    readiness.checks.onboarding,
+    readiness.mode === "CANARY" ? readiness.checks.canaryAdmission : true,
+  ];
+  const activeIdentity = readiness.status === "READY" &&
+    (readiness.mode === "CANARY" || readiness.mode === "PUBLIC");
+  const errors = readiness.errors.filter((error) => !consumerOnlyReadinessErrors.has(error));
+
+  if (!consumerIsolation) {
+    errors.push("consumer isolation: execution, payment, and signing secrets must remain disabled");
+  }
+  if (!activeIdentity) {
+    errors.push("consumer readiness: production identity must be READY/CANARY or READY/PUBLIC");
+  }
+  if (!requiredChecks.every((check) => check === true)) {
+    errors.push("consumer readiness: identity, account, and onboarding checks must be green");
+  }
+
+  const ready = errors.length === 0;
+  return {
+    ...readiness,
+    ready,
+    executionAllowed: false,
+    publicPaymentAllowed: false,
+    errors,
+    checks: {
+      environment: readiness.checks.environment === true,
+      manifest: readiness.checks.manifest === true,
+      identity: readiness.checks.identity === true,
+      account: readiness.checks.account === true,
+      canaryAdmission: readiness.checks.canaryAdmission === true,
+      onboardingMode: readiness.checks.onboardingMode === true,
+      onboarding: readiness.checks.onboarding === true,
+      consumerIsolation,
+    },
   };
 }
 
