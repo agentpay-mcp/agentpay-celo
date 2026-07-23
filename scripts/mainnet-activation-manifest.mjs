@@ -34,7 +34,7 @@ export const MAINNET_CANARY_BINDING = Object.freeze({
   executorAddress: "0x645d39b3943D27cfE53184a446f551a69a4b1FDe",
   deployerAddress: "0x72936d76E840ddBB18976705779b6E24834B4d93",
   projectRef: "hxnrqujmyltkumfipkuk",
-  releaseCommit: "16b284cb9b307f918cea68ce12e7b7d955b60b5c",
+  releaseCommit: "725bab9a446364dbf4086263c9f679d1869ea416",
   publicOrigin: "https://mcp.agentpay.site",
   consumerOrigin: "https://wallet.agentpay.site/celo/mcp",
   siweAudience: "https://wallet.agentpay.site/celo/mcp",
