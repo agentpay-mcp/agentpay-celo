@@ -10,6 +10,7 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
+    "canary:mainnet": "tsx scripts/celo-mainnet-canary.ts",
     "contracts:build": "cd contracts && forge build",
     "contracts:bytecode": "npm run contracts:build && node scripts/export-agentpay-bytecode.mjs",
     "contracts:deploy:celo": "npm run contracts:build && tsx scripts/deploy-celo-factory.ts --broadcast",

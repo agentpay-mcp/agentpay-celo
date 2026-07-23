@@ -83,7 +83,17 @@ Celo mainnet production is isolated and readiness-gated. Use `AGENTPAY_ENVIRONME
 
 Direct AgentPay transactions append the assigned `CELO_ATTRIBUTION_TAG` as an ERC-8021 calldata suffix before signing and durable outbox hashing. Production accepts only the assigned lowercase `celo_` code; it does not derive or invent one. The x402 facilitator owns its settlement transaction, so AgentPay does not tag x402 facilitator settlements or create mirror transactions for attribution. Verify the suffix on the first live Celo transaction before enabling the public mode.
 
-The bounded first canary is canonical Celo USDC only, one lifecycle, no route target, and no silent expansion to USDT or USDm. Broader token and route support is enabled only after the canary gates pass.
+The bounded canary is canonical Celo USDC only, uses the lifecycle cap frozen in the tracked manifest, allows no route target, and does not silently expand to USDT or USDm. Broader token and route support is enabled only after the canary gates pass.
+
+Operators must use the guarded canary command instead of an ad-hoc HTTP request:
+
+```bash
+npm run canary:mainnet -- \
+  --payment-intent-id pay_... \
+  --execute-mainnet-canary
+```
+
+Set `AGENTPAY_CANARY_OWNER_SIGNATURE`, `AGENTPAY_CANARY_PAYER_PRIVATE_KEY`, and `CELO_MAINNET_RPC_URL` only in the operator environment. Never pass signatures or private keys as command-line arguments. The script validates the tracked manifest, Celo mainnet RPC, payer balance, deployed account, readiness state, and exact x402 terms before signing. Both the challenge and paid MCP requests use `Accept: application/json, text/event-stream`; the request body remains byte-for-byte identical, and a drifted challenge stops before payment.
 
 ## ERC-8004 Agent Identity
 
