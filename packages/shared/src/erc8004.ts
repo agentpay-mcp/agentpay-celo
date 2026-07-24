@@ -31,7 +31,7 @@ const webServiceSchema = z.object({
 }).strict();
 const mcpServiceSchema = z.object({
   name: z.literal("MCP"),
-  endpoint: z.literal("https://wallet.agentpay.site/celo/mcp"),
+  endpoint: z.literal("https://mcp.agentpay.site/celo/mcp"),
   version: z.literal("2025-06-18"),
 }).strict();
 const walletServiceSchema = z.object({
@@ -81,7 +81,7 @@ export function createAgentPayErc8004Registration(
     image: agentPayImage,
     services: [
       { name: "web", endpoint: "https://www.agentpay.site/" },
-      { name: "MCP", endpoint: "https://wallet.agentpay.site/celo/mcp", version: "2025-06-18" },
+      { name: "MCP", endpoint: "https://mcp.agentpay.site/celo/mcp", version: "2025-06-18" },
       { name: "wallet", endpoint: `eip155:42220:${wallet.toLowerCase()}` },
     ],
     x402Support: true,

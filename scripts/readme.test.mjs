@@ -132,6 +132,22 @@ describe("README", () => {
     }
   });
 
+  it("documents the verified PUBLIC Celo deployment and onchain evidence", async () => {
+    const contents = await readFile("README.md", "utf8");
+
+    assert.match(contents, /READY\s*\/\s*PUBLIC/);
+    assert.match(contents, /https:\/\/mcp\.agentpay\.site\/celo\/readyz/);
+    assert.match(contents, /https:\/\/wallet\.agentpay\.site\/celo\/readyz/);
+    assert.match(contents, /https:\/\/8004scan\.io\/agents\/celo\/9720/);
+    assert.match(contents, /0xA495Eaff5809Efb32beb6eCd18a48e9469Acf121/i);
+    assert.match(contents, /0x7e1d7834e57f9e16393329ba37a7c5e7a39f6735/i);
+    assert.match(contents, /celo_442daeb34ae2/);
+    assert.match(contents, /0x900a9cfe473ed82ae15b343a9ca9b6a9919542fa84f83be97b3a934d32a1940f/);
+    assert.match(contents, /0x8820bf87809243afdf028949e30c84abd89b06b388a3b32f762e54bce450a716/);
+    assert.match(contents, /0\.01 USDC/);
+    assert.match(contents, /canonical Celo USDC|USDC-only/i);
+  });
+
   it("keeps installed agent instructions aligned to the Codex operational workflows", async () => {
     const files = [
       "packages/skill/SKILL.md",
