@@ -28,7 +28,7 @@ describe("AgentPay ERC-8004 registration metadata", () => {
       image: "https://www.agentpay.site/agentpay-logo/agentpay-icon-192.png",
       services: [
         { name: "web", endpoint: "https://www.agentpay.site/" },
-        { name: "MCP", endpoint: "https://wallet.agentpay.site/celo/mcp", version: "2025-06-18" },
+        { name: "MCP", endpoint: "https://mcp.agentpay.site/celo/mcp", version: "2025-06-18" },
         { name: "wallet", endpoint: `eip155:42220:${agentWallet}` },
       ],
       x402Support: true,
@@ -75,6 +75,12 @@ describe("AgentPay ERC-8004 registration metadata", () => {
     assert.equal(agentPayErc8004RegistrationSchema.safeParse({
       ...valid,
       supportedTrust: ["reputation"],
+    }).success, false);
+    assert.equal(agentPayErc8004RegistrationSchema.safeParse({
+      ...valid,
+      services: valid.services.map((service) => service.name === "MCP"
+        ? { ...service, endpoint: "https://wallet.agentpay.site/celo/mcp" }
+        : service),
     }).success, false);
   });
 });
