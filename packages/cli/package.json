@@ -1,6 +1,6 @@
 {
   "name": "@agentpay-ai/agentpay-celo",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "type": "module",
   "bin": {
     "agentpay-celo": "dist/index.js"
@@ -21,8 +21,8 @@
     "typecheck": "tsc -p ../../tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@agentpay-ai/mcp-server-celo": "0.1.11",
-    "@agentpay-ai/setup-web-celo": "0.1.12",
+    "@agentpay-ai/mcp-server-celo": "0.1.12",
+    "@agentpay-ai/setup-web-celo": "0.1.13",
     "@agentpay-ai/skill-celo": "0.1.7",
     "tsx": "^4.22.5"
   }

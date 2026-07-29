@@ -9,7 +9,7 @@ import type { AgentPayRuntimeName, InstallAgentPayOptions } from "./index.ts";
 
 export const AGENTPAY_MCP_SERVER_NAME = "agentpay-celo";
 export const AGENTPAY_SKILL_NAME = "agentpay-celo";
-export const AGENTPAY_CLI_PACKAGE_SPEC = "@agentpay-ai/agentpay-celo@0.1.19";
+export const AGENTPAY_CLI_PACKAGE_SPEC = "@agentpay-ai/agentpay-celo@0.1.20";
 
 const require = createRequire(import.meta.url);
 

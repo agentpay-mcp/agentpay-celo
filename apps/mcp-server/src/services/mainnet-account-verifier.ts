@@ -30,7 +30,9 @@ const factoryInterface = new Interface([
 const tokenAllowedTopic = keccak256(toUtf8Bytes("TokenAllowedUpdated(address,bool)"));
 const routeTargetAllowedTopic = keccak256(toUtf8Bytes("RouteTargetAllowedUpdated(address,bool)"));
 
-export const MAINNET_LOG_BLOCK_RANGE = 100;
+// Celo Forno accepts 5,000-block eth_getLogs windows. Keep the range at the
+// verified ceiling so the full-history policy scan stays bounded.
+export const MAINNET_LOG_BLOCK_RANGE = 5_000;
 
 export interface MainnetLogFilter {
   address: string;
@@ -45,7 +47,14 @@ export interface MainnetAccountLog {
   blockNumber: number;
 }
 
+export interface MainnetVerificationHead {
+  blockNumber: number;
+  blockHash: string;
+}
+
 export interface MainnetLogScanOptions {
+  getBlockHash?: (blockNumber: number) => Promise<string | null>;
+  capturedHead?: Readonly<MainnetVerificationHead>;
   maxAttempts?: number;
   retryDelayMs?: number;
   interChunkDelayMs?: number;
@@ -94,7 +103,7 @@ export async function fetchLogsInChunks(
     throw new Error("RPC log scan start block must be a non-negative safe integer.");
   }
 
-  const latestBlock = await withRetry(getBlockNumber);
+  const latestBlock = options.capturedHead?.blockNumber ?? await withRetry(getBlockNumber);
   if (!Number.isSafeInteger(latestBlock) || latestBlock < 0) {
     throw new Error("RPC log scan latest block must be a non-negative safe integer.");
   }
@@ -102,6 +111,32 @@ export async function fetchLogsInChunks(
     throw new Error("RPC log scan start block is after the latest block.");
   }
 
+  function normalizeHeadHash(hash: string | null | undefined): string {
+    if (!hash || !/^0x[0-9a-fA-F]{64}$/.test(hash)) {
+      throw new Error("RPC log scan captured head hash is unavailable or malformed.");
+    }
+    return hash.toLowerCase();
+  }
+
+  async function readCapturedHeadHash(): Promise<string> {
+    const getBlockHash = options.getBlockHash;
+    if (!getBlockHash) {
+      throw new Error("RPC log scan captured head requires a block hash reader.");
+    }
+    return withRetry(async () => {
+      const hash = await getBlockHash(latestBlock);
+      return normalizeHeadHash(hash);
+    });
+  }
+
+  const expectedHeadHash = options.capturedHead
+    ? normalizeHeadHash(options.capturedHead.blockHash)
+    : undefined;
+  const initialHeadHash = options.getBlockHash ? await readCapturedHeadHash() : undefined;
+  if (expectedHeadHash && initialHeadHash !== expectedHeadHash) {
+    throw new Error("RPC log scan head changed before verification; possible chain reorganization.");
+  }
+  const capturedHeadHash = expectedHeadHash ?? initialHeadHash;
   const logs: MainnetAccountLog[] = [];
   for (let fromBlock = filter.fromBlock; fromBlock <= latestBlock; fromBlock += MAINNET_LOG_BLOCK_RANGE) {
     if (fromBlock > filter.fromBlock && interChunkDelayMs > 0) await sleep(interChunkDelayMs);
@@ -109,12 +144,19 @@ export async function fetchLogsInChunks(
     const chunk = await withRetry(() => getLogs({ ...filter, fromBlock, toBlock }));
     logs.push(...chunk);
   }
+  if (capturedHeadHash) {
+    const finalHeadHash = await readCapturedHeadHash();
+    if (finalHeadHash !== capturedHeadHash) {
+      throw new Error("RPC log scan head changed during verification; possible chain reorganization.");
+    }
+  }
   return logs;
 }
 
 export interface MainnetAccountVerificationReader {
   getChainId(): Promise<number>;
-  getCode(address: string): Promise<string>;
+  getVerificationHead?(): Promise<Readonly<MainnetVerificationHead>>;
+  getCode(address: string, blockTag?: number): Promise<string>;
   getTransactionReceipt(txHash: string): Promise<{
     status: number | bigint | null;
     blockNumber: number;
@@ -132,16 +174,20 @@ export interface MainnetAccountVerificationReader {
     from: string;
     data: string;
   } | null>;
-  getCodeHash?(address: string): Promise<string | null>;
-  getAccountState(accountAddress: string): Promise<{
+  getCodeHash?(address: string, blockTag?: number): Promise<string | null>;
+  getAccountState(accountAddress: string, blockTag?: number): Promise<{
     owner: string;
     executor: string;
     paused: boolean;
     domainSeparator: string;
     allowedUsdc: boolean;
   }>;
-  getTokenState(tokenAddress: string): Promise<{ code: string; decimals: number }>;
-  getAllowlistEvents(accountAddress: string, fromBlock: number): Promise<{
+  getTokenState(tokenAddress: string, blockTag?: number): Promise<{ code: string; decimals: number }>;
+  getAllowlistEvents(
+    accountAddress: string,
+    fromBlock: number,
+    capturedHead?: Readonly<MainnetVerificationHead>,
+  ): Promise<{
     tokenEvents: Array<{ token: string; allowed: boolean }>;
     routeTargetEvents: Array<{ target: string; allowed: boolean }>;
   }>;
@@ -303,6 +349,7 @@ async function verifyFactoryDeploymentProof(
   reader: MainnetAccountVerificationReader,
   receipt: FactoryDeploymentReceipt,
   expected: MainnetAccountVerificationExpected,
+  verificationBlock?: number,
 ): Promise<void> {
   if (!reader.getTransaction || !reader.getCodeHash) {
     throw new Error("Mainnet deployment receipt does not point to the manifest account and factory deployment proof is unavailable.");
@@ -316,7 +363,7 @@ async function verifyFactoryDeploymentProof(
   if (!addressEquals(transaction.from, expected.deployerAddress)) {
     throw new Error("Factory deployment transaction sender does not match the manifest deployer.");
   }
-  const factoryRuntimeCodeHash = await reader.getCodeHash(transaction.to);
+  const factoryRuntimeCodeHash = await reader.getCodeHash(transaction.to, verificationBlock);
   if (!factoryRuntimeCodeHash
     || !addressEquals(factoryRuntimeCodeHash, MAINNET_ACCOUNT_FACTORY_RUNTIME_CODE_HASH)) {
     throw new Error("Factory deployment target does not have the pinned AgentPayCeloAccountFactoryV1 runtime code hash.");
@@ -363,8 +410,27 @@ export async function verifyMainnetAccount(
     check("chain id", false, "Mainnet account chain id could not be read.");
   }
 
+  let verificationHead: Readonly<MainnetVerificationHead> | undefined;
+  if (reader.getVerificationHead) {
+    try {
+      const head = await reader.getVerificationHead();
+      if (!Number.isSafeInteger(head.blockNumber) || head.blockNumber < 0
+        || !/^0x[0-9a-fA-F]{64}$/.test(head.blockHash)) {
+        throw new Error("Mainnet verification head is malformed.");
+      }
+      verificationHead = Object.freeze({
+        blockNumber: head.blockNumber,
+        blockHash: head.blockHash.toLowerCase(),
+      });
+      checks["verification head"] = true;
+    } catch {
+      checks["verification head"] = false;
+      errors.push("Mainnet verification head could not be captured.");
+    }
+  }
+
   try {
-    const code = await reader.getCode(expected.accountAddress);
+    const code = await reader.getCode(expected.accountAddress, verificationHead?.blockNumber);
     const runtimeBytecodeHash = code === "0x" ? undefined : keccak256(code).toLowerCase();
     observed.runtimeBytecodeHash = runtimeBytecodeHash;
     check("runtime code exists", Boolean(runtimeBytecodeHash), "AgentPay account has no runtime code.");
@@ -392,7 +458,7 @@ export async function verifyMainnetAccount(
         );
       } else {
         try {
-          await verifyFactoryDeploymentProof(reader, receipt, expected);
+          await verifyFactoryDeploymentProof(reader, receipt, expected, verificationHead?.blockNumber);
           checks["deployment account"] = true;
           checks["factory deployment proof"] = true;
         } catch (error) {
@@ -407,7 +473,7 @@ export async function verifyMainnetAccount(
   }
 
   try {
-    const account = await reader.getAccountState(expected.accountAddress);
+    const account = await reader.getAccountState(expected.accountAddress, verificationHead?.blockNumber);
     observed.ownerAddress = account.owner;
     observed.executorAddress = account.executor;
     observed.paused = account.paused;
@@ -433,7 +499,7 @@ export async function verifyMainnetAccount(
 
   try {
     const tokenAddress = expected.tokenAddress ?? MAINNET_USDC_ADDRESS;
-    const token = await reader.getTokenState(tokenAddress);
+    const token = await reader.getTokenState(tokenAddress, verificationHead?.blockNumber);
     const tokenCodeHash = token.code === "0x" ? undefined : keccak256(token.code).toLowerCase();
     observed.tokenCodeHash = tokenCodeHash;
     observed.tokenDecimals = token.decimals;
@@ -445,7 +511,7 @@ export async function verifyMainnetAccount(
 
   if (deploymentBlock !== undefined) {
     try {
-      const events = await reader.getAllowlistEvents(expected.accountAddress, deploymentBlock);
+      const events = await reader.getAllowlistEvents(expected.accountAddress, deploymentBlock, verificationHead);
       for (const event of events.tokenEvents) {
         if (event.allowed && event.token.toLowerCase() !== MAINNET_USDC_ADDRESS.toLowerCase()) {
           errors.push(`Token allowlist event enables non-USDC token ${event.token}.`);
@@ -474,9 +540,25 @@ export async function verifyMainnetAccount(
 export function createEthersMainnetAccountVerificationReader(rpcUrl: string): MainnetAccountVerificationReader {
   const provider = new JsonRpcProvider(rpcUrl);
 
-  async function call<T>(accountAddress: string, method: string, args: unknown[], types: string[]): Promise<T> {
+  async function getBlockHash(blockNumber: number): Promise<string | null> {
+    const block = await provider.send("eth_getBlockByNumber", [`0x${blockNumber.toString(16)}`, false]) as
+      | { hash?: unknown }
+      | null;
+    return typeof block?.hash === "string" ? block.hash : null;
+  }
+
+  async function call<T>(
+    accountAddress: string,
+    method: string,
+    args: unknown[],
+    types: string[],
+    blockTag?: number,
+  ): Promise<T> {
     const data = accountInterface.encodeFunctionData(method, args);
-    const result = await provider.call({ to: accountAddress, data });
+    const result = await provider.send("eth_call", [
+      { to: accountAddress, data },
+      blockTag === undefined ? "latest" : `0x${blockTag.toString(16)}`,
+    ]) as string;
     return accountInterface.decodeFunctionResult(method, result)[0] as T;
   }
 
@@ -484,7 +566,13 @@ export function createEthersMainnetAccountVerificationReader(rpcUrl: string): Ma
     async getChainId() {
       return Number((await provider.getNetwork()).chainId);
     },
-    getCode: (address) => provider.getCode(address),
+    async getVerificationHead() {
+      const blockNumber = await provider.getBlockNumber();
+      const blockHash = await getBlockHash(blockNumber);
+      if (!blockHash) throw new Error("Celo verification head is unavailable.");
+      return Object.freeze({ blockNumber, blockHash });
+    },
+    getCode: (address, blockTag) => provider.getCode(address, blockTag),
     async getTransactionReceipt(txHash) {
       const receipt = await provider.getTransactionReceipt(txHash);
       return receipt
@@ -511,27 +599,36 @@ export function createEthersMainnetAccountVerificationReader(rpcUrl: string): Ma
         ? { to: transaction.to, from: transaction.from, data: transaction.data }
         : null;
     },
-    async getCodeHash(address) {
-      const code = await provider.getCode(address);
+    async getCodeHash(address, blockTag) {
+      const code = await provider.getCode(address, blockTag);
       return code === "0x" ? null : keccak256(code).toLowerCase();
     },
-    async getAccountState(accountAddress) {
+    async getAccountState(accountAddress, blockTag) {
       return {
-        owner: await call<string>(accountAddress, "owner", [], []),
-        executor: await call<string>(accountAddress, "executor", [], []),
-        paused: await call<boolean>(accountAddress, "paused", [], []),
-        domainSeparator: await call<string>(accountAddress, "domainSeparator", [], []),
-        allowedUsdc: await call<boolean>(accountAddress, "allowedTokens", [MAINNET_USDC_ADDRESS], []),
+        owner: await call<string>(accountAddress, "owner", [], [], blockTag),
+        executor: await call<string>(accountAddress, "executor", [], [], blockTag),
+        paused: await call<boolean>(accountAddress, "paused", [], [], blockTag),
+        domainSeparator: await call<string>(accountAddress, "domainSeparator", [], [], blockTag),
+        allowedUsdc: await call<boolean>(
+          accountAddress,
+          "allowedTokens",
+          [MAINNET_USDC_ADDRESS],
+          [],
+          blockTag,
+        ),
       };
     },
-    async getTokenState(tokenAddress) {
-      const code = await provider.getCode(tokenAddress);
+    async getTokenState(tokenAddress, blockTag) {
+      const code = await provider.getCode(tokenAddress, blockTag);
       const data = erc20Interface.encodeFunctionData("decimals", []);
-      const result = await provider.call({ to: tokenAddress, data });
+      const result = await provider.send("eth_call", [
+        { to: tokenAddress, data },
+        blockTag === undefined ? "latest" : `0x${blockTag.toString(16)}`,
+      ]) as string;
       const [decimals] = erc20Interface.decodeFunctionResult("decimals", result);
       return { code, decimals: Number(decimals) };
     },
-    async getAllowlistEvents(accountAddress, fromBlock) {
+    async getAllowlistEvents(accountAddress, fromBlock, capturedHead) {
       const logs = await fetchLogsInChunks(
         () => provider.getBlockNumber(),
         (filter) => provider.getLogs(filter),
@@ -539,6 +636,10 @@ export function createEthersMainnetAccountVerificationReader(rpcUrl: string): Ma
           address: accountAddress,
           topics: [[tokenAllowedTopic, routeTargetAllowedTopic]],
           fromBlock,
+        },
+        {
+          getBlockHash,
+          capturedHead,
         },
       );
       const tokenLogs = logs.filter((log) => log.topics[0]?.toLowerCase() === tokenAllowedTopic.toLowerCase());

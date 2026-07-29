@@ -99,19 +99,33 @@ describe("publishable AgentPay package manifests", () => {
     }
   });
 
-  it("keeps the 0.1.19 installer release candidate locked to the isolated 0.1.7 skill", async () => {
+  it("keeps the 0.1.20 installer release locked to the verifier-fixed package chain and isolated skill", async () => {
     const cliManifest = await readPackageJson("packages/cli");
+    const setupWebManifest = await readPackageJson("apps/setup-web");
+    const mcpServerManifest = await readPackageJson("apps/mcp-server");
     const skillManifest = await readPackageJson("packages/skill");
     const lockfile = JSON.parse(await readFile("package-lock.json", "utf8"));
     const lockedCli = lockfile.packages?.["packages/cli"];
+    const lockedSetupWeb = lockfile.packages?.["apps/setup-web"];
+    const lockedMcpServer = lockfile.packages?.["apps/mcp-server"];
     const lockedSkill = lockfile.packages?.["packages/skill"];
 
-    assert.equal(cliManifest.version, "0.1.19");
+    assert.equal(cliManifest.version, "0.1.20");
+    assert.equal(setupWebManifest.version, "0.1.13");
+    assert.equal(mcpServerManifest.version, "0.1.12");
     assert.equal(skillManifest.version, "0.1.7");
+    assert.equal(cliManifest.dependencies?.["@agentpay-ai/mcp-server-celo"], mcpServerManifest.version);
+    assert.equal(cliManifest.dependencies?.["@agentpay-ai/setup-web-celo"], setupWebManifest.version);
     assert.equal(cliManifest.dependencies?.["@agentpay-ai/skill-celo"], skillManifest.version);
+    assert.equal(setupWebManifest.dependencies?.["@agentpay-ai/mcp-server-celo"], mcpServerManifest.version);
     assert.equal(lockedCli?.version, cliManifest.version);
     assert.deepEqual(lockedCli?.bin, cliManifest.bin);
+    assert.equal(lockedCli?.dependencies?.["@agentpay-ai/mcp-server-celo"], mcpServerManifest.version);
+    assert.equal(lockedCli?.dependencies?.["@agentpay-ai/setup-web-celo"], setupWebManifest.version);
     assert.equal(lockedCli?.dependencies?.["@agentpay-ai/skill-celo"], skillManifest.version);
+    assert.equal(lockedSetupWeb?.version, setupWebManifest.version);
+    assert.equal(lockedSetupWeb?.dependencies?.["@agentpay-ai/mcp-server-celo"], mcpServerManifest.version);
+    assert.equal(lockedMcpServer?.version, mcpServerManifest.version);
     assert.equal(lockedSkill?.version, skillManifest.version);
   });
 

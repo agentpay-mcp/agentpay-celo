@@ -11,8 +11,10 @@ import {
 
 import {
   MAINNET_ACCOUNT_CREATION_BYTECODE_HASH,
+  MAINNET_LOG_BLOCK_RANGE,
   fetchLogsInChunks,
   verifyMainnetAccount,
+  type MainnetLogScanOptions,
   type MainnetAccountVerificationReader,
 } from "./mainnet-account-verifier.ts";
 import { MAINNET_USDC_ADDRESS } from "../runtime/production-readiness.ts";
@@ -27,6 +29,18 @@ const deployerAddress = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 const factoryRuntimeCodeHash = "0xacf158d0950bc04fe98bb801a45eced68265b81b22d820e735a69037d2dd2254";
 const creationHash = MAINNET_ACCOUNT_CREATION_BYTECODE_HASH;
 const deploymentTxHash = `0x${"44".repeat(32)}`;
+const stableHeadHash = `0x${"ab".repeat(32)}`;
+type TestMainnetLogScanOptions = MainnetLogScanOptions & {
+  getBlockHash: (blockNumber: number) => Promise<string | null>;
+};
+
+function scanOptions(overrides: Partial<TestMainnetLogScanOptions> = {}): TestMainnetLogScanOptions {
+  return {
+    getBlockHash: async () => stableHeadHash,
+    ...overrides,
+  };
+}
+
 const factoryInterface = new Interface([
   "function deployAccount((string setupIntentId,bytes32 deploymentNonce,address owner,address executor,uint256 homeChainId,string environment,uint256 deadline,address factory,bytes32 factoryRuntimeCodeHash,bytes32 deploymentSalt,address predictedAccount,bytes32 accountCreationCodeHash,bytes32 accountRuntimeCodeHash,address token,bytes32 tokenAllowlistHash,bytes32 routeAllowlistHash,bytes32 manifestSha256) authorization,bytes ownerSignature)",
   "event AccountDeployed(address indexed owner,address indexed account,bytes32 indexed salt,bytes32 authorizationHash)",
@@ -156,28 +170,41 @@ function factoryReader(input: {
 describe("mainnet AgentPayAccountV2 verifier", () => {
   it("limits historical log requests to the RPC block-range ceiling", async () => {
     const requests: Array<{ fromBlock: number; toBlock: number }> = [];
+    const headHashRequests: number[] = [];
     const delays: number[] = [];
+    let blockNumberRequests = 0;
 
     await fetchLogsInChunks(
-      async () => 205,
+      async () => {
+        blockNumberRequests += 1;
+        return 10_205;
+      },
       async (filter) => {
         requests.push({ fromBlock: filter.fromBlock, toBlock: filter.toBlock });
         return [];
       },
       { address: accountAddress, topics: ["0xtopic"], fromBlock: 100 },
-      {
+      scanOptions({
+        getBlockHash: async (blockNumber) => {
+          headHashRequests.push(blockNumber);
+          return stableHeadHash;
+        },
         interChunkDelayMs: 7,
         sleep: async (milliseconds) => {
           delays.push(milliseconds);
         },
-      },
+      }),
     );
 
+    assert.equal(MAINNET_LOG_BLOCK_RANGE, 5_000);
+    assert.equal(blockNumberRequests, 1);
+    assert.deepEqual(headHashRequests, [10_205, 10_205]);
     assert.deepEqual(requests, [
-      { fromBlock: 100, toBlock: 199 },
-      { fromBlock: 200, toBlock: 205 },
+      { fromBlock: 100, toBlock: 5_099 },
+      { fromBlock: 5_100, toBlock: 10_099 },
+      { fromBlock: 10_100, toBlock: 10_205 },
     ]);
-    assert.deepEqual(delays, [7]);
+    assert.deepEqual(delays, [7, 7]);
   });
 
   it("fails closed when the scan starts after the captured latest block", async () => {
@@ -186,7 +213,7 @@ describe("mainnet AgentPayAccountV2 verifier", () => {
         async () => 99,
         async () => [],
         { address: accountAddress, topics: ["0xtopic"], fromBlock: 100 },
-        { sleep: async () => undefined },
+        scanOptions({ sleep: async () => undefined }),
       ),
       /start block is after the latest block/i,
     );
@@ -203,10 +230,71 @@ describe("mainnet AgentPayAccountV2 verifier", () => {
         return [];
       },
       { address: accountAddress, topics: ["0xtopic"], fromBlock: 100 },
-      { maxAttempts: 2, sleep: async () => undefined },
+      scanOptions({ maxAttempts: 2, sleep: async () => undefined }),
     );
 
     assert.equal(attempts, 2);
+  });
+
+  it("fails closed when the captured head changes during the historical scan", async () => {
+    let headHashRequests = 0;
+
+    await assert.rejects(
+      fetchLogsInChunks(
+        async () => 100,
+        async () => [],
+        { address: accountAddress, topics: ["0xtopic"], fromBlock: 100 },
+        scanOptions({
+          getBlockHash: async () => {
+            headHashRequests += 1;
+            return headHashRequests === 1 ? stableHeadHash : `0x${"cd".repeat(32)}`;
+          },
+          sleep: async () => undefined,
+        }),
+      ),
+      /head changed|reorganization/i,
+    );
+    assert.equal(headHashRequests, 2);
+  });
+
+  it("keeps the exported chunk helper compatible when no scan options are provided", async () => {
+    const logs = await fetchLogsInChunks(
+      async () => 100,
+      async () => [],
+      { address: accountAddress, topics: ["0xtopic"], fromBlock: 100 },
+    );
+
+    assert.deepEqual(logs, []);
+  });
+
+  it("uses one captured production head for code, state, token, and historical event reads", async () => {
+    const blockTags: Array<number | undefined> = [];
+    const allowlistHeads: unknown[] = [];
+    const capturedHead = { blockNumber: 205, blockHash: stableHeadHash };
+    const baseReader = reader();
+    const result = await verifyMainnetAccount(reader({
+      getVerificationHead: async () => capturedHead,
+      getCode: async (_address: string, blockTag?: number) => {
+        blockTags.push(blockTag);
+        return baseReader.getCode(_address);
+      },
+      getAccountState: async (_address: string, blockTag?: number) => {
+        blockTags.push(blockTag);
+        return baseReader.getAccountState(_address);
+      },
+      getTokenState: async (_address: string, blockTag?: number) => {
+        blockTags.push(blockTag);
+        return baseReader.getTokenState(_address);
+      },
+      getAllowlistEvents: async (_address: string, _fromBlock: number, head?: unknown) => {
+        allowlistHeads.push(head);
+        return { tokenEvents: [], routeTargetEvents: [] };
+      },
+    } as unknown as Partial<MainnetAccountVerificationReader>), expected());
+
+    assert.equal(result.valid, true, result.errors.join("; "));
+    assert.deepEqual(blockTags, [205, 205, 205]);
+    assert.deepEqual(allowlistHeads, [capturedHead]);
   });
 
   it("accepts a read-only account observation when every production invariant matches", async () => {
@@ -339,6 +427,25 @@ describe("mainnet AgentPayAccountV2 verifier", () => {
 
     assert.equal(result.valid, false);
     assert.match(result.errors.join("; "), /non-USDC|48065/i);
+    assert.match(result.errors.join("; "), /route target/i);
+  });
+
+  it("rejects any historical forbidden enablement even when a later event disables it", async () => {
+    const result = await verifyMainnetAccount(reader({
+      getAllowlistEvents: async () => ({
+        tokenEvents: [
+          { token: MAINNET_USDT_ADDRESS, allowed: true },
+          { token: MAINNET_USDT_ADDRESS, allowed: false },
+        ],
+        routeTargetEvents: [
+          { target: factoryAddress, allowed: true },
+          { target: factoryAddress, allowed: false },
+        ],
+      }),
+    }), expected());
+
+    assert.equal(result.valid, false);
+    assert.match(result.errors.join("; "), /non-USDC/i);
     assert.match(result.errors.join("; "), /route target/i);
   });
 
