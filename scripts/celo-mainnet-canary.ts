@@ -145,6 +145,7 @@ export interface CanaryCliDependencies {
   createPayerSigner?: (privateKey: string) => CanaryPayerSigner;
   assertPayerPreflight?: typeof assertPayerPreflight;
   runCanary?: typeof runCeloMainnetCanary;
+  loadArtifactDigests?: typeof computeArtifactDigests;
   write?: (message: string) => void;
 }
 
@@ -340,7 +341,7 @@ export async function runCanaryCli(
   }
 
   const rawManifest: unknown = JSON.parse(await readFile(CANARY_MANIFEST_PATH, "utf8"));
-  const artifactDigests = await computeArtifactDigests();
+  const artifactDigests = await (dependencies.loadArtifactDigests ?? computeArtifactDigests)();
   assertMainnetCanaryManifest(rawManifest, { artifactDigests });
   const manifest = canaryManifestSchema.parse(rawManifest);
   assertManifestBindings(manifest);

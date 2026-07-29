@@ -2,6 +2,8 @@
 
 AgentPay is a plugin-first, MCP-first payment runtime for owner-authorized stablecoin payments on Celo. An AI agent can prepare the transaction, but the smart-account owner must sign the exact EIP-712 authorization before the executor can submit it.
 
+The trust boundary is explicit: the Owner authorizes the exact payload; the Executor can only submit what that signature permits.
+
 The Celo hackathon scope includes:
 
 - send payments in USDC, USDT, or USDm;
@@ -11,13 +13,13 @@ The Celo hackathon scope includes:
 - quote remittance and swap-and-pay routes;
 - make agent-to-agent payments with the same owner approval and audit trail.
 
-The submission name and product brand are both **AgentPay**. The main website remains [agentpay.site](https://agentpay.site); the Celo implementation lives in this standalone repository and does not modify the existing X Layer deployment.
+The submission name and product brand are both **AgentPay**. The main website remains [agentpay.site](https://agentpay.site); the Celo implementation lives in this standalone repository. Its npm packages, local state, skill ID, and MCP entry are separately namespaced so installation does not overwrite the existing X Layer deployment or runtime configuration.
 
 ## Live Celo Mainnet Deployment
 
 AgentPay is deployed on Celo mainnet in `READY / PUBLIC` mode. The production boundary is canonical Celo USDC with owner-signed EIP-712 authorization, exact nonces and deadlines, spend and native-fee caps, token and target allowlists, encrypted raw transactions, and an append-only payment audit trail.
 
-- Install: `npx @agentpay-ai/agentpay-celo install`
+- Install for Codex: `npx -y @agentpay-ai/agentpay-celo@latest install --runtime codex`
 - Public paid MCP: [mcp.agentpay.site/celo/mcp](https://mcp.agentpay.site/celo/mcp)
 - Public readiness: [mcp.agentpay.site/celo/readyz](https://mcp.agentpay.site/celo/readyz)
 - Authenticated consumer MCP: [wallet.agentpay.site/celo/mcp](https://wallet.agentpay.site/celo/mcp)
@@ -34,13 +36,17 @@ Onchain evidence:
 
 ## Quick Start
 
-Install AgentPay in a project:
+Install AgentPay for Codex:
 
 ```bash
-npx @agentpay-ai/agentpay-celo install
+npx -y @agentpay-ai/agentpay-celo@latest install --runtime codex
 ```
 
-The installer detects the target runtime and connects normal chat usage to the authenticated consumer MCP endpoint at `https://wallet.agentpay.site/celo/mcp`. The separate paid public execution endpoint is `https://mcp.agentpay.site/celo/mcp` and is used only after Review & Sign. Normal users do not need Supabase, RPC, executor, deployer, or bytecode config. Return to the agent chat and ask:
+The installer writes Celo state under `~/.agentpay-celo`, installs the Codex skill as `~/.agents/skills/agentpay-celo`, and adds the MCP entry `agentpay-celo` without changing an existing X Layer `~/.agentpay`, skill, or MCP entry. Runtime selection is explicit in the command above; when `--runtime` is omitted, detection succeeds only from an unambiguous project marker and otherwise fails closed with a command to retry.
+
+The MCP entry points normal chat usage to the authenticated consumer endpoint at `https://wallet.agentpay.site/celo/mcp`. Authentication remains a separate user step; run `codex mcp login agentpay-celo` if Codex does not prompt automatically, then restart/reconnect Codex or open a new task. Installation and OAuth do not create a wallet or authorize a payment.
+
+The paid public execution endpoint is `https://mcp.agentpay.site/celo/mcp` and is used only after Review & Sign. Normal users do not need Supabase, RPC, executor, deployer, or bytecode config. Return to the agent chat and ask:
 
 ```text
 Create an AgentPay wallet for me on Celo Sepolia.
@@ -49,10 +55,10 @@ Create an AgentPay wallet for me on Celo Sepolia.
 For an operator-managed deployment, use:
 
 ```bash
-npx @agentpay-ai/agentpay-celo install --self-hosted
+npx -y @agentpay-ai/agentpay-celo@latest install --runtime codex --self-hosted
 ```
 
-Self-hosting generates local config and the pinned AgentPay smart-account bytecode.
+Self-hosting generates `~/.agentpay-celo/config.json` with mode `0600` and the pinned AgentPay smart-account bytecode. A forced reinstall preserves existing secret values and unknown operator keys instead of replacing them with empty placeholders.
 
 ## Chat Flow
 
@@ -60,8 +66,8 @@ AgentPay payment and balance tools support Celo mainnet or testnet (Celo Sepolia
 
 The normal self-service Celo Sepolia wallet flow is:
 
-1. The agent calls `prepare_wallet_creation` and gives the owner the Review & Sign URL.
-2. The owner signs the setup message with a Celo-compatible wallet.
+1. The agent calls `prepare_wallet_creation` and gives the owner the setup URL.
+2. The owner signs the setup ownership message with a Celo-compatible wallet. This setup signature is not payment approval.
 3. The agent calls `check_wallet_creation` and reports the AgentPay smart account address.
 4. The owner funds the account with supported Celo USDC, USDT, or USDm plus enough CELO for the relevant operational model.
 
@@ -71,10 +77,12 @@ The normal payment flow is:
 2. It calls `get_agent_wallet` and `get_balance`; insufficient balance stops the flow before approval.
 3. It parses invoices or x402 requirements when relevant, and uses `quote_payment_route` for direct or LI.FI remittance routes.
 4. It calls `prepare_payment`, shows max spend, minimum output, exact native value, fee cap, deadline, target, and calldata hash.
-5. The Owner signs the exact EIP-712 authorization. The Executor can submit only that signed authorization.
-6. The agent calls `execute_payment`, then `track_payment`, and uses `list_payment_events` for the receipt and audit history.
+5. The owner opens the returned Review & Sign URL and signs the exact EIP-712 authorization.
+6. The authenticated consumer MCP polls `get_payment_signature`; the consumer surface never executes a payment.
+7. The signed `paymentIntentId` and signature are handed to `execute_payment` on the paid public MCP. The Executor can submit only that signed authorization.
+8. The agent calls `track_payment` and `list_payment_events` for the receipt and audit history.
 
-Vague confirmations such as “yes” never authorize execution. Exact approval text and an owner signature are separate safeguards; nonce replay protection, deadlines, token and target allowlists, spend caps, and audit events remain enforced.
+Vague confirmations such as “yes” never authorize execution. Exact approval text is migration-only; the production authorization is the owner-signed EIP-712 payload. Nonce replay protection, deadlines, token and target allowlists, spend caps, and audit events remain enforced.
 
 ## x402 Service Purchases
 
@@ -82,7 +90,7 @@ If the user wants a paid service without a URL, call `search_x402_services`, cho
 
 After `track_payment` returns `COMPLETED`, call `retry_x402_request`. AgentPay attaches its receipt proof, reads the v2 `PAYMENT-RESPONSE` header, and carries `payment-identifier` idempotency data when the service advertises it. This receipt bridge works only with services that support the AgentPay proof flow.
 
-Self-hosted operators expose the public MCP endpoint with `agentpay serve-http`. The Celo x402 seller gate uses `AGENTPAY_A2MCP_PAYMENT_ENABLED`, canonical Celo USDC, `eip155:42220` or `eip155:11142220`, and `AGENTPAY_CELO_X402_API_KEY` for the hosted Celo facilitator. `/healthz` remains free.
+Self-hosted operators expose the public MCP endpoint with `agentpay-celo serve-http`. The Celo x402 seller gate uses `AGENTPAY_A2MCP_PAYMENT_ENABLED`, canonical Celo USDC, `eip155:42220` or `eip155:11142220`, and `AGENTPAY_CELO_X402_API_KEY` for the hosted Celo facilitator. `/healthz` remains free.
 
 ## Components
 
@@ -90,7 +98,7 @@ Self-hosted operators expose the public MCP endpoint with `agentpay serve-http`.
 - `apps/setup-web/` — setup and Review & Sign web flow.
 - `packages/shared/` — Celo chain/token metadata, schemas, typed authorization, invoice, and x402 helpers.
 - `packages/cli/` — the `@agentpay-ai/agentpay-celo` installer and runtime templates.
-- `packages/skill/` — source for the installed `skills/agentpay/SKILL.md` instructions.
+- `packages/skill/` — source for the installed `skills/agentpay-celo/SKILL.md` instructions.
 - `contracts/` — non-upgradeable owner-signed smart accounts and Foundry tests.
 - `supabase/migrations/` — tenant, payment, audit, OAuth, canary, and Celo boundary migrations.
 

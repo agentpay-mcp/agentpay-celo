@@ -27,6 +27,14 @@ const deployedMainnetManifest = JSON.parse(
   await readFile(MAINNET_ACTIVATED_MANIFEST_PATH, "utf8"),
 );
 
+async function writeCurrentArtifactDeployedFixture(directory) {
+  const sourcePath = join(directory, "celo-mainnet.activated.json");
+  const manifest = structuredClone(deployedMainnetManifest);
+  manifest.release.packageLockSha256 = artifactDigests.packageLockSha256;
+  await writeFile(sourcePath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+  return sourcePath;
+}
+
 function makeProductionCanaryManifest() {
   const boundManifest = bindMainnetCanaryPolicy({
     deployedManifest: deployedMainnetManifest,
@@ -253,14 +261,15 @@ describe("Celo mainnet activation manifest", () => {
   it("generates a reproducible production READY/CANARY artifact without overwriting DEPLOYED/OFF", async (testContext) => {
     const temporaryDirectory = await mkdtemp(join(tmpdir(), "agentpay-mainnet-canary-"));
     testContext.after(() => rm(temporaryDirectory, { recursive: true, force: true }));
+    const sourcePath = await writeCurrentArtifactDeployedFixture(temporaryDirectory);
     const outputPath = join(temporaryDirectory, "celo-mainnet.canary.json");
-    const sourceBefore = await readFile(MAINNET_ACTIVATED_MANIFEST_PATH, "utf8");
+    const sourceBefore = await readFile(sourcePath, "utf8");
 
-    const first = await generateMainnetCanaryManifest({ outputPath });
+    const first = await generateMainnetCanaryManifest({ sourcePath, outputPath });
     const firstOutput = await readFile(outputPath, "utf8");
-    const second = await generateMainnetCanaryManifest({ outputPath });
+    const second = await generateMainnetCanaryManifest({ sourcePath, outputPath });
     const secondOutput = await readFile(outputPath, "utf8");
-    const sourceAfter = await readFile(MAINNET_ACTIVATED_MANIFEST_PATH, "utf8");
+    const sourceAfter = await readFile(sourcePath, "utf8");
     const validation = validateMainnetCanaryManifest(first.manifest, { artifactDigests });
 
     assert.equal(validation.valid, true, validation.errors.join("; "));
@@ -286,6 +295,22 @@ describe("Celo mainnet activation manifest", () => {
     assert.equal(first.manifest.release.commit, "725bab9a446364dbf4086263c9f679d1869ea416");
     assert.equal(first.manifest.domains.publicOrigin, "https://mcp.agentpay.site");
     assert.equal(deployedMainnetManifest.canaryPolicy.maxAcceptedLifecycles, 1);
+  });
+
+  it("keeps the tracked DEPLOYED/OFF release frozen when package-only metadata changes", async () => {
+    const sourceBefore = await readFile(MAINNET_ACTIVATED_MANIFEST_PATH, "utf8");
+
+    await assert.rejects(
+      generateMainnetCanaryManifest(),
+      /release\.packageLockSha256: does not match the frozen artifact/,
+    );
+
+    assert.equal(await readFile(MAINNET_ACTIVATED_MANIFEST_PATH, "utf8"), sourceBefore);
+    assert.notEqual(
+      deployedMainnetManifest.release.packageLockSha256,
+      artifactDigests.packageLockSha256,
+      "a coordinated production release must replace this guard once the new lockfile is deployed",
+    );
   });
 
   it("fails closed if the second-attempt canary lifecycle cap drifts", () => {
@@ -571,13 +596,14 @@ describe("Celo mainnet activation manifest", () => {
   it("rejects a symlink output without changing its target", async (testContext) => {
     const temporaryDirectory = await mkdtemp(join(tmpdir(), "agentpay-mainnet-canary-symlink-"));
     testContext.after(() => rm(temporaryDirectory, { recursive: true, force: true }));
+    const sourcePath = await writeCurrentArtifactDeployedFixture(temporaryDirectory);
     const protectedPath = join(temporaryDirectory, "protected.txt");
     const outputPath = join(temporaryDirectory, "celo-mainnet.canary.json");
     await writeFile(protectedPath, "protected\n", "utf8");
     await symlink(protectedPath, outputPath);
 
     await assert.rejects(
-      generateMainnetCanaryManifest({ outputPath }),
+      generateMainnetCanaryManifest({ sourcePath, outputPath }),
       /symbolic link/i,
     );
 

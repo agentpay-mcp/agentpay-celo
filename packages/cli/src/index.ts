@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { constants as fsConstants, existsSync } from "node:fs";
-import { access, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
-import { createRequire } from "node:module";
+import { access, chmod, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,8 +19,22 @@ import {
   type SetupWebDependencies,
 } from "@agentpay-ai/setup-web-celo";
 
+import {
+  AGENTPAY_MCP_SERVER_NAME,
+  AGENTPAY_SKILL_NAME,
+  assertWritable,
+  createAgentPayMcpConfig,
+  findPackageRoot,
+  getRuntimeTemplateFiles,
+  isMcpConfigTemplateFile,
+  prepareNativeRuntimeConfigUpdate,
+  resolveAgentPaySkillRoot,
+  resolveCliPackageRoot,
+} from "./installer-support.ts";
+
 const runtimeNames = ["codex", "claude", "cursor", "generic", "hermes"] as const;
 const DEFAULT_HOSTED_MCP_URL = "https://wallet.agentpay.site/celo/mcp";
+const DEFAULT_INSTALL_DIR = "~/.agentpay-celo";
 const requiredConfigKeys = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "CELO_RPC_URL", "EXECUTOR_PRIVATE_KEY"] as const;
 const setupRequiredConfigKeys = [
   "SUPABASE_URL",
@@ -80,14 +93,13 @@ const privateKeyPattern = /^0x[a-fA-F0-9]{64}$/;
 const hexDataPattern = /^0x(?:[a-fA-F0-9]{2})+$/;
 const bytes32Pattern = /^0x[a-fA-F0-9]{64}$/;
 const addressPattern = /^0x[a-fA-F0-9]{40}$/;
-const require = createRequire(import.meta.url);
 
 export type AgentPayRuntimeName = (typeof runtimeNames)[number];
 
 export type AgentPayCliCommand =
   | {
       command: "install";
-      runtime: AgentPayRuntimeName;
+      runtime: AgentPayRuntimeName | undefined;
       outputDir: string;
       force: boolean;
       selfHosted: boolean;
@@ -107,9 +119,12 @@ export interface InstallAgentPayOptions {
   selfHosted?: boolean;
   mcpUrl?: string;
   installNativeRuntimeConfig?: boolean;
+  codexConfigPath?: string;
+  agentSkillsRoot?: string;
   claudeDesktopConfigPath?: string;
   cursorMcpConfigPath?: string;
   hermesConfigPath?: string;
+  skillRoot?: string;
 }
 
 export interface InstallAgentPayResult {
@@ -152,10 +167,12 @@ export function parseCliArgs(args: string[]): AgentPayCliCommand {
   const [command = "help", ...rest] = args;
 
   if (command === "mcp") {
+    assertNoArguments(command, rest);
     return { command: "mcp" };
   }
 
   if (command === "serve-http") {
+    assertKnownOptions(rest, ["--host", "--port"], []);
     return {
       command: "serve-http",
       hostname: readOption(rest, "--host") ?? "0.0.0.0",
@@ -164,25 +181,32 @@ export function parseCliArgs(args: string[]): AgentPayCliCommand {
   }
 
   if (command === "doctor") {
+    assertNoArguments(command, rest);
     return { command: "doctor" };
   }
 
   if (command === "setup-web") {
+    assertNoArguments(command, rest);
     return { command: "setup-web" };
   }
 
   if (command === "install") {
+    assertKnownOptions(rest, ["--runtime", "--mcp-url", "--output-dir"], ["--force", "--self-hosted"]);
+    const runtime = readOption(rest, "--runtime");
+    const mcpUrl = readOption(rest, "--mcp-url") ?? DEFAULT_HOSTED_MCP_URL;
+    assertSafeMcpUrl(mcpUrl);
     return {
       command: "install",
-      runtime: parseRuntime(readOption(rest, "--runtime") ?? "generic"),
-      outputDir: expandHome(readOption(rest, "--output-dir") ?? "~/.agentpay"),
+      runtime: runtime ? parseRuntime(runtime) : undefined,
+      outputDir: expandHome(readOption(rest, "--output-dir") ?? DEFAULT_INSTALL_DIR),
       force: rest.includes("--force"),
       selfHosted: rest.includes("--self-hosted"),
-      mcpUrl: readOption(rest, "--mcp-url") ?? DEFAULT_HOSTED_MCP_URL,
+      mcpUrl,
     };
   }
 
   if (command === "help" || command === "--help" || command === "-h") {
+    assertNoArguments(command, rest);
     return { command: "help" };
   }
 
@@ -243,9 +267,15 @@ export async function runAgentPayCli(
       return 0;
     }
 
-    const installCommand = {
+    const runtime = command.runtime ?? detectAgentPayRuntime(process.cwd());
+    if (!runtime) {
+      throw new Error(
+        "AgentPay could not detect an agent runtime. Re-run with --runtime <codex|claude|cursor|generic|hermes>.",
+      );
+    }
+    const installCommand: InstallAgentPayOptions = {
       ...command,
-      runtime: hasOption(args, "--runtime") ? command.runtime : detectAgentPayRuntime(process.cwd()) ?? command.runtime,
+      runtime,
     };
     const result = await (dependencies.install ?? installAgentPay)(installCommand);
     stdout(`AgentPay installed for ${result.runtime} at ${result.outputDir}`);
@@ -260,25 +290,48 @@ export async function runAgentPayCli(
 export async function installAgentPay(options: InstallAgentPayOptions): Promise<InstallAgentPayResult> {
   const packageRoot = options.packageRoot ?? findPackageRoot();
   const cliRoot = resolveCliPackageRoot(packageRoot);
-  const skillRoot = resolveAgentPaySkillRoot(packageRoot);
+  const skillRoot = options.skillRoot ?? resolveAgentPaySkillRoot(packageRoot);
   const runtimeDir = join(options.outputDir, "runtimes", options.runtime);
-  const skillDir = join(options.outputDir, "skills", "agentpay");
+  const skillDir = join(options.outputDir, "skills", AGENTPAY_SKILL_NAME);
   const templateDir = join(cliRoot, "templates", options.runtime);
   const templateFiles = getRuntimeTemplateFiles(options.runtime);
   const bytecodePath = join(options.outputDir, "AgentPayAccount.bin");
+  const configPath = join(options.outputDir, "config.json");
   const selfHosted = Boolean(options.selfHosted);
+  const selfHostedConfig = selfHosted
+    ? await createInstallConfigContents(configPath, bytecodePath, Boolean(options.force))
+    : undefined;
+  const mcpConfig = createAgentPayMcpConfig({
+    selfHosted,
+    mcpUrl: options.mcpUrl ?? DEFAULT_HOSTED_MCP_URL,
+    configPath,
+  });
+  const serverConfig = (mcpConfig.mcpServers as Record<string, Record<string, unknown>>)[
+    AGENTPAY_MCP_SERVER_NAME
+  ];
+  if (!serverConfig) throw new Error("AgentPay MCP configuration could not be generated.");
+  const nativeConfigUpdate =
+    options.installNativeRuntimeConfig === false
+      ? undefined
+      : await prepareNativeRuntimeConfigUpdate(options, serverConfig);
+  const nativeSkillDir =
+    options.runtime === "codex" && options.installNativeRuntimeConfig !== false
+      ? join(options.agentSkillsRoot ?? join(homedir(), ".agents", "skills"), AGENTPAY_SKILL_NAME)
+      : undefined;
   const filesToWrite = [
     ...(selfHosted
       ? [
           {
             from: undefined,
-            to: join(options.outputDir, "config.json"),
-            contents: `${JSON.stringify(createAgentPayConfig({ accountBytecodePath: bytecodePath }), null, 2)}\n`,
+            to: configPath,
+            contents: selfHostedConfig,
+            mode: 0o600,
           },
           {
             from: join(cliRoot, "assets", "AgentPayAccount.bin"),
             to: bytecodePath,
             contents: undefined,
+            mode: undefined,
           },
         ]
       : []),
@@ -286,18 +339,37 @@ export async function installAgentPay(options: InstallAgentPayOptions): Promise<
       from: join(skillRoot, "SKILL.md"),
       to: join(skillDir, "SKILL.md"),
       contents: undefined,
+      mode: undefined,
     },
     {
       from: join(skillRoot, "agents", "openai.yaml"),
       to: join(skillDir, "agents", "openai.yaml"),
       contents: undefined,
+      mode: undefined,
     },
+    ...(nativeSkillDir
+      ? [
+          {
+            from: join(skillRoot, "SKILL.md"),
+            to: join(nativeSkillDir, "SKILL.md"),
+            contents: undefined,
+            mode: undefined,
+          },
+          {
+            from: join(skillRoot, "agents", "openai.yaml"),
+            to: join(nativeSkillDir, "agents", "openai.yaml"),
+            contents: undefined,
+            mode: undefined,
+          },
+        ]
+      : []),
     ...templateFiles.map((fileName) => ({
       from: isMcpConfigTemplateFile(fileName) ? undefined : join(templateDir, fileName),
       to: join(runtimeDir, fileName),
       contents: isMcpConfigTemplateFile(fileName)
-        ? `${JSON.stringify(createAgentPayMcpConfig({ selfHosted, mcpUrl: options.mcpUrl ?? DEFAULT_HOSTED_MCP_URL }), null, 2)}\n`
+        ? `${JSON.stringify(mcpConfig, null, 2)}\n`
         : undefined,
+      mode: undefined,
     })),
   ];
 
@@ -309,7 +381,10 @@ export async function installAgentPay(options: InstallAgentPayOptions): Promise<
       await mkdir(dirname(file.to), { recursive: true });
 
       if (file.contents !== undefined) {
-        await writeFile(file.to, file.contents, "utf8");
+        await writeFile(file.to, file.contents, { encoding: "utf8", ...(file.mode ? { mode: file.mode } : {}) });
+        if (file.mode) {
+          await chmod(file.to, file.mode);
+        }
       } else if (file.from) {
         await copyFile(file.from, file.to);
       }
@@ -318,18 +393,10 @@ export async function installAgentPay(options: InstallAgentPayOptions): Promise<
     }),
   );
 
-  if (options.installNativeRuntimeConfig !== false) {
-    const mcpConfig = createAgentPayMcpConfig({
-      selfHosted,
-      mcpUrl: options.mcpUrl ?? DEFAULT_HOSTED_MCP_URL,
-    });
-    const mcpServers = mcpConfig.mcpServers as { agentpay: Record<string, unknown> };
-    const nativeConfigPath = getNativeRuntimeConfigPath(options);
-
-    if (nativeConfigPath) {
-      await upsertNativeRuntimeAgentPayMcpServer(options.runtime, nativeConfigPath, mcpServers.agentpay);
-      writtenFiles.push(nativeConfigPath);
-    }
+  if (nativeConfigUpdate) {
+    await mkdir(dirname(nativeConfigUpdate.path), { recursive: true });
+    await writeFile(nativeConfigUpdate.path, nativeConfigUpdate.contents, "utf8");
+    writtenFiles.push(nativeConfigUpdate.path);
   }
 
   return {
@@ -344,6 +411,36 @@ export function createAgentPayConfig(options: CreateAgentPayConfigOptions = {}):
     ...Object.fromEntries([...requiredConfigKeys, ...optionalConfigKeys].map((key) => [key, ""])),
     AGENTPAY_ACCOUNT_BYTECODE_PATH: options.accountBytecodePath ?? "",
   };
+}
+
+async function createInstallConfigContents(
+  configPath: string,
+  accountBytecodePath: string,
+  force: boolean,
+): Promise<string> {
+  const defaults = createAgentPayConfig({ accountBytecodePath });
+  if (!force) {
+    return `${JSON.stringify(defaults, null, 2)}\n`;
+  }
+
+  const existing = await readJsonObjectIfPresent(configPath);
+  return `${JSON.stringify({ ...defaults, ...existing }, null, 2)}\n`;
+}
+
+async function readJsonObjectIfPresent(path: string): Promise<Record<string, unknown>> {
+  try {
+    const value = JSON.parse(await readFile(path, "utf8")) as unknown;
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      throw new Error(`${path} must contain a JSON object.`);
+    }
+    return value as Record<string, unknown>;
+  } catch (error) {
+    const code = typeof error === "object" && error !== null && "code" in error
+      ? (error as { code?: string }).code
+      : undefined;
+    if (code === "ENOENT") return {};
+    throw error;
+  }
 }
 
 export async function loadAgentPayConfigEnv(
@@ -577,18 +674,74 @@ function validateStableTokenOverrideAddresses(env: Record<string, string | undef
 }
 
 function readOption(args: string[], optionName: string): string | undefined {
-  const index = args.indexOf(optionName);
+  const separateIndexes = args
+    .map((arg, index) => (arg === optionName ? index : -1))
+    .filter((index) => index >= 0);
+  const inlineOptions = args.filter((arg) => arg.startsWith(`${optionName}=`));
 
-  if (index >= 0) {
-    return args[index + 1];
+  if (separateIndexes.length + inlineOptions.length > 1) {
+    throw new Error(`${optionName} may be provided only once.`);
   }
 
-  const inlineOption = args.find((arg) => arg.startsWith(`${optionName}=`));
-  return inlineOption ? inlineOption.slice(optionName.length + 1) : undefined;
+  if (separateIndexes.length === 1) {
+    const value = args[separateIndexes[0] + 1];
+    if (!value || value.startsWith("--")) {
+      throw new Error(`${optionName} requires a value.`);
+    }
+    return value;
+  }
+
+  if (inlineOptions.length === 1) {
+    const value = inlineOptions[0].slice(optionName.length + 1);
+    if (!value) throw new Error(`${optionName} requires a value.`);
+    return value;
+  }
+
+  return undefined;
 }
 
-function hasOption(args: string[], optionName: string): boolean {
-  return args.some((arg) => arg === optionName || arg.startsWith(`${optionName}=`));
+function assertNoArguments(command: string, args: string[]): void {
+  if (args.length > 0) {
+    throw new Error(`${command} does not accept arguments.`);
+  }
+}
+
+function assertKnownOptions(args: string[], valueOptions: string[], booleanOptions: string[]): void {
+  const booleanCounts = new Map<string, number>();
+
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (valueOptions.some((option) => argument.startsWith(`${option}=`))) {
+      continue;
+    }
+    if (valueOptions.includes(argument)) {
+      index += 1;
+      continue;
+    }
+    if (booleanOptions.includes(argument)) {
+      const count = (booleanCounts.get(argument) ?? 0) + 1;
+      booleanCounts.set(argument, count);
+      if (count > 1) {
+        throw new Error(`${argument} may be provided only once.`);
+      }
+      continue;
+    }
+    throw new Error(`Unknown option or argument: ${argument}`);
+  }
+}
+
+function assertSafeMcpUrl(value: string): void {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error("AgentPay MCP URL must be a valid HTTPS or loopback HTTP URL.");
+  }
+  const secure = url.protocol === "https:";
+  const loopback = url.protocol === "http:" && isLoopbackHostname(url.hostname);
+  if ((!secure && !loopback) || url.username || url.password) {
+    throw new Error("AgentPay MCP URL must use HTTPS or loopback HTTP and must not contain credentials.");
+  }
 }
 
 function detectAgentPayRuntime(projectDir: string): AgentPayRuntimeName | undefined {
@@ -599,284 +752,11 @@ function detectAgentPayRuntime(projectDir: string): AgentPayRuntimeName | undefi
     { runtime: "hermes", paths: [".hermes"] },
   ];
 
-  return markers.find((marker) => marker.paths.some((path) => existsSync(join(projectDir, path))))?.runtime;
-}
+  const detected = markers
+    .filter((marker) => marker.paths.some((path) => existsSync(join(projectDir, path))))
+    .map((marker) => marker.runtime);
 
-function getRuntimeTemplateFiles(runtime: AgentPayRuntimeName): string[] {
-  if (runtime === "claude") {
-    return ["CLAUDE.md", "claude_desktop_config.json"];
-  }
-
-  if (runtime === "cursor") {
-    return ["mcp.json", "rules.md"];
-  }
-
-  if (runtime === "codex") {
-    return ["AGENTS.md", "mcp.json"];
-  }
-
-  return ["instructions.md", "mcp.json"];
-}
-
-function isMcpConfigTemplateFile(fileName: string): boolean {
-  return fileName === "mcp.json" || fileName === "claude_desktop_config.json";
-}
-
-function createAgentPayMcpConfig(options: { selfHosted: boolean; mcpUrl: string }): Record<string, unknown> {
-  return {
-    mcpServers: {
-      agentpay: options.selfHosted
-        ? {
-            command: "npx",
-            args: ["-y", "@agentpay-ai/agentpay-celo", "mcp"],
-            env: {
-              AGENTPAY_CONFIG: "~/.agentpay/config.json",
-            },
-          }
-        : {
-            url: options.mcpUrl,
-          },
-    },
-  };
-}
-
-function getNativeRuntimeConfigPath(options: InstallAgentPayOptions): string | undefined {
-  if (options.runtime === "claude") {
-    return options.claudeDesktopConfigPath ?? getClaudeDesktopConfigPath();
-  }
-
-  if (options.runtime === "cursor") {
-    return options.cursorMcpConfigPath ?? join(homedir(), ".cursor", "mcp.json");
-  }
-
-  if (options.runtime === "hermes") {
-    return options.hermesConfigPath ?? join(homedir(), ".hermes", "config.yaml");
-  }
-
-  return undefined;
-}
-
-function getClaudeDesktopConfigPath(): string {
-  if (process.platform === "win32") {
-    return join(process.env.APPDATA ?? join(homedir(), "AppData", "Roaming"), "Claude", "claude_desktop_config.json");
-  }
-
-  if (process.platform === "darwin") {
-    return join(homedir(), "Library", "Application Support", "Claude", "claude_desktop_config.json");
-  }
-
-  return join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "Claude", "claude_desktop_config.json");
-}
-
-async function upsertNativeRuntimeAgentPayMcpServer(
-  runtime: AgentPayRuntimeName,
-  configPath: string,
-  serverConfig: Record<string, unknown>,
-): Promise<void> {
-  if (runtime === "hermes") {
-    await upsertHermesAgentPayMcpServer(configPath, serverConfig);
-    return;
-  }
-
-  await upsertJsonAgentPayMcpServer(configPath, serverConfig);
-}
-
-async function upsertJsonAgentPayMcpServer(configPath: string, serverConfig: Record<string, unknown>): Promise<void> {
-  await mkdir(dirname(configPath), { recursive: true });
-
-  let config: Record<string, unknown> = {};
-  try {
-    const rawConfig = await readFile(configPath, "utf8");
-    config = rawConfig.trim() ? (JSON.parse(rawConfig) as Record<string, unknown>) : {};
-  } catch (error) {
-    const code = typeof error === "object" && error !== null && "code" in error ? (error as { code?: string }).code : undefined;
-    if (code !== "ENOENT") {
-      throw error;
-    }
-  }
-
-  const existingMcpServers =
-    typeof config.mcpServers === "object" && config.mcpServers !== null && !Array.isArray(config.mcpServers)
-      ? (config.mcpServers as Record<string, unknown>)
-      : {};
-  const nextConfig = {
-    ...config,
-    mcpServers: {
-      ...existingMcpServers,
-      agentpay: serverConfig,
-    },
-  };
-
-  await writeFile(configPath, `${JSON.stringify(nextConfig, null, 2)}\n`, "utf8");
-}
-
-async function upsertHermesAgentPayMcpServer(
-  configPath: string,
-  serverConfig: Record<string, unknown>,
-): Promise<void> {
-  await mkdir(dirname(configPath), { recursive: true });
-
-  let contents = "";
-  try {
-    contents = await readFile(configPath, "utf8");
-  } catch {
-    // Hermes creates this file during setup, but a fresh machine can be empty.
-  }
-
-  const nextContents = upsertYamlMapEntry(
-    contents,
-    "mcp_servers",
-    "agentpay",
-    formatHermesAgentPayMcpServer(serverConfig),
-  );
-
-  await writeFile(configPath, nextContents, "utf8");
-}
-
-function formatHermesAgentPayMcpServer(serverConfig: Record<string, unknown>): string[] {
-  const lines = ["  agentpay:"];
-
-  if (typeof serverConfig.url === "string") {
-    lines.push(`    url: ${quoteYamlString(serverConfig.url)}`);
-  }
-
-  if (typeof serverConfig.command === "string") {
-    lines.push(`    command: ${quoteYamlString(serverConfig.command)}`);
-  }
-
-  const args = Array.isArray(serverConfig.args) ? serverConfig.args.filter((arg): arg is string => typeof arg === "string") : [];
-  if (args.length > 0) {
-    lines.push("    args:");
-    lines.push(...args.map((arg) => `      - ${quoteYamlString(arg)}`));
-  }
-
-  const env = isStringRecord(serverConfig.env) ? serverConfig.env : undefined;
-  if (env) {
-    lines.push("    env:");
-    lines.push(...Object.entries(env).map(([key, value]) => `      ${key}: ${quoteYamlString(value)}`));
-  }
-
-  lines.push("    enabled: true");
-
-  return lines;
-}
-
-function upsertYamlMapEntry(contents: string, mapKey: string, entryKey: string, entryLines: string[]): string {
-  const normalized = contents.trimEnd();
-
-  if (!normalized) {
-    return `${mapKey}:\n${entryLines.join("\n")}\n`;
-  }
-
-  const lines = normalized.split(/\r?\n/);
-  const mapPattern = new RegExp(`^${escapeRegExp(mapKey)}:\\s*(?:\\{\\}|null)?\\s*(?:#.*)?$`);
-  const mapStart = lines.findIndex((line) => mapPattern.test(line));
-
-  if (mapStart < 0) {
-    return `${normalized}\n\n${mapKey}:\n${entryLines.join("\n")}\n`;
-  }
-
-  const mapEnd = findNextTopLevelLine(lines, mapStart + 1);
-  const absoluteMapEnd = mapEnd < 0 ? lines.length : mapEnd;
-  const block = lines.slice(mapStart + 1, absoluteMapEnd);
-  const entryPattern = new RegExp(`^  ${escapeRegExp(entryKey)}:\\s*(?:#.*)?$`);
-  const entryStart = block.findIndex((line) => entryPattern.test(line));
-
-  if (entryStart < 0) {
-    const updated = [...lines.slice(0, absoluteMapEnd), ...entryLines, ...lines.slice(absoluteMapEnd)];
-    return `${updated.join("\n")}\n`;
-  }
-
-  const entryEnd = findNextSecondLevelLine(block, entryStart + 1);
-  const absoluteEntryStart = mapStart + 1 + entryStart;
-  const absoluteEntryEnd = mapStart + 1 + (entryEnd < 0 ? block.length : entryEnd);
-  const updated = [...lines.slice(0, absoluteEntryStart), ...entryLines, ...lines.slice(absoluteEntryEnd)];
-
-  return `${updated.join("\n")}\n`;
-}
-
-function findNextTopLevelLine(lines: string[], start: number): number {
-  for (let index = start; index < lines.length; index += 1) {
-    const line = lines[index];
-    if (line.trim() && !line.startsWith(" ") && !line.startsWith("\t")) {
-      return index;
-    }
-  }
-
-  return -1;
-}
-
-function findNextSecondLevelLine(lines: string[], start: number): number {
-  for (let index = start; index < lines.length; index += 1) {
-    if (/^  \S/.test(lines[index])) {
-      return index;
-    }
-  }
-
-  return -1;
-}
-
-function quoteYamlString(value: string): string {
-  return JSON.stringify(value);
-}
-
-function isStringRecord(value: unknown): value is Record<string, string> {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    !Array.isArray(value) &&
-    Object.values(value).every((item) => typeof item === "string")
-  );
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-async function assertWritable(path: string, force: boolean): Promise<void> {
-  try {
-    await access(path, fsConstants.F_OK);
-  } catch {
-    return;
-  }
-
-  if (!force) {
-    throw new Error(`${path} already exists. Re-run with --force to overwrite it.`);
-  }
-}
-
-function findPackageRoot(): string {
-  return resolve(dirname(fileURLToPath(import.meta.url)), "..");
-}
-
-function resolveCliPackageRoot(packageRoot: string): string {
-  if (existsSync(join(packageRoot, "assets")) && existsSync(join(packageRoot, "templates"))) {
-    return packageRoot;
-  }
-
-  return packageRoot.endsWith(join("packages", "cli")) ? packageRoot : join(packageRoot, "packages", "cli");
-}
-
-function resolveAgentPaySkillRoot(packageRoot: string): string {
-  const currentPackageRoot = findPackageRoot();
-  const candidates = [
-    join(packageRoot, "skill"),
-    join(packageRoot, "packages", "skill"),
-    join(dirname(packageRoot), "skill"),
-    join(dirname(currentPackageRoot), "skill"),
-    join(process.cwd(), "packages", "skill"),
-  ];
-  const localRoot = candidates.find((candidate) => existsSync(join(candidate, "SKILL.md")));
-
-  if (localRoot) {
-    return localRoot;
-  }
-
-  try {
-    return dirname(require.resolve("@agentpay-ai/skill-celo/package.json"));
-  } catch {
-    throw new Error("AgentPay skill package was not found.");
-  }
+  return detected.length === 1 ? detected[0] : undefined;
 }
 
 function expandHome(path: string): string {
@@ -888,12 +768,12 @@ function createHelpText(): string {
     "AgentPay",
     "",
     "Commands:",
-    "  agentpay install [--runtime <codex|claude|cursor|generic|hermes>] [--output-dir ~/.agentpay] [--force]",
-    "  agentpay install --self-hosted [--runtime <codex|claude|cursor|generic|hermes>] [--output-dir ~/.agentpay] [--force]",
-    "  agentpay doctor",
-    "  agentpay setup-web",
-    "  agentpay mcp",
-    "  agentpay serve-http [--host 0.0.0.0] [--port 3001]",
+    "  agentpay-celo install [--runtime <codex|claude|cursor|generic|hermes>] [--output-dir ~/.agentpay-celo] [--force]",
+    "  agentpay-celo install --self-hosted [--runtime <codex|claude|cursor|generic|hermes>] [--output-dir ~/.agentpay-celo] [--force]",
+    "  agentpay-celo doctor",
+    "  agentpay-celo setup-web",
+    "  agentpay-celo mcp",
+    "  agentpay-celo serve-http [--host 0.0.0.0] [--port 3001]",
   ].join("\n");
 }
 

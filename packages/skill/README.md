@@ -2,10 +2,10 @@
 
 AgentPay runtime instructions for AI coding agents.
 
-This package contains the AgentPay `SKILL.md` and OpenAI metadata used by `npx @agentpay-ai/agentpay-celo install`. Most users should install the CLI instead of installing this package directly:
+This package contains the AgentPay `SKILL.md` and OpenAI metadata installed by the AgentPay Celo CLI. Most Codex users should install the CLI instead of installing this package directly:
 
 ```bash
-npx @agentpay-ai/agentpay-celo install
+npx -y @agentpay-ai/agentpay-celo@latest install --runtime codex
 ```
 
 After installation, users should return to their agent chat and ask for wallet creation or payment there. The agent uses AgentPay MCP tools to create setup links, prepare payments, send the owner to Review & Sign for an EIP-712 authorization, execute with the resulting signature, and track status.

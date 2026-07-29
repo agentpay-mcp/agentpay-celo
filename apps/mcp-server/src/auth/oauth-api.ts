@@ -191,7 +191,7 @@ async function handleRegister(request: Request, dependencies: ConsumerOAuthApiDe
     if (!isRecord(body)) return oauthError("invalid_client_metadata");
     const redirectUris = readRedirectUris(body.redirect_uris);
     const clientName = readOptionalClientName(body.client_name);
-    assertOptionalExactArray(body.grant_types, "authorization_code");
+    assertOptionalAuthorizationGrantTypes(body.grant_types);
     assertOptionalExactArray(body.response_types, "code");
     if (body.token_endpoint_auth_method !== undefined && body.token_endpoint_auth_method !== "none") {
       return oauthError("invalid_client_metadata");
@@ -623,6 +623,22 @@ function readOptionalClientName(value: unknown): string | undefined {
 function assertOptionalExactArray(value: unknown, expected: string): void {
   if (value === undefined) return;
   if (!Array.isArray(value) || value.length !== 1 || value[0] !== expected) {
+    throw new AgentPayAuthError("OAUTH_CLIENT_INVALID", "OAuth client metadata is invalid.");
+  }
+}
+
+function assertOptionalAuthorizationGrantTypes(value: unknown): void {
+  if (value === undefined) return;
+  if (
+    !Array.isArray(value) ||
+    value.length < 1 ||
+    value.length > 2 ||
+    value[0] !== "authorization_code" ||
+    value.some((grantType, index) => {
+      if (grantType !== "authorization_code" && grantType !== "refresh_token") return true;
+      return value.indexOf(grantType) !== index;
+    })
+  ) {
     throw new AgentPayAuthError("OAUTH_CLIENT_INVALID", "OAuth client metadata is invalid.");
   }
 }

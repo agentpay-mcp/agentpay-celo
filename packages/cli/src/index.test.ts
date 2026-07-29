@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { describe, it } from "node:test";
@@ -33,12 +33,30 @@ describe("parseCliArgs", () => {
   it("parses self-hosted install mode", () => {
     assert.deepEqual(parseCliArgs(["install", "--self-hosted", "--mcp-url", "https://mcp.example/mcp"]), {
       command: "install",
-      runtime: "generic",
-      outputDir: `${process.env.HOME}/.agentpay`,
+      runtime: undefined,
+      outputDir: `${process.env.HOME}/.agentpay-celo`,
       force: false,
       selfHosted: true,
       mcpUrl: "https://mcp.example/mcp",
     });
+  });
+
+  it("rejects insecure remote MCP URLs and missing option values", () => {
+    assert.throws(
+      () => parseCliArgs(["install", "--runtime", "codex", "--mcp-url", "http://wallet.example/mcp"]),
+      /HTTPS or loopback HTTP/,
+    );
+    assert.throws(
+      () => parseCliArgs(["install", "--runtime", "--force"]),
+      /--runtime requires a value/,
+    );
+  });
+
+  it("rejects unknown, duplicate, and trailing command arguments", () => {
+    assert.throws(() => parseCliArgs(["install", "--unknown"]), /Unknown option or argument/);
+    assert.throws(() => parseCliArgs(["install", "--force", "--force"]), /only once/);
+    assert.throws(() => parseCliArgs(["doctor", "unexpected"]), /does not accept arguments/);
+    assert.throws(() => parseCliArgs(["serve-http", "--port", "3001", "unexpected"]), /Unknown option or argument/);
   });
 
   it("parses mcp command", () => {
@@ -77,16 +95,17 @@ describe("installAgentPay", () => {
         runtime: "codex",
         outputDir,
         packageRoot: process.cwd(),
+        installNativeRuntimeConfig: false,
       });
 
       const mcpConfig = JSON.parse(await readFile(join(outputDir, "runtimes", "codex", "mcp.json"), "utf8"));
       const instructions = await readFile(join(outputDir, "runtimes", "codex", "AGENTS.md"), "utf8");
-      const skill = await readFile(join(outputDir, "skills", "agentpay", "SKILL.md"), "utf8");
-      const skillMetadata = await readFile(join(outputDir, "skills", "agentpay", "agents", "openai.yaml"), "utf8");
+      const skill = await readFile(join(outputDir, "skills", "agentpay-celo", "SKILL.md"), "utf8");
+      const skillMetadata = await readFile(join(outputDir, "skills", "agentpay-celo", "agents", "openai.yaml"), "utf8");
 
       assert.match(skill, /Requires a verified owner EIP-712 signature before execution/);
       assert.match(skillMetadata, /display_name: AgentPay/);
-      assert.deepEqual(mcpConfig.mcpServers.agentpay, {
+      assert.deepEqual(mcpConfig.mcpServers["agentpay-celo"], {
         url: "https://wallet.agentpay.site/celo/mcp",
       });
       assert.match(instructions, /return to the agent chat/i);
@@ -99,8 +118,8 @@ describe("installAgentPay", () => {
       assert.deepEqual(result.writtenFiles.sort(), [
         join(outputDir, "runtimes", "codex", "AGENTS.md"),
         join(outputDir, "runtimes", "codex", "mcp.json"),
-        join(outputDir, "skills", "agentpay", "SKILL.md"),
-        join(outputDir, "skills", "agentpay", "agents", "openai.yaml"),
+        join(outputDir, "skills", "agentpay-celo", "SKILL.md"),
+        join(outputDir, "skills", "agentpay-celo", "agents", "openai.yaml"),
       ].sort());
     } finally {
       await rm(outputDir, { recursive: true, force: true });
@@ -116,9 +135,11 @@ describe("installAgentPay", () => {
         outputDir,
         packageRoot: process.cwd(),
         selfHosted: true,
+        installNativeRuntimeConfig: false,
       });
 
       const config = JSON.parse(await readFile(join(outputDir, "config.json"), "utf8"));
+      const configMode = (await stat(join(outputDir, "config.json"))).mode & 0o777;
       const bytecodePath = join(outputDir, "AgentPayAccount.bin");
       const bytecode = await readFile(bytecodePath, "utf8");
       const mcpConfig = JSON.parse(await readFile(join(outputDir, "runtimes", "codex", "mcp.json"), "utf8"));
@@ -139,16 +160,136 @@ describe("installAgentPay", () => {
       assert.equal("X402_BAZAAR_FACILITATOR_URL" in config, true);
       assert.equal("SETUP_WEB_PORT" in config, true);
       assert.equal(config.AGENTPAY_ACCOUNT_BYTECODE_PATH, bytecodePath);
+      assert.equal(configMode, 0o600);
       assert.match(bytecode, /^0x[a-fA-F0-9]{200,}\n$/);
-      assert.equal(mcpConfig.mcpServers.agentpay.command, "npx");
-      assert.deepEqual(mcpConfig.mcpServers.agentpay.args, ["-y", "@agentpay-ai/agentpay-celo", "mcp"]);
-      assert.deepEqual(mcpConfig.mcpServers.agentpay.env, {
-        AGENTPAY_CONFIG: "~/.agentpay/config.json",
+      assert.equal(mcpConfig.mcpServers["agentpay-celo"].command, "npx");
+      assert.deepEqual(mcpConfig.mcpServers["agentpay-celo"].args, [
+        "-y",
+        "@agentpay-ai/agentpay-celo@0.1.19",
+        "mcp",
+      ]);
+      assert.deepEqual(mcpConfig.mcpServers["agentpay-celo"].env, {
+        AGENTPAY_CONFIG: join(outputDir, "config.json"),
       });
       assert.ok(result.writtenFiles.includes(join(outputDir, "config.json")));
       assert.ok(result.writtenFiles.includes(bytecodePath));
     } finally {
       await rm(outputDir, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves self-hosted secrets and custom values during a forced reinstall", async () => {
+    const outputDir = await mkdtemp(join(tmpdir(), "agentpay-celo-cli-"));
+    const configPath = join(outputDir, "config.json");
+
+    try {
+      await installAgentPay({
+        runtime: "generic",
+        outputDir,
+        packageRoot: process.cwd(),
+        selfHosted: true,
+        installNativeRuntimeConfig: false,
+      });
+      const existing = JSON.parse(await readFile(configPath, "utf8"));
+      await writeFile(
+        configPath,
+        `${JSON.stringify(
+          {
+            ...existing,
+            SUPABASE_SERVICE_ROLE_KEY: "keep-this-secret",
+            CELO_RPC_URL: "https://rpc.example",
+            CUSTOM_OPERATOR_VALUE: "keep-this-too",
+          },
+          null,
+          2,
+        )}\n`,
+        "utf8",
+      );
+
+      await installAgentPay({
+        runtime: "generic",
+        outputDir,
+        packageRoot: process.cwd(),
+        selfHosted: true,
+        force: true,
+        installNativeRuntimeConfig: false,
+      });
+      const reinstalled = JSON.parse(await readFile(configPath, "utf8"));
+
+      assert.equal(reinstalled.SUPABASE_SERVICE_ROLE_KEY, "keep-this-secret");
+      assert.equal(reinstalled.CELO_RPC_URL, "https://rpc.example");
+      assert.equal(reinstalled.CUSTOM_OPERATOR_VALUE, "keep-this-too");
+    } finally {
+      await rm(outputDir, { recursive: true, force: true });
+    }
+  });
+
+  it("activates an isolated Codex skill and MCP entry without changing X Layer config", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "agentpay-celo-codex-"));
+    const outputDir = join(tempDir, ".agentpay-celo");
+    const codexConfigPath = join(tempDir, ".codex", "config.toml");
+    const agentSkillsRoot = join(tempDir, ".agents", "skills");
+
+    try {
+      await mkdir(dirname(codexConfigPath), { recursive: true });
+      await writeFile(
+        codexConfigPath,
+        [
+          'model = "gpt-5.6-sol"',
+          "",
+          "[mcp_servers.agentpay]",
+          'url = "https://wallet.agentpay.site/mcp"',
+          "",
+          "[mcp_servers.agentpay.oauth]",
+          'client_id = "x-layer-client"',
+          "",
+        ].join("\n"),
+        "utf8",
+      );
+
+      const result = await installAgentPay({
+        runtime: "codex",
+        outputDir,
+        packageRoot: process.cwd(),
+        codexConfigPath,
+        agentSkillsRoot,
+      });
+      const codexConfig = await readFile(codexConfigPath, "utf8");
+      const skill = await readFile(join(agentSkillsRoot, "agentpay-celo", "SKILL.md"), "utf8");
+
+      assert.match(codexConfig, /\[mcp_servers\.agentpay\]\nurl = "https:\/\/wallet\.agentpay\.site\/mcp"/);
+      assert.match(codexConfig, /\[mcp_servers\.agentpay\.oauth\]\nclient_id = "x-layer-client"/);
+      assert.match(codexConfig, /\[mcp_servers\.agentpay-celo\]\nurl = "https:\/\/wallet\.agentpay\.site\/celo\/mcp"/);
+      assert.match(skill, /^---\nname: agentpay-celo\n/m);
+      assert.ok(result.writtenFiles.includes(codexConfigPath));
+      assert.ok(result.writtenFiles.includes(join(agentSkillsRoot, "agentpay-celo", "SKILL.md")));
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("fails before writing install artifacts when a native config is invalid", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "agentpay-celo-invalid-native-"));
+    const outputDir = join(tempDir, "install");
+    const claudeDesktopConfigPath = join(tempDir, "Claude", "claude_desktop_config.json");
+
+    try {
+      await mkdir(dirname(claudeDesktopConfigPath), { recursive: true });
+      await writeFile(claudeDesktopConfigPath, "{ invalid json", "utf8");
+
+      await assert.rejects(
+        () =>
+          installAgentPay({
+            runtime: "claude",
+            outputDir,
+            packageRoot: process.cwd(),
+            claudeDesktopConfigPath,
+          }),
+        /JSON/,
+      );
+      await assert.rejects(() => readFile(join(outputDir, "skills", "agentpay-celo", "SKILL.md"), "utf8"), /ENOENT/);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
     }
   });
 
@@ -235,10 +376,65 @@ describe("installAgentPay", () => {
 
       assert.match(config, /mcp_servers:/);
       assert.match(config, /roblox_studio:/);
-      assert.match(config, /agentpay:/);
+      assert.match(config, /agentpay-celo:/);
       assert.match(config, /url: "https:\/\/wallet\.agentpay\.site\/celo\/mcp"/);
       assert.match(config, /enabled: true/);
       assert.ok(result.writtenFiles.includes(hermesConfigPath));
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("requires force to replace a drifted Hermes entry and preserves other YAML entries", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "agentpay-cli-hermes-drift-"));
+    const outputDir = join(tempDir, "install");
+    const hermesConfigPath = join(tempDir, ".hermes", "config.yaml");
+    const originalConfig = [
+      "_config_version: 9",
+      "mcp_servers:",
+      "  roblox_studio:",
+      '    command: "roblox-studio-mcp"',
+      "    enabled: true",
+      "  agentpay-celo:",
+      '    url: "https://old.example/mcp"',
+      "    enabled: false",
+      "  filesystem:",
+      '    command: "filesystem-mcp"',
+      "    enabled: true",
+      "theme: dark",
+      "",
+    ].join("\n");
+
+    try {
+      await mkdir(dirname(hermesConfigPath), { recursive: true });
+      await writeFile(hermesConfigPath, originalConfig, "utf8");
+
+      await assert.rejects(
+        () =>
+          installAgentPay({
+            runtime: "hermes",
+            outputDir,
+            packageRoot: process.cwd(),
+            hermesConfigPath,
+          }),
+        /already contains agentpay-celo.*--force/,
+      );
+      assert.equal(await readFile(hermesConfigPath, "utf8"), originalConfig);
+
+      await installAgentPay({
+        runtime: "hermes",
+        outputDir,
+        packageRoot: process.cwd(),
+        hermesConfigPath,
+        force: true,
+      });
+      const config = await readFile(hermesConfigPath, "utf8");
+
+      assert.match(config, /roblox_studio:\n    command: "roblox-studio-mcp"\n    enabled: true/);
+      assert.match(config, /filesystem:\n    command: "filesystem-mcp"\n    enabled: true/);
+      assert.match(config, /theme: dark/);
+      assert.match(config, /agentpay-celo:\n    url: "https:\/\/wallet\.agentpay\.site\/celo\/mcp"\n    enabled: true/);
+      assert.doesNotMatch(config, /https:\/\/old\.example\/mcp|enabled: false/);
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
@@ -280,7 +476,7 @@ describe("installAgentPay", () => {
 
       assert.deepEqual(config.preferences, { theme: "dark" });
       assert.deepEqual(config.mcpServers.existing, { url: "https://example.com/mcp" });
-      assert.deepEqual(config.mcpServers.agentpay, { url: "https://wallet.agentpay.site/celo/mcp" });
+      assert.deepEqual(config.mcpServers["agentpay-celo"], { url: "https://wallet.agentpay.site/celo/mcp" });
       assert.ok(result.writtenFiles.includes(claudeDesktopConfigPath));
     } finally {
       await rm(tempDir, { recursive: true, force: true });
@@ -323,7 +519,7 @@ describe("installAgentPay", () => {
         command: "npx",
         args: ["-y", "@modelcontextprotocol/server-filesystem"],
       });
-      assert.deepEqual(config.mcpServers.agentpay, { url: "https://wallet.agentpay.site/celo/mcp" });
+      assert.deepEqual(config.mcpServers["agentpay-celo"], { url: "https://wallet.agentpay.site/celo/mcp" });
       assert.ok(result.writtenFiles.includes(cursorMcpConfigPath));
     } finally {
       await rm(tempDir, { recursive: true, force: true });
@@ -345,6 +541,74 @@ describe("installAgentPay", () => {
       assert.ok(forced.writtenFiles.includes(join(outputDir, "runtimes", "generic", "mcp.json")));
     } finally {
       await rm(outputDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a symlinked install file without changing its target", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "agentpay-cli-file-symlink-"));
+    const outputDir = join(tempDir, "install");
+    const targetPath = join(tempDir, "protected-instructions.md");
+    const destinationPath = join(outputDir, "runtimes", "generic", "instructions.md");
+
+    try {
+      await writeFile(targetPath, "do not overwrite\n", "utf8");
+      await mkdir(dirname(destinationPath), { recursive: true });
+      await symlink(targetPath, destinationPath);
+
+      await assert.rejects(
+        () =>
+          installAgentPay({
+            runtime: "generic",
+            outputDir,
+            packageRoot: process.cwd(),
+            installNativeRuntimeConfig: false,
+            force: true,
+          }),
+        /symbolic link.*not be overwritten/,
+      );
+      assert.equal(await readFile(targetPath, "utf8"), "do not overwrite\n");
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a symlinked native config without changing its target", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "agentpay-cli-native-symlink-"));
+    const outputDir = join(tempDir, "install");
+    const targetPath = join(tempDir, "protected-config.json");
+    const cursorMcpConfigPath = join(tempDir, ".cursor", "mcp.json");
+    const originalConfig = `${JSON.stringify(
+      {
+        mcpServers: {
+          protected: {
+            url: "https://example.com/mcp",
+          },
+        },
+      },
+      null,
+      2,
+    )}\n`;
+
+    try {
+      await writeFile(targetPath, originalConfig, "utf8");
+      await mkdir(dirname(cursorMcpConfigPath), { recursive: true });
+      await symlink(targetPath, cursorMcpConfigPath);
+
+      await assert.rejects(
+        () =>
+          installAgentPay({
+            runtime: "cursor",
+            outputDir,
+            packageRoot: process.cwd(),
+            cursorMcpConfigPath,
+            force: true,
+          }),
+        /symbolic link.*not be overwritten/,
+      );
+      assert.equal(await readFile(targetPath, "utf8"), originalConfig);
+      await assert.rejects(() => readFile(join(outputDir, "skills", "agentpay-celo", "SKILL.md"), "utf8"), /ENOENT/);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
     }
   });
 
@@ -377,11 +641,51 @@ describe("installAgentPay", () => {
 
       const mcpConfig = JSON.parse(await readFile(join(outputDir, "runtimes", "generic", "mcp.json"), "utf8"));
 
-      assert.deepEqual(mcpConfig.mcpServers.agentpay, {
+      assert.deepEqual(mcpConfig.mcpServers["agentpay-celo"], {
         url: "https://wallet.agentpay.site/celo/mcp",
       });
       assert.ok(result.writtenFiles.includes(join(outputDir, "runtimes", "generic", "instructions.md")));
     } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not resolve the skill package from an untrusted working directory", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "agentpay-celo-untrusted-cwd-"));
+    const packageRoot = join(tempDir, "published-cli");
+    const outputDir = join(tempDir, "install");
+    const maliciousProject = join(tempDir, "malicious-project");
+    const originalCwd = process.cwd();
+
+    try {
+      await mkdir(join(packageRoot, "assets"), { recursive: true });
+      await mkdir(join(packageRoot, "templates", "generic"), { recursive: true });
+      await mkdir(join(maliciousProject, "packages", "skill", "agents"), { recursive: true });
+      await copyFile(
+        join(cliFixtureRoot, "assets", "AgentPayAccount.bin"),
+        join(packageRoot, "assets", "AgentPayAccount.bin"),
+      );
+      await copyFile(
+        join(cliFixtureRoot, "templates", "generic", "instructions.md"),
+        join(packageRoot, "templates", "generic", "instructions.md"),
+      );
+      await writeFile(join(maliciousProject, "packages", "skill", "SKILL.md"), "MALICIOUS SKILL\n", "utf8");
+      await writeFile(join(maliciousProject, "packages", "skill", "agents", "openai.yaml"), "malicious: true\n", "utf8");
+      process.chdir(maliciousProject);
+
+      await installAgentPay({
+        runtime: "generic",
+        outputDir,
+        packageRoot,
+        skillRoot: resolve(cliFixtureRoot, "..", "skill"),
+        installNativeRuntimeConfig: false,
+      });
+      const installedSkill = await readFile(join(outputDir, "skills", "agentpay-celo", "SKILL.md"), "utf8");
+
+      assert.doesNotMatch(installedSkill, /MALICIOUS SKILL/);
+      assert.match(installedSkill, /owner EIP-712 signature/i);
+    } finally {
+      process.chdir(originalCwd);
       await rm(tempDir, { recursive: true, force: true });
     }
   });
@@ -547,6 +851,63 @@ describe("runAgentPayCli", () => {
 
       assert.equal(exitCode, 0);
       assert.equal(installedRuntime, "codex");
+    } finally {
+      process.chdir(originalCwd);
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("fails closed when install cannot detect a runtime", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "agentpay-celo-cli-no-runtime-"));
+    const originalCwd = process.cwd();
+    const stderrLines: string[] = [];
+    let installCalled = false;
+
+    try {
+      process.chdir(tempDir);
+      const exitCode = await runAgentPayCli(["install"], {
+        stdout() {},
+        stderr(message) {
+          stderrLines.push(message);
+        },
+        async install(options) {
+          installCalled = true;
+          return { outputDir: options.outputDir, runtime: options.runtime, writtenFiles: [] };
+        },
+      });
+
+      assert.equal(exitCode, 1);
+      assert.equal(installCalled, false);
+      assert.match(stderrLines.join("\n"), /--runtime <codex\|claude\|cursor\|generic\|hermes>/);
+    } finally {
+      process.chdir(originalCwd);
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("fails closed when project markers make runtime detection ambiguous", async () => {
+    const tempDir = await mkdtemp(join(tmpdir(), "agentpay-celo-cli-ambiguous-runtime-"));
+    const originalCwd = process.cwd();
+    const stderrLines: string[] = [];
+    let installCalled = false;
+
+    try {
+      await mkdir(join(tempDir, ".codex"), { recursive: true });
+      await mkdir(join(tempDir, ".cursor"), { recursive: true });
+      process.chdir(tempDir);
+
+      const exitCode = await runAgentPayCli(["install"], {
+        stdout: () => undefined,
+        stderr: (message) => stderrLines.push(message),
+        install: async () => {
+          installCalled = true;
+          throw new Error("install should not run");
+        },
+      });
+
+      assert.equal(exitCode, 1);
+      assert.equal(installCalled, false);
+      assert.match(stderrLines.join("\n"), /--runtime/);
     } finally {
       process.chdir(originalCwd);
       await rm(tempDir, { recursive: true, force: true });

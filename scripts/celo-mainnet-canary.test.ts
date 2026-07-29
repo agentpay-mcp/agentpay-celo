@@ -260,6 +260,16 @@ describe("Celo mainnet canary operator", () => {
     );
   });
 
+  it("refuses the tracked canary while package-only release metadata differs from the deployed artifact", async () => {
+    await assert.rejects(
+      runCanaryCli(
+        ["--payment-intent-id", "pay_canary", "--execute-mainnet-canary"],
+        {},
+      ),
+      /release\.packageLockSha256/,
+    );
+  });
+
   it("runs the tracked-manifest CLI path through injectable offline operator dependencies", async () => {
     const output: string[] = [];
     let preflightInput: Record<string, unknown> | undefined;
@@ -294,6 +304,12 @@ describe("Celo mainnet canary operator", () => {
               transaction: `0x${"44".repeat(32)}`,
               network: "eip155:42220",
             },
+          };
+        },
+        async loadArtifactDigests() {
+          return {
+            packageLockSha256: "91b857d17fb7c7e65d312135595275b72887c0b73510f935de9a8a26d09fe68e",
+            creationBytecodeKeccak256: "0x2ede9e46a03a9b3d8e8dc322905443b0fedfabd324c54c73fe1c748f10d0152a",
           };
         },
         write(message) {

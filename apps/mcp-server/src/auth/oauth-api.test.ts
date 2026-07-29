@@ -307,11 +307,12 @@ describe("consumer OAuth authorization API", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          client_name: "AgentPay test client",
+          client_name: "Codex",
           redirect_uris: [redirectUri],
-          grant_types: ["authorization_code"],
+          grant_types: ["authorization_code", "refresh_token"],
           response_types: ["code"],
           token_endpoint_auth_method: "none",
+          application_type: "native",
         }),
       }),
     );
@@ -320,7 +321,7 @@ describe("consumer OAuth authorization API", () => {
     assert.deepEqual(await registered.json(), {
       client_id: "client_123",
       client_id_issued_at: 1783814400,
-      client_name: "AgentPay test client",
+      client_name: "Codex",
       redirect_uris: [redirectUri],
       grant_types: ["authorization_code"],
       response_types: ["code"],

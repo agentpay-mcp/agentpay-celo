@@ -1,15 +1,16 @@
 {
   "name": "@agentpay-ai/agentpay-celo",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "type": "module",
   "bin": {
-    "agentpay": "dist/index.js"
+    "agentpay-celo": "dist/index.js"
   },
   "files": [
     "README.md",
     "assets/",
     "dist/",
     "src/index.ts",
+    "src/installer-support.ts",
     "templates/"
   ],
   "publishConfig": {
@@ -22,7 +23,7 @@
   "dependencies": {
     "@agentpay-ai/mcp-server-celo": "0.1.11",
     "@agentpay-ai/setup-web-celo": "0.1.12",
-    "@agentpay-ai/skill-celo": "0.1.6",
+    "@agentpay-ai/skill-celo": "0.1.7",
     "tsx": "^4.22.5"
   }
 }

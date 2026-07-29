@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "agentpay": {
+    "agentpay-celo": {
       "url": "https://wallet.agentpay.site/celo/mcp"
     }
   }

@@ -99,6 +99,22 @@ describe("publishable AgentPay package manifests", () => {
     }
   });
 
+  it("keeps the 0.1.19 installer release candidate locked to the isolated 0.1.7 skill", async () => {
+    const cliManifest = await readPackageJson("packages/cli");
+    const skillManifest = await readPackageJson("packages/skill");
+    const lockfile = JSON.parse(await readFile("package-lock.json", "utf8"));
+    const lockedCli = lockfile.packages?.["packages/cli"];
+    const lockedSkill = lockfile.packages?.["packages/skill"];
+
+    assert.equal(cliManifest.version, "0.1.19");
+    assert.equal(skillManifest.version, "0.1.7");
+    assert.equal(cliManifest.dependencies?.["@agentpay-ai/skill-celo"], skillManifest.version);
+    assert.equal(lockedCli?.version, cliManifest.version);
+    assert.deepEqual(lockedCli?.bin, cliManifest.bin);
+    assert.equal(lockedCli?.dependencies?.["@agentpay-ai/skill-celo"], skillManifest.version);
+    assert.equal(lockedSkill?.version, skillManifest.version);
+  });
+
   it("declares runtime dependencies in the package that imports them", async () => {
     const rootManifest = await readPackageJson(".");
     const skillManifest = await readPackageJson("packages/skill");
@@ -156,7 +172,7 @@ describe("publishable AgentPay package manifests", () => {
   it("keeps the CLI bin path in npm publish-normalized form", async () => {
     const manifest = await readPackageJson("packages/cli");
 
-    assert.equal(manifest.bin?.agentpay, "dist/index.js");
+    assert.deepEqual(manifest.bin, { "agentpay-celo": "dist/index.js" });
   });
 
   it("keeps the published CLI wrapper resolving tsx from its package dependency", async () => {
@@ -179,9 +195,10 @@ describe("publishable AgentPay package manifests", () => {
     for (const templatePath of templatePaths) {
       const template = JSON.parse(await readFile(templatePath, "utf8"));
 
-      assert.deepEqual(template.mcpServers.agentpay, {
+      assert.deepEqual(template.mcpServers["agentpay-celo"], {
         url: "https://wallet.agentpay.site/celo/mcp",
       });
+      assert.equal(template.mcpServers.agentpay, undefined);
     }
   });
 
