@@ -1524,6 +1524,7 @@ describe("startAgentPayHttpServer", () => {
     ) => {
       let verificationCalls = 0;
       let verificationDeployerAddress: string | undefined;
+      let verificationRpcUrl: string | undefined;
       const env = {
         ...productionMcpEnv(),
         AGENTPAY_MAINNET_MANIFEST_PATH: manifestPath,
@@ -1537,15 +1538,16 @@ describe("startAgentPayHttpServer", () => {
           loadRuntimeIdentity: async () => identityMode
             ? productionIdentityFor(manifest, identityMode)
             : null,
-          verifyAccount: async (verificationExpected) => {
+          verifyAccount: async (verificationExpected, rpcUrl) => {
             verificationCalls += 1;
             verificationDeployerAddress = (verificationExpected as { deployerAddress?: string }).deployerAddress;
+            verificationRpcUrl = rpcUrl;
             return { valid: false, checks: {}, errors: ["test verifier"] };
           },
           checkOnboardingReady: async () => true,
         },
       );
-      return { readiness, verificationCalls, verificationDeployerAddress };
+      return { readiness, verificationCalls, verificationDeployerAddress, verificationRpcUrl };
     };
 
     try {
@@ -1556,6 +1558,7 @@ describe("startAgentPayHttpServer", () => {
       const environmentPublic = await resolve(null, "PUBLIC");
       assert.equal(environmentPublic.verificationCalls, 1);
       assert.equal(environmentPublic.verificationDeployerAddress, manifest.contract.deployerAddress);
+      assert.equal(environmentPublic.verificationRpcUrl, "https://forno.celo.org");
 
       const paddedEnvironmentOff = await resolve(null, " OFF ");
       assert.equal(paddedEnvironmentOff.verificationCalls, 0);
@@ -1567,6 +1570,7 @@ describe("startAgentPayHttpServer", () => {
 
       const identityPublic = await resolve("PUBLIC", "OFF");
       assert.equal(identityPublic.verificationCalls, 1);
+      assert.equal(identityPublic.verificationRpcUrl, "https://forno.celo.org");
     } finally {
       await rm(directory, { recursive: true, force: true });
     }

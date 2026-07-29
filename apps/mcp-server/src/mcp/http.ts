@@ -143,7 +143,10 @@ export interface StartAgentPayHttpServerOptions {
 /** @internal Dependency seam for resolver tests; production callers use the pinned defaults. */
 export interface ResolveProductionReadinessDependencies {
   loadRuntimeIdentity?: () => Promise<RuntimeEnvironmentIdentity | null>;
-  verifyAccount?: (expected: MainnetAccountVerificationExpected) => Promise<MainnetAccountVerificationResult>;
+  verifyAccount?: (
+    expected: MainnetAccountVerificationExpected,
+    rpcUrl: string,
+  ) => Promise<MainnetAccountVerificationResult>;
   checkOnboardingReady?: (setupUrl: string, expectedMode: string) => Promise<boolean>;
 }
 
@@ -2343,10 +2346,13 @@ export async function resolveProductionReadiness(
         tokenCodeHash: manifest.token.codeHash,
         tokenDecimals: manifest.token.decimals,
       };
-      accountVerification = await (dependencies.verifyAccount ?? ((input) => {
-        const reader = createEthersMainnetAccountVerificationReader(config.celoRpcUrl);
+      const verificationRpcUrl = config.celoRpcFallbackUrls?.[MAINNET_CHAIN_ID] ?? config.celoRpcUrl;
+      accountVerification = await (dependencies.verifyAccount ?? ((input, rpcUrl) => {
+        // Startup verification is read-only and intentionally uses the pinned
+        // Forno fallback so it cannot exhaust the primary transaction RPC.
+        const reader = createEthersMainnetAccountVerificationReader(rpcUrl);
         return verifyMainnetAccount(reader, input);
-      }))(expected);
+      }))(expected, verificationRpcUrl);
     } catch {
       extraErrors.push("mainnet account: read-only verification could not be completed");
     }
