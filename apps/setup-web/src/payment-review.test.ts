@@ -116,6 +116,11 @@ describe("Review & Sign page", () => {
     assert.match(html, /eip6963:announceProvider/);
     assert.match(html, /eip6963:requestProvider/);
     assert.match(html, /accounts\?\.some\(\(account\) => accountMatches\(account, expectedOwner\)\)/);
+    assert.match(html, /wallet_switchEthereumChain/);
+    assert.match(html, /wallet_addEthereumChain/);
+    assert.match(html, /ensureCeloWalletChain/);
+    assert.match(html, /"0xa4ec"/);
+    assert.match(html, /"0xaa044c"/);
     assert.doesNotMatch(html, /eth_sendTransaction|personal_sign/);
     assert.doesNotMatch(html, /localStorage/);
   });

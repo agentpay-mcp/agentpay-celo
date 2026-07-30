@@ -6,7 +6,6 @@ import { createProductionOnboardingE2eFixture } from "./production-onboarding-fi
 import {
   installMockWallet,
   setWalletAccount,
-  setWalletChain,
   walletMethods,
 } from "./eip1193-wallet.ts";
 
@@ -71,16 +70,14 @@ test("production onboarding lets an existing active user bypass sponsorship", as
   }
 });
 
-test("production onboarding blocks wrong chain and wrong wallet while duplicate clicks stay idempotent", async ({ page }) => {
+test("production onboarding auto-switches a wrong chain and blocks a wrong wallet while duplicate clicks stay idempotent", async ({ page }) => {
   await installOnboardingWallet(page, fixture, "0x1");
   await page.goto(fixture.url);
   await page.locator("#action").click();
-  await expect(page.locator("#status")).toContainText("Switch the owner wallet to Celo mainnet");
-  expect(fixture.stores.inspect.events()).toHaveLength(0);
-
-  await setWalletChain(page, "0xa4ec");
-  await page.locator("#action").click();
   await expect(page.locator("#status")).toContainText("Check every field");
+  expect(await walletMethods(page)).toEqual(
+    expect.arrayContaining(["wallet_switchEthereumChain", "wallet_addEthereumChain"]),
+  );
   const wrongOwner = new Wallet(`0x${"c".repeat(64)}`);
   await setWalletAccount(page, wrongOwner.address);
   await page.locator("#action").click();

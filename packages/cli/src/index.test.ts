@@ -165,7 +165,7 @@ describe("installAgentPay", () => {
       assert.equal(mcpConfig.mcpServers["agentpay-celo"].command, "npx");
       assert.deepEqual(mcpConfig.mcpServers["agentpay-celo"].args, [
         "-y",
-        "@agentpay-ai/agentpay-celo@0.1.20",
+        "@agentpay-ai/agentpay-celo@0.1.21",
         "mcp",
       ]);
       assert.deepEqual(mcpConfig.mcpServers["agentpay-celo"].env, {

@@ -29,6 +29,11 @@ describe("renderSetupPage", () => {
     assert.match(html, /id="owner-address"/);
     assert.match(html, /Connected wallet does not match the expected owner address/);
     assert.match(html, /window\.AgentPaySetup/);
+    assert.match(html, /wallet_switchEthereumChain/);
+    assert.match(html, /wallet_addEthereumChain/);
+    assert.match(html, /ensureCeloWalletChain/);
+    assert.match(html, /"0xa4ec"/);
+    assert.match(html, /"0xaa044c"/);
   });
 });
 
@@ -61,6 +66,7 @@ describe("createSetupWebHandler", () => {
     assert.equal(body.setupIntentId, "setup_123");
     assert.equal(body.status, "PENDING");
     assert.equal(body.messageToSign, setupIntent.messageToSign);
+    assert.equal(body.homeChainId, 11142220);
   });
 
   it("returns 404 for missing setup intents", async () => {

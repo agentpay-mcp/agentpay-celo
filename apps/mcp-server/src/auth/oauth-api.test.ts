@@ -400,6 +400,11 @@ describe("consumer OAuth authorization API", () => {
     assert.match(authorizePage, /Authorize AgentPay test client/);
     assert.match(authorizePage, /fetch\("\/celo\/oauth\/siwe\/challenge"/);
     assert.match(authorizePage, /fetch\("\/celo\/oauth\/siwe\/verify"/);
+    assert.match(authorizePage, /wallet_switchEthereumChain/);
+    assert.match(authorizePage, /wallet_addEthereumChain/);
+    assert.match(authorizePage, /"0xaa044c"/);
+    assert.doesNotMatch(authorizePage, /"0xa4ec"/);
+    assert.match(authorizePage, /ensureCeloWalletChain/);
     const cookie = authorize.headers.get("set-cookie");
     assert.ok(cookie);
     assert.match(cookie, /^agentpay_celo_oauth_transaction=.*; Path=\/celo\/oauth; HttpOnly; Secure; SameSite=Lax;/);

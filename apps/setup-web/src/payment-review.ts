@@ -9,6 +9,8 @@ import {
   type PaymentReviewRepository,
 } from "@agentpay-ai/mcp-server-celo";
 import {
+  CELO_WALLET_ADD_CHAIN_PARAMETERS,
+  CELO_WALLET_SWITCH_CLIENT_SOURCE,
   formatNativeAmount,
   paymentReviewSignatureSchema,
   paymentReviewTokenSchema,
@@ -416,6 +418,7 @@ function reviewHeaders(headers: Record<string, string>): HeadersInit {
 }
 
 function renderPaymentReviewPage(nonce: string, apiPath: string): string {
+  const safeWalletNetworks = JSON.stringify(CELO_WALLET_ADD_CHAIN_PARAMETERS).replace(/</g, "\\u003c");
   return `<!doctype html>
 <html lang="en">
   <head>
@@ -463,6 +466,8 @@ function renderPaymentReviewPage(nonce: string, apiPath: string): string {
     <script nonce="${nonce}">
       (() => {
         const reviewApiPath = ${JSON.stringify(apiPath)};
+        const celoWalletNetworks = ${safeWalletNetworks};
+        ${CELO_WALLET_SWITCH_CLIENT_SOURCE}
         const state = { token: new URLSearchParams(window.location.hash.slice(1)).get("review_token") || "", payload: null };
         const notice = document.getElementById("notice");
         const review = document.getElementById("review");
@@ -563,6 +568,16 @@ function renderPaymentReviewPage(nonce: string, apiPath: string): string {
             ethereum = ethereum || providerCandidates()[0]?.provider;
             if (!ethereum) { setNotice("No compatible EVM wallet was found.", "error"); sign.disabled = false; return; }
             await ethereum.request({ method: "eth_requestAccounts" });
+            const selected = await findProviderState();
+            if (selected) {
+              ethereum = selected.provider;
+              listenToProvider(ethereum);
+              const expectedOwner = state.payload.summary.ownerAddress;
+              if (selected.accounts?.some((account) => accountMatches(account, expectedOwner))) {
+                setNotice("Confirm the switch to the source Celo network in your wallet.");
+                await ensureCeloWalletChain(ethereum, state.payload.authorization.domain.chainId);
+              }
+            }
             if (!await checkWallet()) return;
             const accounts = await ethereum.request({ method: "eth_accounts" });
             if (!state.payload.walletAuthorization) throw new Error("Review unavailable.");

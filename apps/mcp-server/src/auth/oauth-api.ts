@@ -2,6 +2,8 @@ import { randomBytes } from "node:crypto";
 
 import {
   AgentPayAuthError,
+  CELO_WALLET_SWITCH_CLIENT_SOURCE,
+  getCeloWalletAddChainParameter,
   type SessionEnvironment,
   type SessionScope,
 } from "@agentpay-ai/shared-celo";
@@ -739,6 +741,9 @@ function renderConsentPage(input: {
   cspNonce: string;
 }): string {
   const safeConfig = JSON.stringify({ authorizationId: input.authorizationId, expectedChainId: input.expectedChainId }).replace(/</g, "\\u003c");
+  const safeWalletNetworks = JSON.stringify({
+    [input.expectedChainId]: getCeloWalletAddChainParameter(input.expectedChainId),
+  }).replace(/</g, "\\u003c");
   const csp = consentContentSecurityPolicy(input.cspNonce);
   return `<!doctype html>
 <html lang="en">
@@ -768,6 +773,8 @@ function renderConsentPage(input: {
     </main>
     <script nonce="${escapeHtml(input.cspNonce)}">
       const config = ${safeConfig};
+      const celoWalletNetworks = ${safeWalletNetworks};
+      ${CELO_WALLET_SWITCH_CLIENT_SOURCE}
       const button = document.getElementById("authorize");
       const status = document.getElementById("status");
       const setStatus = (message) => { status.textContent = message; };
@@ -779,9 +786,11 @@ function renderConsentPage(input: {
           const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
           const ownerAddress = Array.isArray(accounts) ? accounts[0] : undefined;
           if (!ownerAddress) throw new Error("No wallet account was selected.");
+          setStatus("Switching to the required Celo network…");
+          await ensureCeloWalletChain(window.ethereum, config.expectedChainId);
           const chain = await window.ethereum.request({ method: "eth_chainId" });
           const chainId = Number.parseInt(chain, 16);
-          if (chainId !== config.expectedChainId) throw new Error("Switch your wallet to the required Celo network and try again.");
+          if (chainId !== config.expectedChainId) throw new Error("Wallet is not connected to the required Celo network.");
           setStatus("Preparing ownership proof…");
           const challengeResponse = await fetch("${AGENTPAY_OAUTH_ROUTE_PREFIX}/siwe/challenge", {
             method: "POST",

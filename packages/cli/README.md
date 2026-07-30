@@ -33,6 +33,8 @@ Pay 5 USDT to 0x... on Celo Sepolia for invoice INV-001.
 
 No user secrets are required for hosted mode. Hosted chat connects to the authenticated consumer endpoint at `https://wallet.agentpay.site/celo/mcp`; payment execution occurs only on the separate paid public endpoint at `https://mcp.agentpay.site/celo/mcp` after owner Review & Sign.
 
+The OAuth, setup, and Review & Sign pages request the required Celo network automatically. They use `wallet_switchEthereumChain` first and add the official Celo mainnet or Sepolia network only when the wallet reports that it is unknown. The owner must still confirm the wallet prompt; rejecting it never advances to signing.
+
 Payment and balance tools support Celo mainnet or testnet (Celo Sepolia) through `network: "mainnet" | "testnet"`. Users can switch networks per request. Self-service chat wallet creation is currently available on Celo Sepolia, while mainnet uses an operator-managed, readiness-gated account path. Cross-chain routes are selected at payment time after a Celo wallet exists.
 
 AgentPay covers direct sends, invoice payments, x402 purchases, batch payouts, remittance/swap-and-pay routes, and agent-to-agent payments. For x402 discovery without a URL, the agent uses `search_x402_services` and `prepare_x402_service_request`. After payment completes, `retry_x402_request` attaches AgentPay receipt proof, reads `PAYMENT-RESPONSE`, and passes `payment-identifier` idempotency data when supported.

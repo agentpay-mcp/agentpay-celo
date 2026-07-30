@@ -149,7 +149,12 @@ describe("production onboarding route and browser boundary", () => {
     assert.equal(page.headers.get("referrer-policy"), "no-referrer");
     assert.equal(page.headers.get("access-control-allow-origin"), null);
     assert.match(page.headers.get("content-security-policy") ?? "", /default-src 'none'/);
-    assert.doesNotMatch(await page.text(), /fonts\.google|https:\/\/(?!wallet\.agentpay\.site)/);
+    const pageHtml = await page.text();
+    assert.doesNotMatch(pageHtml, /fonts\.google/);
+    assert.deepEqual(
+      [...new Set(pageHtml.match(/https:\/\/[^"\\]+/g) ?? [])].sort(),
+      ["https://celoscan.io", "https://forno.celo.org"].sort(),
+    );
 
     const sameSiteNavigation = await handler(new Request(`${origin}/celo/setup`, {
       headers: { host, "sec-fetch-site": "same-site", "sec-fetch-mode": "navigate", "sec-fetch-dest": "document" },

@@ -1,3 +1,8 @@
+import {
+  CELO_WALLET_ADD_CHAIN_PARAMETERS,
+  CELO_WALLET_SWITCH_CLIENT_SOURCE,
+} from "@agentpay-ai/shared-celo";
+
 export function renderProductionOnboardingPage(nonce: string): string {
   return `<!doctype html>
 <html lang="en">
@@ -38,13 +43,15 @@ export function renderProductionOnboardingPage(nonce: string): string {
   </main>
   <script nonce="${nonce}">
   (()=>{
+    const celoWalletNetworks=${JSON.stringify({ 42220: CELO_WALLET_ADD_CHAIN_PARAMETERS[42220] })};
+    ${CELO_WALLET_SWITCH_CLIENT_SOURCE}
     const $=(id)=>document.getElementById(id);let capability=null,csrfToken=null,typedData=null,owner=null,pollTimer=null;
     const setStatus=(text)=>{$("status").textContent=text};
     const provider=()=>window.okxwallet||window.ethereum;
     const api=async(path,options={})=>{const response=await fetch(path,{credentials:"same-origin",cache:"no-store",...options});const body=await response.json();if(!response.ok)throw new Error(body.error||"SETUP_UNAVAILABLE");return body};
     const show=(data)=>{const m=data.message;typedData=data;owner=m.owner;$("details").hidden=false;$("owner").textContent=m.owner;$("factory").textContent=m.factory;$("account").textContent=m.predictedAccount;$("executor").textContent=m.executor;$("token").textContent=m.token;$("deadline").textContent=new Date(Number(m.deadline)*1000).toISOString();$("manifest").textContent=m.manifestSha256};
     const poll=async()=>{try{const state=await api("/celo/setup/api/status",{headers:{"x-agentpay-setup-capability":capability}});setStatus(state.status==="SETUP_COMPLETED"?"Setup completed. Return to chat to continue.":"Deployment status: "+state.status);if(state.status==="SETUP_COMPLETED"){clearInterval(pollTimer);$("action").hidden=true}}catch{setStatus("Status is temporarily unavailable. Keep this page open.")}};
-    $("action").addEventListener("click",async()=>{const wallet=provider();if(!wallet){setStatus("Install or enable an EVM wallet first.");return}$("action").disabled=true;try{const accounts=await wallet.request({method:"eth_requestAccounts"});const chainId=await wallet.request({method:"eth_chainId"});if(chainId!=="0xa4ec")throw new Error("Switch the owner wallet to Celo mainnet (chain 42220).");if(!accounts?.[0])throw new Error("No owner account was returned.");
+    $("action").addEventListener("click",async()=>{const wallet=provider();if(!wallet){setStatus("Install or enable an EVM wallet first.");return}$("action").disabled=true;try{const accounts=await wallet.request({method:"eth_requestAccounts"});if(!accounts?.[0])throw new Error("No owner account was returned.");setStatus("Confirm the switch to Celo Mainnet in your wallet.");await ensureCeloWalletChain(wallet,42220);const chainId=String(await wallet.request({method:"eth_chainId"})).toLowerCase();if(chainId!=="0xa4ec")throw new Error("Wallet is not connected to Celo mainnet.");
       if(!typedData){const challenge=await api("/celo/setup/api/challenge",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({ownerAddress:accounts[0]})});capability=challenge.capability;csrfToken=challenge.csrfToken;show(challenge.typedData);$("action").textContent="Review and sign setup";setStatus("Check every field, then sign with the displayed owner wallet.");return}
       if(accounts[0].toLowerCase()!==owner.toLowerCase())throw new Error("Connected wallet does not match the setup owner.");const payload={...typedData,types:{EIP712Domain:[{name:"name",type:"string"},{name:"version",type:"string"},{name:"chainId",type:"uint256"},{name:"verifyingContract",type:"address"}],...typedData.types}};const signature=await wallet.request({method:"eth_signTypedData_v4",params:[owner,JSON.stringify(payload)]});await api("/celo/setup/api/authorize",{method:"POST",headers:{"content-type":"application/json","x-agentpay-setup-capability":capability,"x-agentpay-csrf-token":csrfToken},body:JSON.stringify({signature})});$("action").textContent="Deployment submitted";setStatus("Authorization accepted. Waiting for sponsored deployment…");pollTimer=setInterval(poll,2000);await poll()
     }catch(error){setStatus(error instanceof Error?error.message:"Setup is unavailable.")}finally{$("action").disabled=false}});

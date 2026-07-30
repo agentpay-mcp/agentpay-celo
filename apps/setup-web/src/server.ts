@@ -2,6 +2,9 @@ import { createServer, type IncomingMessage } from "node:http";
 import { isIP } from "node:net";
 
 import {
+  CELO_NETWORK_CHAIN_IDS,
+  CELO_WALLET_ADD_CHAIN_PARAMETERS,
+  CELO_WALLET_SWITCH_CLIENT_SOURCE,
   checkWalletCreationInputSchema,
   completeWalletSetupInputSchema,
   type CompleteWalletSetupInput,
@@ -309,6 +312,7 @@ async function handleGetSetupIntent(pathname: string, dependencies: SetupWebDepe
     expiresAt: intent.expiresAt,
     accountAddress: intent.accountAddress,
     completedAt: intent.completedAt,
+    homeChainId: intent.homeChainId ?? CELO_NETWORK_CHAIN_IDS.testnet,
   });
 }
 
@@ -799,6 +803,8 @@ button:disabled {
 `;
 
 const clientScript = `(() => {
+  const celoWalletNetworks = ${JSON.stringify(CELO_WALLET_ADD_CHAIN_PARAMETERS)};
+  ${CELO_WALLET_SWITCH_CLIENT_SOURCE}
   const state = {
     setupIntentId: new URLSearchParams(window.location.search).get("setup_intent_id") || "",
     intent: null,
@@ -921,6 +927,10 @@ const clientScript = `(() => {
     try {
       const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
       state.account = accounts[0] || "";
+      if (state.account && state.intent) {
+        setNotice("Confirm the switch to the required Celo network in your wallet.");
+        await ensureCeloWalletChain(window.ethereum, state.intent.homeChainId);
+      }
       if (hasOwnerMismatch()) {
         setNotice("Connected wallet does not match the expected owner address. Switch wallets before signing.", "error");
       } else {
@@ -946,6 +956,8 @@ const clientScript = `(() => {
 
     setBusy(true);
     try {
+      setNotice("Confirm the required Celo network before signing.");
+      await ensureCeloWalletChain(window.ethereum, state.intent.homeChainId);
       const signature = await window.ethereum.request({
         method: "personal_sign",
         params: [state.intent.messageToSign, state.account],

@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { TypedDataEncoder, Wallet } from "ethers";
 
 import { createPaymentReviewE2eFixture } from "./payment-review-fixture.ts";
-import { installMockWallet, setWalletAccount, setWalletChain, walletMethods } from "./eip1193-wallet.ts";
+import { installMockWallet, setWalletAccount, walletMethods } from "./eip1193-wallet.ts";
 
 type ReviewFixture = Awaited<ReturnType<typeof createPaymentReviewE2eFixture>>;
 
@@ -112,10 +112,11 @@ test("blocks a wrong owner and resumes only after accountsChanged matches the ow
   await expect(page.locator("#notice")).toContainText("Signature accepted");
 });
 
-test("blocks the wrong chain and resumes only after chainChanged matches the source chain", async ({ page }) => {
+test("switches a wrong-chain owner wallet before signing", async ({ page }) => {
   await installMockWallet(page, {
     account: fixture.owner.address,
     chainIdHex: "0xc4",
+    knownChainIds: [fixture.expectedChainHex],
     expectedTypedData: expectedWalletTypedData(fixture.prepared.authorization!),
     signature: fixture.signature,
   });
@@ -124,11 +125,49 @@ test("blocks the wrong chain and resumes only after chainChanged matches the sou
   await expect(page.locator("#notice")).toContainText("Switch to the source Celo network");
   expect(await walletMethods(page)).not.toContain("eth_signTypedData_v4");
 
-  await setWalletChain(page, fixture.expectedChainHex);
-  await expect(page.locator("#notice")).toContainText("Everything matches");
   await page.locator("#sign").click();
   await expect(page.locator("#notice")).toContainText("Signature accepted");
-  expect(await walletMethods(page)).not.toContain("wallet_switchEthereumChain");
+  expect(await walletMethods(page)).toContain("wallet_switchEthereumChain");
+  expect(await walletMethods(page)).not.toContain("wallet_addEthereumChain");
+});
+
+test("adds an unknown Celo chain before signing", async ({ page }) => {
+  await installMockWallet(page, {
+    account: fixture.owner.address,
+    chainIdHex: "0xc4",
+    expectedTypedData: expectedWalletTypedData(fixture.prepared.authorization!),
+    signature: fixture.signature,
+  });
+
+  await page.goto(fixture.prepared.reviewUrl!);
+  await page.locator("#sign").click();
+  await expect(page.locator("#notice")).toContainText("Signature accepted");
+
+  const methods = await walletMethods(page);
+  expect(methods).toContain("wallet_switchEthereumChain");
+  expect(methods).toContain("wallet_addEthereumChain");
+  expect(methods).toContain("eth_signTypedData_v4");
+});
+
+test("keeps a rejected network switch unsigned and allows an intentional retry", async ({ page }) => {
+  await installMockWallet(page, {
+    account: fixture.owner.address,
+    chainIdHex: "0xc4",
+    knownChainIds: [fixture.expectedChainHex],
+    expectedTypedData: expectedWalletTypedData(fixture.prepared.authorization!),
+    signature: fixture.signature,
+    rejectSwitchCount: 1,
+  });
+
+  await page.goto(fixture.prepared.reviewUrl!);
+  await page.locator("#sign").click();
+  await expect(page.locator("#notice")).toContainText("Network switch to Celo Sepolia was cancelled");
+  await expect(page.locator("#sign")).toBeEnabled();
+  expect(await walletMethods(page)).not.toContain("eth_signTypedData_v4");
+  expect((await fixture.pollSignature()).status).toBe("AWAITING_SIGNATURE");
+
+  await page.locator("#sign").click();
+  await expect(page.locator("#notice")).toContainText("Signature accepted");
 });
 
 test("keeps an expired handoff non-executable", async ({ page }) => {

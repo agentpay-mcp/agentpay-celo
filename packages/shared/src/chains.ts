@@ -71,6 +71,86 @@ export const CELO_NETWORKS = {
   },
 } as const;
 
+export const CELO_WALLET_ADD_CHAIN_PARAMETERS = {
+  42220: {
+    chainId: "0xa4ec",
+    chainName: "Celo Mainnet",
+    nativeCurrency: {
+      name: "Celo",
+      symbol: "CELO",
+      decimals: 18,
+    },
+    rpcUrls: ["https://forno.celo.org"],
+    blockExplorerUrls: ["https://celoscan.io"],
+  },
+  11142220: {
+    chainId: "0xaa044c",
+    chainName: "Celo Sepolia",
+    nativeCurrency: {
+      name: "Celo",
+      symbol: "CELO",
+      decimals: 18,
+    },
+    rpcUrls: ["https://forno.celo-sepolia.celo-testnet.org"],
+    blockExplorerUrls: ["https://celo-sepolia.blockscout.com"],
+  },
+} as const;
+
+/**
+ * Browser-safe helper source embedded into the OAuth, setup, and Review & Sign
+ * pages. The host page must define `celoWalletNetworks` from
+ * CELO_WALLET_ADD_CHAIN_PARAMETERS before this source.
+ */
+export const CELO_WALLET_SWITCH_CLIENT_SOURCE = `
+  const walletErrorCode = (error) => {
+    const value = error?.code ?? error?.data?.originalError?.code;
+    const parsed = Number(value);
+    return Number.isInteger(parsed) ? parsed : undefined;
+  };
+  const ensureCeloWalletChain = async (provider, expectedChainId) => {
+    const network = celoWalletNetworks[String(expectedChainId)];
+    if (!network) throw new Error("The requested Celo network is not supported.");
+    const readChainId = async () => String(await provider.request({ method: "eth_chainId" })).toLowerCase();
+    if (await readChainId() === network.chainId.toLowerCase()) return false;
+    const switchNetwork = async () => {
+      try {
+        await provider.request({
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: network.chainId }],
+        });
+      } catch (error) {
+        if (walletErrorCode(error) === 4001) {
+          throw new Error("Network switch to " + network.chainName + " was cancelled in your wallet.");
+        }
+        throw error;
+      }
+    };
+    try {
+      await switchNetwork();
+    } catch (error) {
+      if (walletErrorCode(error) !== 4902) throw error;
+      try {
+        await provider.request({
+          method: "wallet_addEthereumChain",
+          params: [network],
+        });
+      } catch (addError) {
+        if (walletErrorCode(addError) === 4001) {
+          throw new Error("Adding " + network.chainName + " was cancelled in your wallet.");
+        }
+        throw addError;
+      }
+      if (await readChainId() !== network.chainId.toLowerCase()) {
+        await switchNetwork();
+      }
+    }
+    if (await readChainId() !== network.chainId.toLowerCase()) {
+      throw new Error("Wallet did not switch to " + network.chainName + ".");
+    }
+    return true;
+  };
+`;
+
 export const AGENTPAY_CELO_PUBLIC_URLS = {
   consumerMcp: "https://wallet.agentpay.site/celo/mcp",
   paidMcp: "https://mcp.agentpay.site/celo/mcp",
@@ -103,6 +183,14 @@ export function resolveCeloHomeChainId(
   }
 
   return input.homeChainId ?? networkHomeChainId ?? fallbackHomeChainId;
+}
+
+export function getCeloWalletAddChainParameter(chainId: number) {
+  const network = CELO_WALLET_ADD_CHAIN_PARAMETERS[chainId as keyof typeof CELO_WALLET_ADD_CHAIN_PARAMETERS];
+  if (!network) {
+    throw new Error(`Unsupported Celo wallet chain ${chainId}.`);
+  }
+  return network;
 }
 
 export function getChainName(chainId: number): string {

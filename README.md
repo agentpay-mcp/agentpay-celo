@@ -46,6 +46,8 @@ The installer writes Celo state under `~/.agentpay-celo`, installs the Codex ski
 
 The MCP entry points normal chat usage to the authenticated consumer endpoint at `https://wallet.agentpay.site/celo/mcp`. Authentication remains a separate user step; run `codex mcp login agentpay-celo` if Codex does not prompt automatically, then restart/reconnect Codex or open a new task. Installation and OAuth do not create a wallet or authorize a payment.
 
+OAuth, wallet setup, and Review & Sign detect the required Celo network from the server-bound flow. When the connected wallet is on another chain, the page requests `wallet_switchEthereumChain`; if that Celo network is not registered yet, it falls back to `wallet_addEthereumChain` with the official mainnet or Celo Sepolia metadata. The wallet still shows a confirmation prompt, and a rejected switch leaves the flow unsigned and safe to retry.
+
 The paid public execution endpoint is `https://mcp.agentpay.site/celo/mcp` and is used only after Review & Sign. Normal users do not need Supabase, RPC, executor, deployer, or bytecode config. Return to the agent chat and ask:
 
 ```text

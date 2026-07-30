@@ -2,7 +2,14 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { z } from "zod";
 
-import { AGENTPAY_CELO_PUBLIC_URLS, CELO_NETWORKS, getNativeCurrency, networkSelectionShape } from "./chains.ts";
+import {
+  AGENTPAY_CELO_PUBLIC_URLS,
+  CELO_NETWORKS,
+  CELO_WALLET_ADD_CHAIN_PARAMETERS,
+  getCeloWalletAddChainParameter,
+  getNativeCurrency,
+  networkSelectionShape,
+} from "./chains.ts";
 
 describe("getNativeCurrency", () => {
   it("returns native currency metadata for supported chains", () => {
@@ -59,5 +66,27 @@ describe("getNativeCurrency", () => {
       setup: "https://wallet.agentpay.site/celo/setup",
       review: "https://wallet.agentpay.site/celo/review",
     });
+  });
+
+  it("pins official wallet add-chain metadata for Celo mainnet and Sepolia", () => {
+    assert.deepEqual(CELO_WALLET_ADD_CHAIN_PARAMETERS, {
+      42220: {
+        chainId: "0xa4ec",
+        chainName: "Celo Mainnet",
+        nativeCurrency: { name: "Celo", symbol: "CELO", decimals: 18 },
+        rpcUrls: ["https://forno.celo.org"],
+        blockExplorerUrls: ["https://celoscan.io"],
+      },
+      11142220: {
+        chainId: "0xaa044c",
+        chainName: "Celo Sepolia",
+        nativeCurrency: { name: "Celo", symbol: "CELO", decimals: 18 },
+        rpcUrls: ["https://forno.celo-sepolia.celo-testnet.org"],
+        blockExplorerUrls: ["https://celo-sepolia.blockscout.com"],
+      },
+    });
+    assert.equal(getCeloWalletAddChainParameter(42220).chainId, "0xa4ec");
+    assert.equal(getCeloWalletAddChainParameter(11142220).chainId, "0xaa044c");
+    assert.throws(() => getCeloWalletAddChainParameter(1), /Unsupported Celo wallet chain 1/);
   });
 });

@@ -5,7 +5,9 @@ export interface MockWalletOptions {
   chainIdHex: string;
   expectedTypedData: unknown;
   signature: string;
+  knownChainIds?: string[];
   rejectSignCount?: number;
+  rejectSwitchCount?: number;
 }
 
 export async function installMockWallet(page: Page, options: MockWalletOptions): Promise<void> {
@@ -14,7 +16,9 @@ export async function installMockWallet(page: Page, options: MockWalletOptions):
     const listeners = new Map<string, Array<(value: unknown) => void>>();
     let account = config.account;
     let chainIdHex = config.chainIdHex;
+    const knownChainIds = new Set([chainIdHex.toLowerCase(), ...(config.knownChainIds ?? []).map((value) => value.toLowerCase())]);
     let remainingSignRejections = config.rejectSignCount ?? 0;
+    let remainingSwitchRejections = config.rejectSwitchCount ?? 0;
 
     const emit = (event: string, value: unknown) => {
       for (const listener of listeners.get(event) ?? []) {
@@ -29,6 +33,28 @@ export async function installMockWallet(page: Page, options: MockWalletOptions):
         }
         if (request.method === "eth_chainId") {
           return chainIdHex;
+        }
+        if (request.method === "wallet_switchEthereumChain") {
+          const requestedChainId = String((request.params?.[0] as { chainId?: unknown } | undefined)?.chainId ?? "").toLowerCase();
+          if (remainingSwitchRejections > 0) {
+            remainingSwitchRejections -= 1;
+            throw Object.assign(new Error("User rejected the network switch."), { code: 4001 });
+          }
+          if (!knownChainIds.has(requestedChainId)) {
+            throw Object.assign(new Error("Unrecognized chain."), { code: 4902 });
+          }
+          chainIdHex = requestedChainId;
+          emit("chainChanged", chainIdHex);
+          return null;
+        }
+        if (request.method === "wallet_addEthereumChain") {
+          const network = request.params?.[0] as { chainId?: unknown } | undefined;
+          const requestedChainId = String(network?.chainId ?? "").toLowerCase();
+          if (!requestedChainId) throw new Error("Missing add-chain identifier.");
+          knownChainIds.add(requestedChainId);
+          chainIdHex = requestedChainId;
+          emit("chainChanged", chainIdHex);
+          return null;
         }
         if (request.method === "eth_signTypedData_v4") {
           if (String(request.params?.[0] ?? "").toLowerCase() !== account.toLowerCase()) {
