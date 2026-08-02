@@ -99,7 +99,7 @@ describe("publishable AgentPay package manifests", () => {
     }
   });
 
-  it("keeps the 0.1.21 installer release locked to the auto-switch package chain and isolated skill", async () => {
+  it("keeps the 0.1.22 installer release locked to the auto-switch package chain and isolated skill", async () => {
     const cliManifest = await readPackageJson("packages/cli");
     const setupWebManifest = await readPackageJson("apps/setup-web");
     const mcpServerManifest = await readPackageJson("apps/mcp-server");
@@ -112,11 +112,11 @@ describe("publishable AgentPay package manifests", () => {
     const lockedShared = lockfile.packages?.["packages/shared"];
     const lockedSkill = lockfile.packages?.["packages/skill"];
 
-    assert.equal(cliManifest.version, "0.1.21");
+    assert.equal(cliManifest.version, "0.1.22");
     assert.equal(setupWebManifest.version, "0.1.14");
-    assert.equal(mcpServerManifest.version, "0.1.13");
+    assert.equal(mcpServerManifest.version, "0.1.14");
     assert.equal(sharedManifest.version, "0.1.4");
-    assert.equal(skillManifest.version, "0.1.7");
+    assert.equal(skillManifest.version, "0.1.8");
     assert.equal(cliManifest.dependencies?.["@agentpay-ai/mcp-server-celo"], mcpServerManifest.version);
     assert.equal(cliManifest.dependencies?.["@agentpay-ai/setup-web-celo"], setupWebManifest.version);
     assert.equal(cliManifest.dependencies?.["@agentpay-ai/skill-celo"], skillManifest.version);

@@ -22,6 +22,7 @@ export * from "./auth/oauth-api.ts";
 export * from "./services/lifi.ts";
 export * from "./services/chain-executor.ts";
 export * from "./services/payment-authorization.ts";
+export * from "./services/execution-handoff.ts";
 export * from "./services/mainnet-account-verifier.ts";
 export * from "./services/payment-review.ts";
 export * from "./services/paid-execution-lifecycle.ts";

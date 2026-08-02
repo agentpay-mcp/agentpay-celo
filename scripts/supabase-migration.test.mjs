@@ -17,6 +17,7 @@ const celoBoundaryMigrationPath = "supabase/migrations/20260717120000_celo_home_
 const celoConsumerResourceMigrationPath = "supabase/migrations/20260721120000_celo_consumer_resource.sql";
 const productionSetupMigrationPath = "supabase/migrations/20260721130000_celo_production_mainnet_onboarding.sql";
 const celoX402SettlementAuditMigrationPath = "supabase/migrations/20260721160000_celo_x402_settlement_audit.sql";
+const consumerExecutionHandoffMigrationPath = "supabase/migrations/20260802130000_consumer_execution_handoff.sql";
 const migrationsDir = "supabase/migrations";
 const requiredTables = ["setup_intents", "agent_wallets", "payment_intents", "payment_events"];
 const requiredSecurityStatements = [
@@ -380,6 +381,21 @@ describe("AgentPay Supabase migration", () => {
     }
     assert.ok(sql.includes("insert into public.payment_events"));
     assert.ok(sql.includes("on conflict do nothing"));
+  });
+
+  it("separates consumer execution handoff from x402 fee settlement", async () => {
+    const sql = normalizeSql(await readFile(consumerExecutionHandoffMigrationPath, "utf8"));
+
+    assert.ok(sql.includes("add column if not exists execution_source text not null default 'x402'"));
+    assert.ok(sql.includes("paid_execution_lifecycles_execution_source_check"));
+    assert.ok(sql.includes("check (execution_source in ('x402', 'consumer_handoff'))"));
+    assert.ok(sql.includes("'not_required', 'accepted', 'settling', 'settled', 'settlement_unknown', 'settlement_rejected', 'manual_review'"));
+    assert.ok(sql.includes("paid_execution_lifecycles_execution_source_fee_check"));
+    assert.ok(sql.includes("execution_source = 'consumer_handoff'"));
+    assert.ok(sql.includes("fee_status = 'not_required'"));
+    assert.ok(sql.includes("execution_source = 'x402'"));
+    assert.ok(sql.includes("create index if not exists paid_execution_lifecycles_execution_source_idx"));
+    assert.ok(sql.includes("notify pgrst, 'reload schema'"));
   });
 
   it("adds a transactional canary reservation ledger without enabling execution", async () => {

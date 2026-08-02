@@ -1084,11 +1084,102 @@ describe("registerAgentPayMcpTools", () => {
     );
     const executionResult = await execute.handler({ paymentIntentId: "pay_123", approvalText: "ignored" });
     assert.equal((executionResult as { isError?: boolean }).isError, true);
-    assert.match(JSON.stringify(executionResult), /public paid ASP/i);
+    assert.match(JSON.stringify(executionResult), /complete Review & Sign|internal executor bridge/i);
     await assert.rejects(getSignature.handler({ paymentIntentId: "pay_123" }), (error: unknown) => {
       assert.equal((error as { code?: string }).code, "AUTH_SCOPE_REQUIRED");
       return true;
     });
+  });
+
+  it("hands an owner-signed consumer execution to the configured public executor", async () => {
+    const server = new FakeMcpServer();
+    const runtime = createRuntime({});
+    const sessionContext = createSessionContext({
+      sessionId: "session_handoff",
+      tenantId: "tenant_a",
+      ownerAddress: "0x1111111111111111111111111111111111111111",
+      accountAddress: "0x2222222222222222222222222222222222222222",
+      homeChainId: 1952,
+      audience: "https://wallet.agentpay.site/celo/mcp",
+      environment: "staging",
+      scopes: ["payment:review"],
+      authEpoch: 0,
+      issuedAt: "2026-07-12T00:00:00.000Z",
+      expiresAt: "2026-07-19T00:00:00.000Z",
+    });
+    const calls: Array<{ paymentIntentId: string; signature: string }> = [];
+
+    registerAgentPayMcpTools(server, runtime, {
+      sessionContext,
+      executePaymentHandoff: {
+        async execute(input) {
+          calls.push({ paymentIntentId: input.paymentIntentId, signature: input.signature! });
+          return {
+            paymentIntentId: input.paymentIntentId,
+            status: "EXECUTING",
+            sourceTxHash: `0x${"a".repeat(64)}`,
+          };
+        },
+      },
+    });
+
+    const execute = server.tools.get("execute_payment");
+    assert.ok(execute);
+    const result = await execute.handler({
+      paymentIntentId: "pay_handoff",
+      signature: `0x${"b".repeat(130)}`,
+    });
+
+    assert.deepEqual(calls, [{
+      paymentIntentId: "pay_handoff",
+      signature: `0x${"b".repeat(130)}`,
+    }]);
+    assert.deepEqual((result as { structuredContent?: unknown }).structuredContent, {
+      paymentIntentId: "pay_handoff",
+      status: "EXECUTING",
+      sourceTxHash: `0x${"a".repeat(64)}`,
+    });
+    assert.equal((result as { isError?: boolean }).isError, undefined);
+  });
+
+  it("does not hand off caller-controlled authority fields", async () => {
+    const server = new FakeMcpServer();
+    const runtime = createRuntime({});
+    const sessionContext = createSessionContext({
+      sessionId: "session_handoff_authority",
+      tenantId: "tenant_a",
+      ownerAddress: "0x1111111111111111111111111111111111111111",
+      accountAddress: "0x2222222222222222222222222222222222222222",
+      homeChainId: 1952,
+      audience: "https://wallet.agentpay.site/celo/mcp",
+      environment: "staging",
+      scopes: ["payment:review"],
+      authEpoch: 0,
+      issuedAt: "2026-07-12T00:00:00.000Z",
+      expiresAt: "2026-07-19T00:00:00.000Z",
+    });
+    let called = false;
+    registerAgentPayMcpTools(server, runtime, {
+      sessionContext,
+      executePaymentHandoff: {
+        async execute() {
+          called = true;
+          return {};
+        },
+      },
+    });
+
+    const execute = server.tools.get("execute_payment");
+    assert.ok(execute);
+    const result = await execute.handler({
+      paymentIntentId: "pay_handoff",
+      signature: `0x${"b".repeat(130)}`,
+      tenantId: "tenant_other",
+    });
+
+    assert.equal(called, false);
+    assert.equal((result as { isError?: boolean }).isError, true);
+    assert.match(JSON.stringify(result), /tenantId is derived from the authenticated consumer session/i);
   });
 
   it("returns a tenant-scoped signature only with the payment:review scope", async () => {

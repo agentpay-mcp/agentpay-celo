@@ -38,7 +38,7 @@
     "typecheck": "tsc -p ../../tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@agentpay-ai/mcp-server-celo": "0.1.13",
+    "@agentpay-ai/mcp-server-celo": "0.1.14",
     "@agentpay-ai/shared-celo": "0.1.4",
     "ethers": "^6.17.0",
     "zod": "^4.4.3"

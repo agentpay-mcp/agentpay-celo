@@ -12,7 +12,7 @@ export const MAINNET_USDC_CODE_HASH =
   "0x14254a76b7b2554180021c6390e814e73dee647ae91b7198da08de5145214493";
 export const MAINNET_ACCOUNT_CREATION_BYTECODE_HASH =
   "0x2ede9e46a03a9b3d8e8dc322905443b0fedfabd324c54c73fe1c748f10d0152a";
-export const MAINNET_MIGRATION_HEAD = "20260721160000_celo_x402_settlement_audit";
+export const MAINNET_MIGRATION_HEAD = "20260802130000_consumer_execution_handoff";
 export const MAINNET_RPC_FALLBACK_URL = "https://forno.celo.org";
 export const MAINNET_SETUP_URL = "https://wallet.agentpay.site/celo/setup";
 export const MAINNET_SETUP_READINESS_URL = "https://wallet.agentpay.site/celo/setup/readyz";

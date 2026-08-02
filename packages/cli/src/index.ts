@@ -6,6 +6,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  parseExecutionHandoffEnv,
   startAgentPayHttpServer,
   startAgentPayMcpServer,
   type AgentPayHttpServer,
@@ -63,6 +64,10 @@ const optionalConfigKeys = [
   "AGENTPAY_MAINNET_MANIFEST_PATH",
   "AGENTPAY_SESSION_HASH_KEY",
   "AGENTPAY_REVIEW_TOKEN_SECRET",
+  "AGENTPAY_RAW_TX_ENCRYPTION_KEY",
+  "AGENTPAY_INTERNAL_EXECUTION_URL",
+  "AGENTPAY_INTERNAL_EXECUTION_SECRET",
+  "AGENTPAY_INTERNAL_EXECUTION_MAX_SKEW_SECONDS",
   "AGENTPAY_ACCOUNT_ADDRESS",
   "AGENTPAY_CELO_USDC_ADDRESS",
   "AGENTPAY_CELO_USDT_ADDRESS",
@@ -525,9 +530,30 @@ function validateMcpConfig(env: Record<string, string | undefined>): AgentPayDoc
     env.AGENTPAY_REVIEW_TOKEN_SECRET && env.AGENTPAY_REVIEW_TOKEN_SECRET.length < 32
       ? "AGENTPAY_REVIEW_TOKEN_SECRET"
       : undefined,
+    ...validateExecutionHandoffEnv(env),
   ].filter((name): name is string => Boolean(name));
 
   return createDoctorSection(missing, invalid);
+}
+
+function validateExecutionHandoffEnv(env: Record<string, string | undefined>): string[] {
+  const configured = Boolean(
+    env.AGENTPAY_INTERNAL_EXECUTION_URL ||
+      env.AGENTPAY_INTERNAL_EXECUTION_SECRET ||
+      env.AGENTPAY_INTERNAL_EXECUTION_MAX_SKEW_SECONDS,
+  );
+  if (!configured) return [];
+
+  try {
+    parseExecutionHandoffEnv(env);
+    return [];
+  } catch {
+    return [
+      "AGENTPAY_INTERNAL_EXECUTION_URL",
+      "AGENTPAY_INTERNAL_EXECUTION_SECRET",
+      "AGENTPAY_INTERNAL_EXECUTION_MAX_SKEW_SECONDS",
+    ].filter((name) => Boolean(env[name]));
+  }
 }
 
 async function validateSetupConfig(env: Record<string, string | undefined>): Promise<AgentPayDoctorSection> {

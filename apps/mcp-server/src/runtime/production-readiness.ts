@@ -18,7 +18,7 @@ export const MAINNET_CAIP2 = "eip155:42220";
 export const MAINNET_USDC_ADDRESS = "0xcebA9300f2b948710d2653dD7B07f33A8B32118C";
 export const MAINNET_USDC_CODE_HASH =
   "0x14254a76b7b2554180021c6390e814e73dee647ae91b7198da08de5145214493";
-export const MAINNET_MIGRATION_HEAD = "20260721160000_celo_x402_settlement_audit";
+export const MAINNET_MIGRATION_HEAD = "20260802130000_consumer_execution_handoff";
 export const MAINNET_RPC_FALLBACK_URL = "https://forno.celo.org";
 export const MAINNET_CONSUMER_MCP_URL = "https://wallet.agentpay.site/celo/mcp";
 export const MAINNET_PAID_MCP_URL = "https://mcp.agentpay.site/celo/mcp";

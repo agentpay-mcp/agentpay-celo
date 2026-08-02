@@ -48,6 +48,7 @@ import {
   type PaidExecutionLifecycleClaimInput,
   type PaidExecutionLifecycleRecord,
   type PaidExecutionLifecycleStore,
+  type PaidExecutionSource,
   type PaidExecutionLifecycleStatus,
   type PaidExecutionResponseSnapshot,
 } from "./paid-execution-lifecycle.ts";
@@ -335,6 +336,7 @@ interface PaidExecutionLifecycleRow {
   id: string;
   tenant_id: string;
   idempotency_key: string;
+  execution_source?: PaidExecutionSource | null;
   payment_identifier: string | null;
   payment_payload_hash: string;
   payment_requirements_hash: string;
@@ -1328,11 +1330,16 @@ function createPaidExecutionLifecycleRepository(
       }, "SETTLING");
     },
     async markExecuting(id, at) {
+      const current = await scopeQuery(client.from("paid_execution_lifecycles").select("*").eq("id", id)).maybeSingle();
+      if (current.error || !current.data) {
+        throw new Error(`Failed to load paid execution lifecycle ${id}.`);
+      }
+      const expectedStatus = current.data.execution_source === "consumer_handoff" ? "CLAIMED" : "SETTLED";
       return updatePaidExecutionLifecycle(client, scopeUpdate, id, {
         status: "EXECUTING",
         execution_status: "QUEUED",
         updated_at: at,
-      }, "SETTLED");
+      }, expectedStatus);
     },
     async markExecutionBroadcasted(id, txHash, at) {
       const current = await scopeQuery(client.from("paid_execution_lifecycles").select("*").eq("id", id)).maybeSingle();
@@ -1487,6 +1494,7 @@ function toPaidExecutionLifecycleRow(
     id: input.id,
     tenant_id: tenantId,
     idempotency_key: idempotencyKey,
+    execution_source: input.executionSource ?? "x402",
     payment_identifier: input.paymentIdentifier,
     payment_payload_hash: input.paymentPayloadHash,
     payment_requirements_hash: input.paymentRequirementsHash,
@@ -1503,7 +1511,7 @@ function toPaidExecutionLifecycleRow(
     fee_amount: input.feeAmount,
     fee_pay_to: input.feePayTo,
     status: "CLAIMED",
-    fee_status: "ACCEPTED",
+    fee_status: input.executionSource === "consumer_handoff" ? "NOT_REQUIRED" : "ACCEPTED",
     execution_status: "NOT_QUEUED",
     refund_status: "NOT_REQUIRED",
     created_at: input.createdAt,
@@ -1516,6 +1524,7 @@ function toPaidExecutionLifecycleRecord(row: PaidExecutionLifecycleRow): PaidExe
     id: row.id,
     ...(row.tenant_id ? { tenantId: row.tenant_id } : {}),
     idempotencyKey: row.idempotency_key,
+    executionSource: row.execution_source ?? "x402",
     ...(row.payment_identifier ? { paymentIdentifier: row.payment_identifier } : {}),
     paymentPayloadHash: row.payment_payload_hash,
     paymentRequirementsHash: row.payment_requirements_hash,
@@ -1532,7 +1541,9 @@ function toPaidExecutionLifecycleRecord(row: PaidExecutionLifecycleRow): PaidExe
     ...(row.fee_amount ? { feeAmount: row.fee_amount } : {}),
     ...(row.fee_pay_to ? { feePayTo: row.fee_pay_to } : {}),
     status: row.status,
-    feeStatus: row.fee_status ?? defaultFeeStatusForLifecycle(row.status),
+    feeStatus: row.fee_status ?? (row.execution_source === "consumer_handoff"
+      ? "NOT_REQUIRED"
+      : defaultFeeStatusForLifecycle(row.status)),
     executionStatus: row.execution_status ?? defaultExecutionStatusForLifecycle(row.status),
     refundStatus: row.refund_status ?? "NOT_REQUIRED",
     ...(row.settlement_tx_hash ? { settlementTxHash: row.settlement_tx_hash } : {}),
@@ -2101,6 +2112,7 @@ function toInvoiceExecutionOutboxRecord(row: InvoiceExecutionOutboxRow): Invoice
 
 function hasSameLifecycleBinding(record: PaidExecutionLifecycleRecord, input: PaidExecutionLifecycleClaimInput): boolean {
   return (
+    record.executionSource === (input.executionSource ?? "x402") &&
     record.paymentPayloadHash === input.paymentPayloadHash &&
     record.paymentRequirementsHash === input.paymentRequirementsHash &&
     record.requestHash === input.requestHash &&
@@ -2110,9 +2122,9 @@ function hasSameLifecycleBinding(record: PaidExecutionLifecycleRecord, input: Pa
     (record.authorizationHash ?? null) === (input.authorizationHash ?? null) &&
     (record.challengeId ?? null) === (input.challengeId ?? null) &&
     record.feeNetwork === input.feeNetwork &&
-    record.feeAsset?.toLowerCase() === input.feeAsset.toLowerCase() &&
+    record.feeAsset?.toLowerCase() === input.feeAsset?.toLowerCase() &&
     record.feeAmount === input.feeAmount &&
-    record.feePayTo?.toLowerCase() === input.feePayTo.toLowerCase()
+    record.feePayTo?.toLowerCase() === input.feePayTo?.toLowerCase()
   );
 }
 

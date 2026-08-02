@@ -123,8 +123,8 @@ const exactPaymentConfig = {
 };
 
 describe("production readiness gate", () => {
-  it("pins production readiness to the atomic payment audit migration", () => {
-    assert.equal(MAINNET_MIGRATION_HEAD, "20260721160000_celo_x402_settlement_audit");
+  it("pins production readiness to the consumer execution handoff migration", () => {
+    assert.equal(MAINNET_MIGRATION_HEAD, "20260802130000_consumer_execution_handoff");
     assert.equal(baseManifest.database.migrationHead, MAINNET_MIGRATION_HEAD);
     assert.equal(baseManifest.release.migrationHead, MAINNET_MIGRATION_HEAD);
   });

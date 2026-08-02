@@ -65,6 +65,7 @@ import {
 } from "./erc8004-registration.ts";
 import {
   createInMemoryPaidExecutionLifecycleStore,
+  createConsumerExecutionLifecycleClaimInput,
   createPaidExecutionLifecycleClaimInput,
   hashCanonicalJson,
   PaidExecutionRequestError,
@@ -73,6 +74,13 @@ import {
   type PaidExecutionLifecycleStore,
   type PaidExecutionRequestBinding,
 } from "../services/paid-execution-lifecycle.ts";
+import {
+  EXECUTION_HANDOFF_PATH,
+  createExecutionHandoffClient,
+  parseExecutionHandoffEnv,
+  verifyExecutionHandoffSignature,
+  type ExecutionHandoffClient,
+} from "../services/execution-handoff.ts";
 import {
   createInMemoryPaidExecutionChallengeStore,
   type PaidExecutionChallengeStore,
@@ -88,7 +96,7 @@ import {
   type CanaryPolicy,
 } from "../runtime/paid-execution-canary.ts";
 import type { CanaryLedgerStore } from "../runtime/paid-execution-canary-ledger.ts";
-import type { DurableExecutionContext, PaymentPreflightResult } from "../tools/execute-payment.ts";
+import { DurableExecutionError, type DurableExecutionContext, type PaymentPreflightResult } from "../tools/execute-payment.ts";
 import {
   createPaymentAuthorizationFromIntent,
   hashPaymentAuthorization,
@@ -138,6 +146,11 @@ export interface StartAgentPayHttpServerOptions {
   oauthApi?: ConsumerOAuthApi;
   /** @internal Validated metadata seam for tests; production parses env. */
   agentRegistration?: AgentPayErc8004Registration;
+  /** @internal Dependency seam; production derives this from the internal handoff env. */
+  executionHandoff?: ExecutionHandoffClient;
+  /** @internal Secret seam; production derives this from the internal handoff env. */
+  executionHandoffSecret?: string;
+  executionHandoffMaxSkewSeconds?: number;
 }
 
 /** @internal Dependency seam for resolver tests; production callers use the pinned defaults. */
@@ -169,6 +182,14 @@ export async function startAgentPayHttpServer(options: StartAgentPayHttpServerOp
     await verifyConfiguredAgentPayErc8004Identity(agentRegistration, runtimeEnv);
   }
   const mode = options.mode ?? config.httpMode ?? "public";
+  const executionHandoffConfig = parseExecutionHandoffEnv(runtimeEnv);
+  const executionHandoff = options.executionHandoff ?? (
+    mode === "consumer" && executionHandoffConfig
+      ? createExecutionHandoffClient(executionHandoffConfig)
+      : undefined
+  );
+  const executionHandoffSecret = options.executionHandoffSecret ?? executionHandoffConfig?.secret;
+  const executionHandoffMaxSkewSeconds = options.executionHandoffMaxSkewSeconds ?? executionHandoffConfig?.maxSkewSeconds;
   const paymentEnabled = String((options.env ?? process.env).AGENTPAY_A2MCP_PAYMENT_ENABLED ?? "")
     .trim()
     .toLowerCase();
@@ -386,6 +407,8 @@ export async function startAgentPayHttpServer(options: StartAgentPayHttpServerOp
       paidExecutionLifecycle: paidExecutionLifecycle!,
       paidExecutionChallenge,
       invoiceExecutionOutbox,
+      executionHandoffSecret: mode === "public" ? executionHandoffSecret : undefined,
+      executionHandoffMaxSkewSeconds,
       canaryLedger,
       canaryPolicy,
       createServer:
@@ -394,6 +417,7 @@ export async function startAgentPayHttpServer(options: StartAgentPayHttpServerOp
           createAgentPayMcpServer(runtime, undefined, {
             sessionContext: tenantContext,
             publicExecutionOnly: mode === "public",
+            executePaymentHandoff: mode === "consumer" ? executionHandoff : undefined,
           })),
       createTransport: options.createTransport ?? createStatelessTransport,
     });
@@ -449,10 +473,310 @@ interface HandleAgentPayHttpRequestOptions {
   paidExecutionLifecycle: PaidExecutionLifecycleStore;
   paidExecutionChallenge?: PaidExecutionChallengeStore;
   invoiceExecutionOutbox?: InvoiceExecutionOutboxStore;
+  executionHandoffSecret?: string;
+  executionHandoffMaxSkewSeconds?: number;
   canaryLedger?: CanaryLedgerStore;
   canaryPolicy?: CanaryPolicy;
   createServer: (runtime: AgentPayRuntime, tenantContext?: SessionContext) => ConnectableAgentPayMcpServer;
   createTransport: () => StreamableHTTPServerTransport;
+}
+
+async function handleInternalExecutionHandoff(options: HandleAgentPayHttpRequestOptions): Promise<void> {
+  if (options.mode !== "public" || !options.executionHandoffSecret) {
+    writeJson(options.response, 404, { error: "Not found" });
+    return;
+  }
+  if (options.config.environment === "production" && !options.readiness.executionAllowed) {
+    writeJson(options.response, 503, {
+      error: "Production execution unavailable.",
+      code: "PRODUCTION_NOT_READY",
+    });
+    return;
+  }
+  if (options.request.method !== "POST") {
+    writeJson(options.response, 405, { error: "Method not allowed." }, { allow: "POST" });
+    return;
+  }
+  if (requestContentLengthExceeds(options.request, 16_384)) {
+    writeJson(options.response, 413, { error: "Request body too large." }, { "cache-control": "no-store" });
+    return;
+  }
+
+  let requestBody: Buffer;
+  try {
+    requestBody = await readRequestBody(options.request, 16_384);
+  } catch {
+    writeJson(options.response, 413, { error: "Request body too large." }, { "cache-control": "no-store" });
+    return;
+  }
+
+  const timestampHeader = getIncomingHeader(options.request, "x-agentpay-handoff-timestamp");
+  const signature = getIncomingHeader(options.request, "x-agentpay-handoff-signature");
+  const timestamp = timestampHeader ? Number(timestampHeader) : Number.NaN;
+  if (
+    !signature ||
+    !Number.isInteger(timestamp) ||
+    !verifyExecutionHandoffSignature({
+      secret: options.executionHandoffSecret,
+      timestamp,
+      body: requestBody,
+      signature,
+      maxSkewSeconds: options.executionHandoffMaxSkewSeconds,
+    })
+  ) {
+    writeJson(options.response, 401, {
+      error: "Invalid execution handoff.",
+      code: "INTERNAL_HANDOFF_UNAUTHORIZED",
+    }, { "cache-control": "no-store" });
+    return;
+  }
+
+  let binding: PaidExecutionRequestBinding;
+  try {
+    binding = parsePaidExecutionRequest(requestBody);
+  } catch (error) {
+    writeJson(options.response, 400, {
+      error: error instanceof PaidExecutionRequestError ? error.message : "Execution handoff request is invalid.",
+      code: error instanceof PaidExecutionRequestError ? error.code : "INTERNAL_HANDOFF_INVALID",
+    });
+    return;
+  }
+
+  const runtime = options.runtime;
+  if (!runtime?.preflightPayment || !runtime.executePaymentWithContext ||
+    !options.invoiceExecutionOutbox || !options.paidExecutionLifecycle) {
+    writeJson(options.response, 503, {
+      error: "Durable internal execution is unavailable.",
+      code: "INTERNAL_HANDOFF_UNAVAILABLE",
+    });
+    return;
+  }
+
+  let preflight: PaymentPreflightResult;
+  try {
+    preflight = await runtime.preflightPayment(binding.input);
+  } catch {
+    writeJson(options.response, 422, {
+      error: "Execution handoff preflight failed.",
+      code: "INTERNAL_HANDOFF_PREFLIGHT_FAILED",
+    });
+    return;
+  }
+  if (!preflight.intent.tenantId) {
+    writeJson(options.response, 422, {
+      error: "Execution handoff requires a tenant-bound payment intent.",
+      code: "INTERNAL_HANDOFF_TENANT_REQUIRED",
+    });
+    return;
+  }
+
+  const now = () => new Date().toISOString();
+  const lifecycleId = randomUUID();
+  let authorizationHash: string;
+  try {
+    authorizationHash = hashPaymentAuthorization(createPaymentAuthorizationForLifecycle(preflight));
+  } catch {
+    writeJson(options.response, 422, {
+      error: "Execution handoff authorization binding failed.",
+      code: "INTERNAL_HANDOFF_AUTHORIZATION_INVALID",
+    });
+    return;
+  }
+  const lifecycleInput = createConsumerExecutionLifecycleClaimInput({
+    lifecycleId,
+    tenantId: preflight.intent.tenantId,
+    binding,
+    authorizationHash,
+    environment: options.config.environment,
+    createdAt: now(),
+  });
+
+  let lifecycleClaim;
+  try {
+    lifecycleClaim = await options.paidExecutionLifecycle.claim(lifecycleInput);
+  } catch {
+    writeJson(options.response, 503, {
+      error: "Paid lifecycle unavailable.",
+      code: "INTERNAL_HANDOFF_LIFECYCLE_UNAVAILABLE",
+    });
+    return;
+  }
+  if (lifecycleClaim.disposition === "CONFLICT") {
+    writeJson(options.response, 409, {
+      error: "Execution handoff conflicts with an existing payment.",
+      code: "INTERNAL_HANDOFF_CONFLICT",
+    });
+    return;
+  }
+  if (lifecycleClaim.disposition === "REPLAY") {
+    if (lifecycleClaim.record.status === "COMPLETED" && lifecycleClaim.record.responseBodyBase64) {
+      replayPaidLifecycleResponse(options.response, lifecycleClaim.record);
+      return;
+    }
+    if (lifecycleClaim.record.status === "FAILED") {
+      replayPaidLifecycleFailure(options.response, lifecycleClaim.record);
+      return;
+    }
+    writeJson(options.response, 409, {
+      error: "Execution handoff is already being processed.",
+      code: "INTERNAL_HANDOFF_IN_PROGRESS",
+    });
+    return;
+  }
+
+  const durableExecution = createDurableExecutionContext({
+    lifecycleId,
+    paymentIntentId: preflight.intent.id,
+    tenantId: preflight.intent.tenantId,
+    ownerAuthorizationNonce: preflight.intent.nonce,
+    executorAddress: runtime.executorAddress,
+    rawTxEncryptionKey: options.config.rawTxEncryptionKey,
+    outbox: options.invoiceExecutionOutbox,
+    lifecycle: options.paidExecutionLifecycle,
+    now,
+  });
+  if (!durableExecution) {
+    await markLifecycleFailureFallback(
+      options.paidExecutionLifecycle,
+      lifecycleId,
+      "INTERNAL_HANDOFF_EXECUTOR_UNAVAILABLE",
+      "Internal execution requires an outbox-aware executor.",
+      now(),
+    );
+    writeJson(options.response, 503, {
+      error: "Durable internal execution is unavailable.",
+      code: "INTERNAL_HANDOFF_EXECUTOR_UNAVAILABLE",
+    });
+    return;
+  }
+
+  try {
+    const reservation = await durableExecution.outbox.enqueue({
+      id: durableExecution.outboxId,
+      tenantId: durableExecution.tenantId,
+      lifecycleId: durableExecution.lifecycleId,
+      paymentIntentId: durableExecution.paymentIntentId,
+      chainId: preflight.intent.sourceChainId,
+      executorAddress: durableExecution.executorAddress,
+      createdAt: now(),
+    });
+    if (reservation.disposition === "CONFLICT" ||
+      (reservation.disposition === "REPLAY" && reservation.record.status !== "QUEUED")) {
+      throw new Error("Execution outbox reservation is already bound to a different or terminal record.");
+    }
+  } catch {
+    await markReservedInvoiceManualReview(
+      durableExecution,
+      "INTERNAL_HANDOFF_RESERVATION_FAILED",
+      "Internal execution outbox reservation failed; manual review is required.",
+      now(),
+    );
+    await markLifecycleFailureFallback(
+      options.paidExecutionLifecycle,
+      lifecycleId,
+      "INTERNAL_HANDOFF_RESERVATION_FAILED",
+      "Internal execution could not reserve its durable outbox.",
+      now(),
+    );
+    writeJson(options.response, 503, {
+      error: "Durable internal execution is unavailable.",
+      code: "INTERNAL_HANDOFF_RESERVATION_FAILED",
+    });
+    return;
+  }
+
+  try {
+    await options.paidExecutionLifecycle.markExecuting(lifecycleId, now());
+  } catch {
+    await markReservedInvoiceManualReview(
+      durableExecution,
+      "INTERNAL_HANDOFF_QUEUE_UNKNOWN",
+      "Internal execution queue persistence is unknown; manual review is required.",
+      now(),
+    );
+    await markLifecycleFailureFallback(
+      options.paidExecutionLifecycle,
+      lifecycleId,
+      "INTERNAL_HANDOFF_QUEUE_UNKNOWN",
+      "Internal execution lifecycle could not be advanced to execution.",
+      now(),
+    );
+    writeJson(options.response, 503, {
+      error: "Paid lifecycle unavailable.",
+      code: "INTERNAL_HANDOFF_QUEUE_UNKNOWN",
+    });
+    return;
+  }
+
+  let output: unknown;
+  try {
+    output = await runtime.executePaymentWithContext(binding.input, durableExecution);
+  } catch (error) {
+    const message = error instanceof DurableExecutionError
+      ? "Internal execution outcome is ambiguous; reconciliation is required."
+      : "Internal payment execution failed; manual review is required.";
+    if (error instanceof DurableExecutionError) {
+      await markLifecycleExecutionPersistenceUnknown(
+        options.paidExecutionLifecycle,
+        lifecycleId,
+        error.code,
+        message,
+        now(),
+      );
+    } else {
+      await markReservedInvoiceManualReview(durableExecution, "INTERNAL_HANDOFF_EXECUTION_FAILED", message, now());
+      await markLifecycleFailureFallback(
+        options.paidExecutionLifecycle,
+        lifecycleId,
+        "INTERNAL_HANDOFF_EXECUTION_FAILED",
+        message,
+        now(),
+      );
+    }
+    writeJson(options.response, 503, {
+      jsonrpc: "2.0",
+      error: { code: -32000, message },
+      id: binding.requestId,
+    });
+    return;
+  }
+
+  const responseBody = Buffer.from(JSON.stringify({
+    jsonrpc: "2.0",
+    id: binding.requestId,
+    result: output,
+  }) + "\n", "utf8");
+  const responseHeaders = {
+    "content-type": "application/json",
+    "x-agentpay-execution-source": "consumer_handoff",
+  };
+  const executionTxHash = isRecordValue(output) && typeof output.sourceTxHash === "string"
+    ? output.sourceTxHash
+    : undefined;
+  try {
+    await options.paidExecutionLifecycle.markCompleted(
+      lifecycleId,
+      { status: 200, headers: responseHeaders, body: responseBody, executionTxHash },
+      now(),
+    );
+  } catch {
+    await markLifecycleExecutionPersistenceUnknown(
+      options.paidExecutionLifecycle,
+      lifecycleId,
+      "INTERNAL_HANDOFF_RESULT_PERSISTENCE_UNKNOWN",
+      "Internal execution result persistence is unknown; reconciliation is required.",
+      now(),
+    );
+    writeJson(options.response, 503, {
+      error: "Paid lifecycle unavailable.",
+      code: "INTERNAL_HANDOFF_RESULT_PERSISTENCE_UNKNOWN",
+    });
+    return;
+  }
+
+  for (const [name, value] of Object.entries(responseHeaders)) options.response.setHeader(name, value);
+  options.response.writeHead(200);
+  options.response.end(responseBody);
 }
 
 async function handleAgentPayHttpRequest(options: HandleAgentPayHttpRequestOptions): Promise<void> {
@@ -461,6 +785,15 @@ async function handleAgentPayHttpRequest(options: HandleAgentPayHttpRequestOptio
 
   if (options.request.method === "OPTIONS") {
     options.response.writeHead(204).end();
+    return;
+  }
+
+  if (pathname === EXECUTION_HANDOFF_PATH) {
+    let handoffReadiness = options.readiness;
+    if (options.refreshReadiness && handoffReadiness.identityFingerprint) {
+      handoffReadiness = await options.refreshReadiness(handoffReadiness);
+    }
+    await handleInternalExecutionHandoff({ ...options, readiness: handoffReadiness });
     return;
   }
 
@@ -1752,7 +2085,7 @@ function setCorsHeaders(response: ServerResponse, mode: "public" | "consumer"): 
   response.setHeader("access-control-allow-methods", "GET, POST, OPTIONS");
   response.setHeader(
     "access-control-allow-headers",
-    "content-type, authorization, mcp-session-id, mcp-protocol-version, payment-signature, PAYMENT-SIGNATURE",
+    "content-type, authorization, mcp-session-id, mcp-protocol-version, payment-signature, PAYMENT-SIGNATURE, x-agentpay-handoff-timestamp, x-agentpay-handoff-signature",
   );
   response.setHeader("access-control-expose-headers", "PAYMENT-REQUIRED, PAYMENT-RESPONSE, WWW-Authenticate");
 }
@@ -1857,6 +2190,11 @@ function getForwardedHeader(request: IncomingMessage, name: string): string | un
   const firstValue = Array.isArray(value) ? value[0] : value;
 
   return firstValue?.split(",")[0]?.trim();
+}
+
+function getIncomingHeader(request: IncomingMessage, name: string): string | undefined {
+  const value = request.headers[name.toLowerCase()];
+  return Array.isArray(value) ? value[0] : value;
 }
 
 function writeHttpInstruction(response: ServerResponse, instruction: HTTPResponseInstructions): void {

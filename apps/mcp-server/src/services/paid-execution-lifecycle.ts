@@ -18,6 +18,7 @@ export type PaidExecutionLifecycleStatus =
 
 /** The fee, invoice, and recovery states are intentionally independent. */
 export type PaidExecutionFeeStatus =
+  | "NOT_REQUIRED"
   | "ACCEPTED"
   | "SETTLING"
   | "SETTLED"
@@ -41,11 +42,13 @@ export type PaidExecutionRefundStatus =
   | "UNKNOWN"
   | "REFUNDED"
   | "MANUAL_REVIEW";
+export type PaidExecutionSource = "x402" | "consumer_handoff";
 
 export interface PaidExecutionLifecycleRecord {
   id: string;
   tenantId?: string;
   idempotencyKey: string;
+  executionSource: PaidExecutionSource;
   paymentIdentifier?: string;
   paymentPayloadHash: string;
   paymentRequirementsHash: string;
@@ -81,6 +84,7 @@ export interface PaidExecutionLifecycleRecord {
 
 export interface PaidExecutionLifecycleClaimInput {
   id: string;
+  executionSource?: PaidExecutionSource;
   tenantId?: string;
   paymentIdentifier?: string;
   paymentPayloadHash: string;
@@ -93,10 +97,10 @@ export interface PaidExecutionLifecycleClaimInput {
   challengeId?: string;
   environment?: "staging" | "production";
   payer?: string;
-  feeNetwork: string;
-  feeAsset: string;
-  feeAmount: string;
-  feePayTo: string;
+  feeNetwork?: string;
+  feeAsset?: string;
+  feeAmount?: string;
+  feePayTo?: string;
   createdAt: string;
 }
 
@@ -133,6 +137,7 @@ export interface PaidExecutionLifecycleStore {
 
 export interface PaidExecutionRequestBinding {
   toolName: typeof PAID_EXECUTION_TOOL;
+  requestId: string | number;
   input: ExecutePaymentInput;
   requestHash: string;
   argumentsHash: string;
@@ -178,15 +183,47 @@ export function parsePaidExecutionRequest(body: Buffer): PaidExecutionRequestBin
   }
 
   const argumentsHash = hashCanonicalJson(input.data);
-  const { id: _requestId, ...semanticRequest } = parsed;
+  const { id: requestId, ...semanticRequest } = parsed;
   return {
     toolName: PAID_EXECUTION_TOOL,
+    requestId,
     input: input.data,
     // Bind the complete semantic JSON-RPC request. The transport correlation
     // id is intentionally excluded so a lost-response retry with a fresh id
     // replays the same lifecycle instead of charging/executing again.
     requestHash: hashCanonicalJson(semanticRequest),
     argumentsHash,
+  };
+}
+
+export function createConsumerExecutionLifecycleClaimInput(input: {
+  lifecycleId: string;
+  tenantId: string;
+  binding: PaidExecutionRequestBinding;
+  authorizationHash: string;
+  environment?: "staging" | "production";
+  createdAt: string;
+}): PaidExecutionLifecycleClaimInput {
+  return {
+    id: input.lifecycleId,
+    executionSource: "consumer_handoff",
+    tenantId: input.tenantId,
+    // The internal handoff has no x402 payload. These hashes still provide a
+    // durable, deterministic replay fence without persisting the raw owner
+    // signature or inventing a fee receipt.
+    paymentPayloadHash: hashCanonicalJson({
+      source: "consumer_handoff",
+      paymentIntentId: input.binding.input.paymentIntentId,
+      authorizationHash: input.authorizationHash,
+    }),
+    paymentRequirementsHash: hashCanonicalJson({ source: "consumer_handoff", fee: "none" }),
+    requestHash: input.binding.requestHash,
+    toolName: input.binding.toolName,
+    paymentIntentId: input.binding.input.paymentIntentId,
+    argumentsHash: input.binding.argumentsHash,
+    authorizationHash: input.authorizationHash,
+    ...(input.environment ? { environment: input.environment } : {}),
+    createdAt: input.createdAt,
   };
 }
 
@@ -319,6 +356,7 @@ export function createInMemoryPaidExecutionLifecycleStore(
       }
       const record: PaidExecutionLifecycleRecord = {
         id: input.id || createId(),
+        executionSource: input.executionSource ?? "x402",
         ...(input.tenantId ? { tenantId: input.tenantId } : {}),
         idempotencyKey,
         ...(input.paymentIdentifier ? { paymentIdentifier: input.paymentIdentifier } : {}),
@@ -332,12 +370,12 @@ export function createInMemoryPaidExecutionLifecycleStore(
         ...(input.challengeId ? { challengeId: input.challengeId } : {}),
         ...(input.environment ? { environment: input.environment } : {}),
         ...(input.payer ? { payer: input.payer } : {}),
-        feeNetwork: input.feeNetwork,
-        feeAsset: input.feeAsset,
-        feeAmount: input.feeAmount,
-        feePayTo: input.feePayTo,
+        ...(input.feeNetwork ? { feeNetwork: input.feeNetwork } : {}),
+        ...(input.feeAsset ? { feeAsset: input.feeAsset } : {}),
+        ...(input.feeAmount ? { feeAmount: input.feeAmount } : {}),
+        ...(input.feePayTo ? { feePayTo: input.feePayTo } : {}),
         status: "CLAIMED",
-        feeStatus: "ACCEPTED",
+        feeStatus: input.executionSource === "consumer_handoff" ? "NOT_REQUIRED" : "ACCEPTED",
         executionStatus: "NOT_QUEUED",
         refundStatus: "NOT_REQUIRED",
         createdAt: input.createdAt,
@@ -377,7 +415,12 @@ export function createInMemoryPaidExecutionLifecycleStore(
       return cloneLifecycleRecord(record);
     },
     async markExecuting(id, at) {
-      const record = transition(records, id, "EXECUTING", at, ["SETTLED", "EXECUTING"]);
+      const existing = findLifecycleRecord(records, id);
+      if (existing.status !== "SETTLED" && existing.status !== "EXECUTING" &&
+        !(existing.status === "CLAIMED" && existing.feeStatus === "NOT_REQUIRED")) {
+        throw new Error(`Paid execution lifecycle ${id} cannot transition from ${existing.status} to EXECUTING.`);
+      }
+      const record = transition(records, id, "EXECUTING", at, ["CLAIMED", "SETTLED", "EXECUTING"]);
       record.executionStatus = "QUEUED";
       return record;
     },
@@ -493,6 +536,7 @@ function findLifecycleRecord(
 
 function hasSameBinding(existing: PaidExecutionLifecycleRecord, input: PaidExecutionLifecycleClaimInput): boolean {
   return (
+    existing.executionSource === (input.executionSource ?? "x402") &&
     existing.paymentPayloadHash === input.paymentPayloadHash &&
     existing.paymentRequirementsHash === input.paymentRequirementsHash &&
     existing.requestHash === input.requestHash &&
@@ -502,9 +546,9 @@ function hasSameBinding(existing: PaidExecutionLifecycleRecord, input: PaidExecu
     && (existing.authorizationHash ?? null) === (input.authorizationHash ?? null)
     && (existing.challengeId ?? null) === (input.challengeId ?? null)
     && existing.feeNetwork === input.feeNetwork
-    && existing.feeAsset?.toLowerCase() === input.feeAsset.toLowerCase()
+    && existing.feeAsset?.toLowerCase() === input.feeAsset?.toLowerCase()
     && existing.feeAmount === input.feeAmount
-    && existing.feePayTo?.toLowerCase() === input.feePayTo.toLowerCase()
+    && existing.feePayTo?.toLowerCase() === input.feePayTo?.toLowerCase()
   );
 }
 

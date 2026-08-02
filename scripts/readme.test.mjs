@@ -45,7 +45,7 @@ describe("README", () => {
     assert.match(contents, /application\/json, text\/event-stream/);
     assert.match(contents, /Never pass signatures or private keys as command-line arguments/i);
     assert.match(contents, /get_payment_signature/);
-    assert.match(contents, /consumer (?:MCP|surface).*never executes|never executes.*consumer/i);
+    assert.match(contents, /consumer .*automatically .*handoff|loopback HMAC handoff|isolated public executor/i);
     assert.match(contents, /exact approval (?:text|phrase).*migration-only/i);
     assert.doesNotMatch(contents, /docs\//);
     assert.doesNotMatch(contents, /AGENTPAY_CONCEPT/);
@@ -62,7 +62,7 @@ describe("README", () => {
     assert.match(contents, /npx -y @agentpay-ai\/agentpay-celo@latest install --runtime codex/);
     assert.match(contents, /return to your agent chat/i);
     assert.match(quickStart, /https:\/\/wallet\.agentpay\.site\/celo\/mcp/);
-    assert.match(contents, /https:\/\/mcp\.agentpay\.site\/celo\/mcp/);
+    assert.match(contents, /isolated paid executor|automatically hands the signed intent/i);
     assert.match(contents, /No user secrets are required|do not manage Supabase/i);
     assert.match(contents, /install --runtime codex --self-hosted/);
     assert.match(contents, /create an AgentPay wallet/i);

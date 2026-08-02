@@ -165,7 +165,7 @@ describe("installAgentPay", () => {
       assert.equal(mcpConfig.mcpServers["agentpay-celo"].command, "npx");
       assert.deepEqual(mcpConfig.mcpServers["agentpay-celo"].args, [
         "-y",
-        "@agentpay-ai/agentpay-celo@0.1.21",
+        "@agentpay-ai/agentpay-celo@0.1.22",
         "mcp",
       ]);
       assert.deepEqual(mcpConfig.mcpServers["agentpay-celo"].env, {
@@ -804,6 +804,21 @@ describe("runAgentPayDoctor", () => {
 
     assert.ok(insecure.mcp.invalid.includes("SETUP_WEB_URL"));
     assert.equal(loopback.mcp.invalid.includes("SETUP_WEB_URL"), false);
+  });
+
+  it("validates the consumer-to-public execution handoff without exposing its secret", async () => {
+    const report = await runAgentPayDoctor({
+      SUPABASE_URL: "https://agentpay.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "service-role-secret",
+      CELO_RPC_URL: "https://rpc.example",
+      EXECUTOR_PRIVATE_KEY: `0x${"1".repeat(64)}`,
+      AGENTPAY_INTERNAL_EXECUTION_URL: "https://wallet.agentpay.site/internal/celo/execute-payment",
+      AGENTPAY_INTERNAL_EXECUTION_SECRET: "short-secret",
+    });
+
+    assert.equal(report.mcp.invalid.includes("AGENTPAY_INTERNAL_EXECUTION_URL"), true);
+    assert.equal(report.mcp.invalid.includes("AGENTPAY_INTERNAL_EXECUTION_SECRET"), true);
+    assert.doesNotMatch(report.text, /short-secret/);
   });
 
   it("does not report setup web ready for a production or implicit mainnet surface", async () => {

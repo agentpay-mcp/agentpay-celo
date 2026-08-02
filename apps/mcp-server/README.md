@@ -8,7 +8,7 @@ Run locally:
 npm run start --workspace @agentpay-ai/mcp-server-celo
 ```
 
-Core local/staging configuration is `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CELO_RPC_URL`, and `EXECUTOR_PRIVATE_KEY`. Per-request network switching can use `CELO_MAINNET_RPC_URL` and `CELO_SEPOLIA_RPC_URL`.
+Core local/staging configuration is `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `CELO_RPC_URL`, and `EXECUTOR_PRIVATE_KEY`. Per-request network switching can use `CELO_MAINNET_RPC_URL` and `CELO_SEPOLIA_RPC_URL`. For split consumer/public services, apply `supabase/migrations/20260802130000_consumer_execution_handoff.sql`, configure the same `AGENTPAY_INTERNAL_EXECUTION_SECRET` and loopback `AGENTPAY_INTERNAL_EXECUTION_URL` in both boundaries, then restart both services; only the public service keeps executor-grade secrets.
 
 For the public Celo x402 seller gate (production route: `/celo/mcp`):
 

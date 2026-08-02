@@ -41,7 +41,7 @@ describe("Celo mainnet shadow manifest", () => {
     const result = validate(makeManifest());
     assert.equal(result.valid, true, result.errors.join("; "));
     assert.deepEqual(makeManifest().contract.allowedTokens, [MAINNET_USDC_ADDRESS]);
-    assert.equal(MAINNET_MIGRATION_HEAD, "20260721160000_celo_x402_settlement_audit");
+    assert.equal(MAINNET_MIGRATION_HEAD, "20260802130000_consumer_execution_handoff");
     assert.equal(makeManifest().database.migrationHead, MAINNET_MIGRATION_HEAD);
     assert.equal(makeManifest().release.migrationHead, MAINNET_MIGRATION_HEAD);
     assert.deepEqual(makeManifest().chain, {

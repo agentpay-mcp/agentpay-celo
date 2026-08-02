@@ -7,6 +7,7 @@ import {
   createInMemoryPaidExecutionLifecycleStore,
   createPaidExecutionIdempotencyKey,
   createPaidExecutionLifecycleClaimInput,
+  createConsumerExecutionLifecycleClaimInput,
   extractPaymentIdentifier,
   hashCanonicalJson,
   parsePaidExecutionRequest,
@@ -216,5 +217,36 @@ describe("paid execution lifecycle bindings", () => {
     const confirmed = await store.markExecutionReceipt("life_receipt", true, "2026-07-13T00:00:06.000Z");
     assert.equal(confirmed.status, "COMPLETED");
     assert.equal(confirmed.executionStatus, "CONFIRMED");
+  });
+
+  it("claims a consumer handoff without inventing an x402 fee and can queue it directly", async () => {
+    const store = createInMemoryPaidExecutionLifecycleStore(() => "life_consumer");
+    const binding = parsePaidExecutionRequest(validBody);
+    const input = createConsumerExecutionLifecycleClaimInput({
+      lifecycleId: "life_consumer",
+      tenantId: "tenant_consumer",
+      binding,
+      authorizationHash: `0x${"a".repeat(64)}`,
+      environment: "staging",
+      createdAt: "2026-07-13T00:00:00.000Z",
+    });
+
+    assert.equal(input.executionSource, "consumer_handoff");
+    assert.equal(input.feeNetwork, undefined);
+    assert.equal(input.feeAsset, undefined);
+    assert.equal(input.feeAmount, undefined);
+    assert.equal(input.feePayTo, undefined);
+
+    const claim = await store.claim(input);
+    assert.equal(claim.disposition, "CLAIMED");
+    assert.equal(claim.record.executionSource, "consumer_handoff");
+    assert.equal(claim.record.feeStatus, "NOT_REQUIRED");
+    await store.markExecuting("life_consumer", "2026-07-13T00:00:01.000Z");
+    const completed = await store.markCompleted(
+      "life_consumer",
+      { status: 200, headers: {}, body: Buffer.from("ok") },
+      "2026-07-13T00:00:02.000Z",
+    );
+    assert.equal(completed.status, "COMPLETED");
   });
 });

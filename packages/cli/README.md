@@ -31,7 +31,7 @@ Create an AgentPay wallet for me on Celo Sepolia.
 Pay 5 USDT to 0x... on Celo Sepolia for invoice INV-001.
 ```
 
-No user secrets are required for hosted mode. Hosted chat connects to the authenticated consumer endpoint at `https://wallet.agentpay.site/celo/mcp`; payment execution occurs only on the separate paid public endpoint at `https://mcp.agentpay.site/celo/mcp` after owner Review & Sign.
+No user secrets are required for hosted mode. Hosted chat connects to the authenticated consumer endpoint at `https://wallet.agentpay.site/celo/mcp`; after owner Review & Sign, the consumer automatically hands the signed intent to the isolated paid executor. Users do not need a second MCP registration or another OAuth login.
 
 The OAuth, setup, and Review & Sign pages request the required Celo network automatically. They use `wallet_switchEthereumChain` first and add the official Celo mainnet or Sepolia network only when the wallet reports that it is unknown. The owner must still confirm the wallet prompt; rejecting it never advances to signing.
 
@@ -62,5 +62,7 @@ Self-hosted staging/local configuration uses:
 - setup bytecode and `SETUP_DEPLOYER_PRIVATE_KEY` when setup-web is enabled.
 
 Optional values include `SETUP_WEB_URL`, `LIFI_API_KEY`, `X402_BAZAAR_FACILITATOR_URL`, Celo token overrides, Review & Sign secrets, and the Celo x402 seller variables.
+
+Split self-hosted services also use `AGENTPAY_INTERNAL_EXECUTION_URL`, `AGENTPAY_INTERNAL_EXECUTION_SECRET`, and `AGENTPAY_INTERNAL_EXECUTION_MAX_SKEW_SECONDS`. Apply `supabase/migrations/20260802130000_consumer_execution_handoff.sql` before rollout, put the same HMAC secret in consumer and public env files, then restart both services; never put executor or raw-transaction keys in the consumer env.
 
 Production uses the isolated Celo mainnet boundary: `AGENTPAY_ENVIRONMENT=production`, `AGENTPAY_HOME_CHAIN_ID=42220`, a dedicated HTTPS primary `CELO_MAINNET_RPC_URL`, `CELO_MAINNET_RPC_FALLBACK_URL=https://forno.celo.org`, production-only Supabase aliases, the V2 bytecode pin, and a tracked readiness manifest.

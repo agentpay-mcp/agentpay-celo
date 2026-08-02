@@ -1,6 +1,6 @@
 {
   "name": "@agentpay-ai/skill-celo",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "type": "module",
   "files": [
     "README.md",

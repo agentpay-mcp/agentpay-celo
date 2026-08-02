@@ -27,6 +27,7 @@ import {
 } from "@agentpay-ai/shared-celo";
 
 import type { AgentPayRuntime } from "../runtime/agentpay-runtime.ts";
+import type { ExecutionHandoffClient } from "../services/execution-handoff.ts";
 import { prepareAccountAdminTransactionTool } from "../tools/account-admin.ts";
 import { DurableExecutionError, executePaymentTool } from "../tools/execute-payment.ts";
 import { getBalanceTool } from "../tools/get-balance.ts";
@@ -64,6 +65,8 @@ export interface AgentPayMcpToolResult {
 
 export interface AgentPayMcpRegistrationOptions {
   sessionContext?: SessionContext;
+  /** Consumer-only bridge to the isolated public executor. */
+  executePaymentHandoff?: ExecutionHandoffClient;
   /** Public paid ASP mode exposes only execute_payment. */
   publicExecutionOnly?: boolean;
   /** Explicit local/migration escape hatch. Production/public registration leaves this off. */
@@ -331,15 +334,24 @@ function registerExecutePaymentTool(
       if (options.sessionContext) {
         try {
           assertNoCallerAuthority(input);
+          const parsedInput = executePaymentInputSchema.parse(input);
+          if (!parsedInput.signature) {
+            throw new AgentPayAuthError(
+              "AUTH_PAYMENT_SIGNATURE_REQUIRED",
+              "Consumer session cannot authorize payment execution; complete Review & Sign and retry with the owner signature.",
+            );
+          }
+          requireSessionScope(options.sessionContext, "payment:review");
+          if (!options.executePaymentHandoff) {
+            throw new AgentPayAuthError(
+              "AUTH_PAYMENT_SIGNATURE_REQUIRED",
+              "Consumer execution handoff is not configured; an operator must configure the internal executor bridge.",
+            );
+          }
+          return toMcpResult(await options.executePaymentHandoff.execute(parsedInput));
         } catch (error) {
           return toMcpErrorResult(error);
         }
-        return toMcpErrorResult(
-          new AgentPayAuthError(
-            "AUTH_PAYMENT_SIGNATURE_REQUIRED",
-            "Consumer session cannot authorize payment execution; hand the owner-signed authorization to the public paid ASP.",
-          ),
-        );
       }
       if (!executePaymentInputSchema.safeParse(input).data?.signature && !options.legacyApprovalEnabled) {
         return toMcpErrorResult(

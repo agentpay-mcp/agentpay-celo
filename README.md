@@ -80,8 +80,8 @@ The normal payment flow is:
 3. It parses invoices or x402 requirements when relevant, and uses `quote_payment_route` for direct or LI.FI remittance routes.
 4. It calls `prepare_payment`, shows max spend, minimum output, exact native value, fee cap, deadline, target, and calldata hash.
 5. The owner opens the returned Review & Sign URL and signs the exact EIP-712 authorization.
-6. The authenticated consumer MCP polls `get_payment_signature`; the consumer surface never executes a payment.
-7. The signed `paymentIntentId` and signature are handed to `execute_payment` on the paid public MCP. The Executor can submit only that signed authorization.
+6. The authenticated consumer MCP polls `get_payment_signature` until the owner-signed EIP-712 authorization is verified.
+7. The consumer `execute_payment` call automatically sends that exact signed intent over the loopback HMAC handoff to the isolated public executor. Users do not need to register a second MCP server or repeat OAuth. The executor can submit only that signed authorization.
 8. The agent calls `track_payment` and `list_payment_events` for the receipt and audit history.
 
 Vague confirmations such as “yes” never authorize execution. Exact approval text is migration-only; the production authorization is the owner-signed EIP-712 payload. Nonce replay protection, deadlines, token and target allowlists, spend caps, and audit events remain enforced.
@@ -93,6 +93,8 @@ If the user wants a paid service without a URL, call `search_x402_services`, cho
 After `track_payment` returns `COMPLETED`, call `retry_x402_request`. AgentPay attaches its receipt proof, reads the v2 `PAYMENT-RESPONSE` header, and carries `payment-identifier` idempotency data when the service advertises it. This receipt bridge works only with services that support the AgentPay proof flow.
 
 Self-hosted operators expose the public MCP endpoint with `agentpay-celo serve-http`. The Celo x402 seller gate uses `AGENTPAY_A2MCP_PAYMENT_ENABLED`, canonical Celo USDC, `eip155:42220` or `eip155:11142220`, and `AGENTPAY_CELO_X402_API_KEY` for the hosted Celo facilitator. `/healthz` remains free.
+
+Before rollout, apply `supabase/migrations/20260802130000_consumer_execution_handoff.sql`. When running separate consumer and public services, set the same `AGENTPAY_INTERNAL_EXECUTION_SECRET` and the public loopback URL `AGENTPAY_INTERNAL_EXECUTION_URL=http://127.0.0.1:3101/internal/celo/execute-payment` in both service env files, then restart both services. The consumer never receives `EXECUTOR_PRIVATE_KEY` or `AGENTPAY_RAW_TX_ENCRYPTION_KEY`; the HMAC handoff is the only execution bridge.
 
 ## Components
 

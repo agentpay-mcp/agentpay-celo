@@ -7,7 +7,10 @@ import {
   createSupabaseAgentPayRepositories,
   toPaymentIntentRow,
 } from "./supabase.ts";
-import { createPaidExecutionIdempotencyKey } from "./paid-execution-lifecycle.ts";
+import {
+  createConsumerExecutionLifecycleClaimInput,
+  createPaidExecutionIdempotencyKey,
+} from "./paid-execution-lifecycle.ts";
 
 class FakeSelectQuery {
   public calls: Array<[string, unknown[]]> = [];
@@ -232,12 +235,19 @@ class FakePaidExecutionLifecycleQuery {
   public updated: unknown;
   public insertError: { message: string } | null = null;
   public maybeSingleData: any = null;
+  public maybeSingleDataQueue: unknown[] = [];
 
   select(columns: string) { this.calls.push(["select", [columns]]); return this; }
   insert(row: unknown) { this.inserted = row; return Promise.resolve({ error: this.insertError }); }
   update(row: unknown) { this.updated = row; this.calls.push(["update", [row]]); return this; }
   eq(column: string, value: string) { this.calls.push(["eq", [column, value]]); return this; }
-  maybeSingle() { this.calls.push(["maybeSingle", []]); return Promise.resolve({ data: this.maybeSingleData, error: null }); }
+  maybeSingle() {
+    this.calls.push(["maybeSingle", []]);
+    const data = this.maybeSingleDataQueue.length > 0
+      ? this.maybeSingleDataQueue.shift()
+      : this.maybeSingleData;
+    return Promise.resolve({ data, error: null });
+  }
 }
 
 class FakePaidExecutionChallengeQuery {
@@ -1165,6 +1175,7 @@ describe("createSupabaseAgentPayRepositories", () => {
         paymentPayloadHash: input.paymentPayloadHash,
         tenantId: input.tenantId,
       }),
+      execution_source: "x402",
       payment_identifier: input.paymentIdentifier,
       payment_payload_hash: input.paymentPayloadHash,
       payment_requirements_hash: input.paymentRequirementsHash,
@@ -1209,6 +1220,91 @@ describe("createSupabaseAgentPayRepositories", () => {
     assert.equal(settled.status, "SETTLED");
     assert.equal((query.updated as Record<string, unknown>).status, "SETTLED");
     assert.equal((query.updated as Record<string, unknown>).settlement_tx_hash, `0x${"1".repeat(64)}`);
+  });
+
+  it("persists and replays consumer handoff lifecycles without x402 fee terms", async () => {
+    const query = new FakePaidExecutionLifecycleQuery();
+    const client = {
+      from(table: string) {
+        assert.equal(table, "paid_execution_lifecycles");
+        return query;
+      },
+    };
+    const repositories = createSupabaseAgentPayRepositories(client as unknown as AgentPaySupabaseClient);
+    const binding = {
+      toolName: "execute_payment" as const,
+      requestId: "handoff-1",
+      input: {
+        paymentIntentId: "pay_handoff",
+        signature: `0x${"1".repeat(130)}`,
+      },
+      requestHash: "a".repeat(64),
+      argumentsHash: "b".repeat(64),
+    };
+    const input = createConsumerExecutionLifecycleClaimInput({
+      lifecycleId: "11111111-1111-4111-8111-111111111111",
+      tenantId: "22222222-2222-4222-8222-222222222222",
+      binding,
+      authorizationHash: `0x${"2".repeat(64)}`,
+      environment: "production",
+      createdAt: "2026-08-02T13:00:00.000Z",
+    });
+
+    const claimed = await repositories.paidExecutionLifecycle.claim(input);
+    assert.equal(claimed.disposition, "CLAIMED");
+    const inserted = query.inserted as Record<string, unknown>;
+    assert.equal(inserted.execution_source, "consumer_handoff");
+    assert.equal(inserted.fee_status, "NOT_REQUIRED");
+    assert.equal(Object.hasOwn(inserted, "fee_network"), false);
+    assert.equal(Object.hasOwn(inserted, "fee_asset"), false);
+    assert.equal(Object.hasOwn(inserted, "fee_amount"), false);
+    assert.equal(Object.hasOwn(inserted, "fee_pay_to"), false);
+
+    const persistedRow = {
+      ...inserted,
+      payment_identifier: null,
+      payer: null,
+      status: "CLAIMED",
+      fee_status: "NOT_REQUIRED",
+      execution_status: "NOT_QUEUED",
+      refund_status: "NOT_REQUIRED",
+      settlement_tx_hash: null,
+      settlement_headers: null,
+      response_status: null,
+      response_headers: null,
+      response_body_base64: null,
+      execution_tx_hash: null,
+      error_code: null,
+      error_message: null,
+      settled_at: null,
+      completed_at: null,
+    };
+    query.insertError = { message: "duplicate key" };
+    query.maybeSingleData = persistedRow;
+    const replay = await repositories.paidExecutionLifecycle.claim(input);
+    assert.equal(replay.disposition, "REPLAY");
+    assert.equal(replay.record.executionSource, "consumer_handoff");
+    assert.equal(replay.record.feeStatus, "NOT_REQUIRED");
+
+    const conflict = await repositories.paidExecutionLifecycle.claim({
+      ...input,
+      requestHash: "c".repeat(64),
+    });
+    assert.equal(conflict.disposition, "CONFLICT");
+
+    query.maybeSingleDataQueue = [
+      persistedRow,
+      { ...persistedRow, status: "EXECUTING", execution_status: "QUEUED" },
+    ];
+    const executing = await repositories.paidExecutionLifecycle.markExecuting(
+      input.id,
+      "2026-08-02T13:00:01.000Z",
+    );
+    assert.equal(executing.status, "EXECUTING");
+    assert.equal(executing.executionSource, "consumer_handoff");
+    assert.equal(executing.feeStatus, "NOT_REQUIRED");
+    assert.equal((query.updated as Record<string, unknown>).status, "EXECUTING");
+    assert.equal((query.updated as Record<string, unknown>).execution_status, "QUEUED");
   });
 
   it("renews an expired paid challenge with the same durable binding", async () => {

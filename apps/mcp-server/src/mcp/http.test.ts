@@ -33,7 +33,13 @@ import { parseAgentPayEnv } from "../runtime/agentpay-runtime.ts";
 import type { RuntimeEnvironmentIdentity } from "../runtime/production-readiness.ts";
 import type { CanaryLedgerStore } from "../runtime/paid-execution-canary-ledger.ts";
 import { createInMemoryInvoiceExecutionOutboxStore } from "../services/paid-execution-outbox.ts";
-import { createInMemoryPaidExecutionLifecycleStore } from "../services/paid-execution-lifecycle.ts";
+import {
+  createInMemoryPaidExecutionLifecycleStore,
+} from "../services/paid-execution-lifecycle.ts";
+import {
+  EXECUTION_HANDOFF_PATH,
+  createExecutionHandoffSignature,
+} from "../services/execution-handoff.ts";
 import type { PaymentIntentRecord } from "@agentpay-ai/shared-celo";
 import type {
   AgentPayMcpPaymentProcessor,
@@ -96,6 +102,115 @@ describe("startAgentPayHttpServer", () => {
       await client.close();
 
       assert.deepEqual(tools.tools.map((tool) => tool.name), ["execute_payment"]);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("accepts only an HMAC-authenticated consumer handoff and replays the durable result", async () => {
+    const secret = ["internal", "execution", "secret", "that", "is", "at", "least", "32", "bytes"].join("-");
+    const lifecycle = createInMemoryPaidExecutionLifecycleStore(() => "life_internal");
+    const outbox = createInMemoryInvoiceExecutionOutboxStore(() => "outbox_internal");
+    let executions = 0;
+    const runtime = createRuntime({
+      executorAddress: "0xcccccccccccccccccccccccccccccccccccccccc",
+      async preflightPayment(input) {
+        return {
+          paymentIntentId: input.paymentIntentId,
+          input,
+          intent: {
+            ...reservationIntent(),
+            id: input.paymentIntentId,
+            tenantId: "tenant_internal",
+            sourceChainId: 11142220,
+            destinationChainId: 11142220,
+            nonce: "1",
+          },
+        };
+      },
+      async executePaymentWithContext(input, context) {
+        executions += 1;
+        assert.match(context.lifecycleId, /^[0-9a-f-]{36}$/);
+        assert.equal(context.tenantId, "tenant_internal");
+        return {
+          paymentIntentId: input.paymentIntentId,
+          status: "EXECUTING",
+          sourceTxHash: `0x${"d".repeat(64)}`,
+          message: "Payment execution started.",
+        };
+      },
+    });
+    const server = await startAgentPayHttpServer({
+      env: {
+        ...mcpEnv(),
+        AGENTPAY_RAW_TX_ENCRYPTION_KEY: "a".repeat(64),
+        AGENTPAY_INTERNAL_EXECUTION_URL: `http://127.0.0.1:3101${EXECUTION_HANDOFF_PATH}`,
+        AGENTPAY_INTERNAL_EXECUTION_SECRET: secret,
+      },
+      hostname: "127.0.0.1",
+      port: 0,
+      mode: "public",
+      paidExecutionLifecycle: lifecycle,
+      invoiceExecutionOutbox: outbox,
+      createRuntime() {
+        return runtime;
+      },
+    });
+
+    const body = JSON.stringify({
+      jsonrpc: "2.0",
+      id: "internal-1",
+      method: "tools/call",
+      params: {
+        name: "execute_payment",
+        arguments: {
+          paymentIntentId: "pay_internal",
+          signature: `0x${"b".repeat(130)}`,
+        },
+      },
+    });
+    const timestamp = Math.floor(Date.now() / 1000);
+    const headers = {
+      "content-type": "application/json",
+      "x-agentpay-handoff-timestamp": String(timestamp),
+      "x-agentpay-handoff-signature": createExecutionHandoffSignature({ secret, timestamp, body }),
+    };
+
+    try {
+      const unauthorized = await fetch(new URL(EXECUTION_HANDOFF_PATH, server.url), {
+        method: "POST",
+        headers: { ...headers, "x-agentpay-handoff-signature": "sha256=" + "0".repeat(64) },
+        body,
+      });
+      assert.equal(unauthorized.status, 401);
+
+      const first = await fetch(new URL(EXECUTION_HANDOFF_PATH, server.url), {
+        method: "POST",
+        headers,
+        body,
+      });
+      const firstText = await first.text();
+      assert.equal(first.status, 200, firstText);
+      const firstBody = JSON.parse(firstText);
+      assert.deepEqual(firstBody, {
+        jsonrpc: "2.0",
+        id: "internal-1",
+        result: {
+          paymentIntentId: "pay_internal",
+          status: "EXECUTING",
+          sourceTxHash: `0x${"d".repeat(64)}`,
+          message: "Payment execution started.",
+        },
+      });
+
+      const replay = await fetch(new URL(EXECUTION_HANDOFF_PATH, server.url), {
+        method: "POST",
+        headers,
+        body,
+      });
+      assert.equal(replay.status, 200);
+      assert.deepEqual(await replay.json(), firstBody);
+      assert.equal(executions, 1);
     } finally {
       await server.close();
     }
@@ -2096,7 +2211,7 @@ describe("startAgentPayHttpServer", () => {
         }),
       });
       assert.equal(executionResponse.status, 200);
-      assert.match(await executionResponse.text(), /public paid ASP/i);
+      assert.match(await executionResponse.text(), /complete Review & Sign|internal executor bridge/i);
     } finally {
       await server.close();
     }

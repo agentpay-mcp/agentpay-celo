@@ -85,7 +85,7 @@ Expected AgentPay tools:
 - `prepare_account_admin_transaction`: prepare owner transactions for pause, unpause, executor rotation, nonce cancellation, token allowlist updates, and withdrawals.
 - `prepare_payment`: create a payment intent and, for trusted consumer sessions, return a server-generated Review & Sign URL plus canonical EIP-712 typed data. The legacy approval phrase is migration-only.
 - `get_payment_signature`: poll the tenant-scoped Review & Sign handoff and return the verified owner signature without executing a payment.
-- `execute_payment`: execute a prepared payment with the owner signature on the public paid ASP. The authenticated consumer only prepares and reviews; approval text is local/migration-only and is not public payment authorization.
+- `execute_payment`: after the owner signature is verified, submit the prepared payment through the configured consumer-to-public handoff. The consumer sends only the signed intent; the isolated public executor performs the durable execution. Approval text is local/migration-only and is not payment authorization.
 - `track_payment`: track source and destination transaction status.
 - `list_transactions`: show recent payment intents and transactions.
 - `list_payment_events`: show lifecycle audit events for a specific payment intent.
@@ -190,7 +190,7 @@ For every payment:
 3. Call `prepare_payment`.
 4. Show the returned payment summary to the user. When `authorization` is present, show the canonical typed-data details and exact `authorizationHash`.
 5. Open the returned `reviewUrl` for the owner. The connected wallet must use **Review & Sign** to sign the server-derived EIP-712 authorization. Do not let the agent, session, or x402 credential replace this signature.
-6. Poll `get_payment_signature` until it returns the verified 65-byte owner signature, then hand the `paymentIntentId` and signature to the public paid ASP and call its `execute_payment` tool. The authenticated consumer does not execute payments directly.
+6. Poll `get_payment_signature` until it returns the verified 65-byte owner signature, then call `execute_payment` on the authenticated consumer. A configured consumer service automatically hands the exact `paymentIntentId` and signature to the isolated public executor over the HMAC bridge; do not register or authenticate a second MCP server manually.
 7. Call `track_payment` until the payment reaches a clear completed, failed, or still-executing state.
 8. Call `list_payment_events` when the user asks for audit history, failure detail, or lifecycle evidence for a payment.
 
@@ -236,7 +236,7 @@ Never execute a payment if:
 - Balance is insufficient.
 - AgentPay returns an error.
 
-If the public paid ASP's `execute_payment` says the intent is already being executed or is no longer awaiting approval, do not retry the same signature. Call `track_payment` or `list_payment_events` for the current status.
+If the consumer `execute_payment` handoff says the intent is already being executed or is no longer awaiting approval, do not retry the same signature. Call `track_payment` or `list_payment_events` for the current status.
 
 ## Insufficient Balance
 
