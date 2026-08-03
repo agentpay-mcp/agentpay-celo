@@ -30,7 +30,10 @@ import type { SiweChallenge } from "../auth/siwe.ts";
 import type { AgentPayRuntime } from "../runtime/agentpay-runtime.ts";
 import { DEFAULT_CANARY_CAPS } from "../runtime/paid-execution-canary.ts";
 import { parseAgentPayEnv } from "../runtime/agentpay-runtime.ts";
-import type { RuntimeEnvironmentIdentity } from "../runtime/production-readiness.ts";
+import type {
+  ProductionReadinessResult,
+  RuntimeEnvironmentIdentity,
+} from "../runtime/production-readiness.ts";
 import type { CanaryLedgerStore } from "../runtime/paid-execution-canary-ledger.ts";
 import { createInMemoryInvoiceExecutionOutboxStore } from "../services/paid-execution-outbox.ts";
 import {
@@ -47,14 +50,117 @@ import type {
 } from "./celo-agent-payment.ts";
 import {
   loadManifestCanaryPolicy,
+  resolvePaymentProcessorFailureReadiness,
   resolveProductionReadiness,
   shouldVerifyMainnetAccountAtStartup,
   startAgentPayHttpServer,
   toConsumerProductionReadiness,
+  withPublicPaymentProcessorError,
 } from "./http.ts";
 import type { ConnectableAgentPayMcpServer } from "./stdio.ts";
 
 describe("startAgentPayHttpServer", () => {
+  it("keeps core execution eligible when only the hosted x402 processor is unavailable", () => {
+    const coreReadiness: ProductionReadinessResult = {
+      ready: true,
+      executionAllowed: true,
+      publicPaymentAllowed: true,
+      mode: "PUBLIC",
+      status: "READY",
+      errors: [],
+      checks: {
+        environment: true,
+        manifest: true,
+        identity: true,
+        payment: true,
+        rawTransactionEncryption: true,
+        account: true,
+        canaryAdmission: true,
+        onboardingMode: true,
+        onboarding: true,
+      },
+      identityFingerprint: "core-ready",
+    };
+
+    const publicReadiness = withPublicPaymentProcessorError(
+      coreReadiness,
+      "payment processor: initialization failed",
+    );
+
+    assert.equal(publicReadiness.ready, false);
+    assert.equal(publicReadiness.executionAllowed, true);
+    assert.equal(publicReadiness.publicPaymentAllowed, false);
+    assert.equal(publicReadiness.checks.paymentProcessor, false);
+    assert.deepEqual(publicReadiness.errors, ["payment processor: initialization failed"]);
+    assert.equal(coreReadiness.ready, true);
+    assert.equal(coreReadiness.publicPaymentAllowed, true);
+    assert.equal("paymentProcessor" in coreReadiness.checks, false);
+
+    const split = resolvePaymentProcessorFailureReadiness(
+      coreReadiness,
+      "payment processor: initialization failed",
+    );
+    assert.equal(split.publicReadiness.ready, false);
+    assert.equal(split.publicReadiness.publicPaymentAllowed, false);
+    assert.equal(split.coreExecutionReadiness, coreReadiness);
+  });
+
+  it("keeps CANARY handoffs fail-closed when the hosted x402 processor is unavailable", () => {
+    const canaryReadiness: ProductionReadinessResult = {
+      ready: true,
+      executionAllowed: true,
+      publicPaymentAllowed: true,
+      mode: "CANARY",
+      status: "READY",
+      errors: [],
+      checks: {
+        environment: true,
+        manifest: true,
+        identity: true,
+        payment: true,
+        rawTransactionEncryption: true,
+        account: true,
+        canaryAdmission: true,
+        onboardingMode: true,
+        onboarding: true,
+      },
+      identityFingerprint: "canary-ready",
+    };
+
+    const split = resolvePaymentProcessorFailureReadiness(
+      canaryReadiness,
+      "payment processor: initialization failed",
+    );
+
+    assert.equal(split.publicReadiness.ready, false);
+    assert.equal(split.publicReadiness.publicPaymentAllowed, false);
+    assert.equal(split.coreExecutionReadiness.ready, false);
+    assert.equal(split.coreExecutionReadiness.executionAllowed, false);
+    assert.match(split.coreExecutionReadiness.errors.join("; "), /payment processor: initialization failed/);
+  });
+
+  it("never re-enables core execution when x402 degrades an already blocked runtime", () => {
+    const blockedReadiness: ProductionReadinessResult = {
+      ready: false,
+      executionAllowed: false,
+      publicPaymentAllowed: false,
+      mode: "DRAIN",
+      status: "DRAINING",
+      errors: ["execution mode: DRAIN does not accept new public executions"],
+      checks: { environment: true, manifest: true, identity: true, account: true },
+    };
+
+    const degraded = withPublicPaymentProcessorError(
+      blockedReadiness,
+      "payment processor: initialization failed",
+    );
+
+    assert.equal(degraded.ready, false);
+    assert.equal(degraded.executionAllowed, false);
+    assert.equal(degraded.publicPaymentAllowed, false);
+    assert.equal(degraded.checks.paymentProcessor, false);
+  });
+
   it("rejects a mainnet paid public surface without the production chain boundary", async () => {
     await assert.rejects(
       () =>

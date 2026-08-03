@@ -265,6 +265,7 @@ export async function startAgentPayHttpServer(options: StartAgentPayHttpServerOp
       }
     };
   }
+  let coreExecutionReadiness = readiness;
   if (mode === "consumer" && !config.environment) {
     throw new AgentPayAuthError("AUTH_ENVIRONMENT_REQUIRED", "Consumer mode requires AGENTPAY_ENVIRONMENT.");
   }
@@ -362,6 +363,7 @@ export async function startAgentPayHttpServer(options: StartAgentPayHttpServerOp
   if (config.environment === "production" && mode === "public" &&
     (!paidExecutionLifecycle || !paidExecutionChallenge || !invoiceExecutionOutbox)) {
     readiness = withReadinessError(readiness, "paid execution lifecycle: durable challenge, lifecycle, and outbox stores are required");
+    coreExecutionReadiness = readiness;
   }
   const hostname = options.hostname ?? defaultHostname;
   const port = options.port ?? defaultPort;
@@ -375,11 +377,21 @@ export async function startAgentPayHttpServer(options: StartAgentPayHttpServerOp
         ? await createCeloAgentPaymentProcessorFromEnv(options.env ?? process.env, { mcpPath })
         : options.paymentProcessor ?? await createCeloAgentPaymentProcessorFromEnv(options.env ?? process.env, { mcpPath });
       if (config.environment === "production" && !paymentProcessor) {
-        readiness = withReadinessError(readiness, "payment processor: exact production x402 processor was not created");
+        const failureReadiness = resolvePaymentProcessorFailureReadiness(
+          readiness,
+          "payment processor: exact production x402 processor was not created",
+        );
+        readiness = failureReadiness.publicReadiness;
+        coreExecutionReadiness = failureReadiness.coreExecutionReadiness;
       }
     } catch {
       if (config.environment === "production") {
-        readiness = withReadinessError(readiness, "payment processor: initialization failed");
+        const failureReadiness = resolvePaymentProcessorFailureReadiness(
+          readiness,
+          "payment processor: initialization failed",
+        );
+        readiness = failureReadiness.publicReadiness;
+        coreExecutionReadiness = failureReadiness.coreExecutionReadiness;
       } else {
         throw new Error("AgentPay payment processor initialization failed.");
       }
@@ -402,6 +414,7 @@ export async function startAgentPayHttpServer(options: StartAgentPayHttpServerOp
       healthPath,
       readinessPath,
       readiness,
+      coreExecutionReadiness,
       refreshReadiness,
       paymentProcessor,
       paidExecutionLifecycle: paidExecutionLifecycle!,
@@ -432,6 +445,10 @@ export async function startAgentPayHttpServer(options: StartAgentPayHttpServerOp
   if (runtime?.reconcileInvoiceExecutions) {
     void runtime.reconcileInvoiceExecutions().catch(() => {
       if (config.environment === "production") {
+        coreExecutionReadiness = withReadinessError(
+          coreExecutionReadiness,
+          "invoice execution reconciler: startup recovery failed",
+        );
         readiness = withReadinessError(readiness, "invoice execution reconciler: startup recovery failed");
       }
     });
@@ -468,6 +485,7 @@ interface HandleAgentPayHttpRequestOptions {
   healthPath: string;
   readinessPath: string;
   readiness: ProductionReadinessResult;
+  coreExecutionReadiness: ProductionReadinessResult;
   refreshReadiness?: (current: ProductionReadinessResult) => Promise<ProductionReadinessResult>;
   paymentProcessor?: AgentPayMcpPaymentProcessor;
   paidExecutionLifecycle: PaidExecutionLifecycleStore;
@@ -789,7 +807,7 @@ async function handleAgentPayHttpRequest(options: HandleAgentPayHttpRequestOptio
   }
 
   if (pathname === EXECUTION_HANDOFF_PATH) {
-    let handoffReadiness = options.readiness;
+    let handoffReadiness = options.coreExecutionReadiness;
     if (options.refreshReadiness && handoffReadiness.identityFingerprint) {
       handoffReadiness = await options.refreshReadiness(handoffReadiness);
     }
@@ -2616,6 +2634,54 @@ function withReadinessError(readiness: ProductionReadinessResult, error: string)
     executionAllowed: false,
     publicPaymentAllowed: false,
     errors: [...readiness.errors, error],
+  };
+}
+
+/**
+ * A hosted x402 seller outage must keep the external paid ASP fail-closed
+ * without disabling the independently authenticated, owner-signed consumer
+ * execution handoff. Core execution readiness is preserved verbatim; only the
+ * public payment dependency and aggregate public readiness are degraded.
+ *
+ * @internal Exported for the readiness-boundary regression tests.
+ */
+export function withPublicPaymentProcessorError(
+  readiness: ProductionReadinessResult,
+  error: string,
+): ProductionReadinessResult {
+  return {
+    ...readiness,
+    ready: false,
+    publicPaymentAllowed: false,
+    errors: [...readiness.errors, error],
+    checks: {
+      ...readiness.checks,
+      paymentProcessor: false,
+    },
+  };
+}
+
+/**
+ * PUBLIC has already passed the unrestricted production identity gates, so a
+ * hosted seller outage may leave its trusted consumer handoff on core
+ * readiness. CANARY still depends on its per-request x402 admission and must
+ * remain fully blocked when that processor is unavailable.
+ *
+ * @internal Exported for the readiness-boundary regression tests.
+ */
+export function resolvePaymentProcessorFailureReadiness(
+  readiness: ProductionReadinessResult,
+  error: string,
+): {
+  publicReadiness: ProductionReadinessResult;
+  coreExecutionReadiness: ProductionReadinessResult;
+} {
+  const publicReadiness = withPublicPaymentProcessorError(readiness, error);
+  return {
+    publicReadiness,
+    coreExecutionReadiness: readiness.mode === "PUBLIC"
+      ? readiness
+      : { ...publicReadiness, executionAllowed: false },
   };
 }
 
