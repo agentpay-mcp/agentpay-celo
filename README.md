@@ -15,6 +15,12 @@ The Celo hackathon scope includes:
 
 The submission name and product brand are both **AgentPay**. The main website remains [agentpay.site](https://agentpay.site); the Celo implementation lives in this standalone repository. Its npm packages, local state, skill ID, and MCP entry are separately namespaced so installation does not overwrite the existing X Layer deployment or runtime configuration.
 
+## Demo
+
+[![Watch the AgentPay Celo Mainnet demo](https://img.youtube.com/vi/m9r6jYtd_hA/hqdefault.jpg)](https://youtu.be/m9r6jYtd_hA)
+
+[Watch the AgentPay Celo Mainnet demo on YouTube](https://youtu.be/m9r6jYtd_hA).
+
 ## Live Celo Mainnet Deployment
 
 AgentPay is deployed on Celo mainnet in `READY / PUBLIC` mode. The production boundary is canonical Celo USDC with owner-signed EIP-712 authorization, exact nonces and deadlines, spend and native-fee caps, token and target allowlists, encrypted raw transactions, and an append-only payment audit trail.
